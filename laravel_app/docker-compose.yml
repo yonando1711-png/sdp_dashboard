@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sdp_dashboard
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    volumes:
+      - sdp_storage:/var/www/html/storage/app
+    environment:
+      - APP_NAME=SDP_Dashboard
+      - APP_ENV=production
+      - APP_DEBUG=true
+      - APP_URL=https://sdp-dashboard.hartonomotor-group.com
+      - SESSION_DRIVER=file
+      - CACHE_STORE=file
+
+volumes:
+  sdp_storage:

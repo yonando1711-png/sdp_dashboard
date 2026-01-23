@@ -1,0 +1,4 @@
+*.xlsx
+*.~lock*
+*.pdf
+.DS_Store
