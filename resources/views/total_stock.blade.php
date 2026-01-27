@@ -5,6 +5,51 @@
 @section('content')
 <div x-data="queryBuilder()" x-init="init()" class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden h-[calc(100vh-140px)] flex flex-col">
     
+    <!-- Save View Modal -->
+    <template x-teleport="body">
+        <div x-show="showSaveModal" class="fixed inset-0 z-[9999] overflow-y-auto" x-cloak>
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <!-- Backdrop -->
+                <div x-show="showSaveModal" 
+                     x-transition:enter="ease-out duration-300"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="ease-in duration-200"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     @click="showSaveModal = false" 
+                     class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+                
+                <!-- Modal Content -->
+                <div x-show="showSaveModal"
+                     x-transition:enter="ease-out duration-300"
+                     x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+                     x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                     x-transition:leave="ease-in duration-200"
+                     x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                     x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+                     class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-left overflow-hidden border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-slate-800">Save Current View</h3>
+                        <button @click="showSaveModal = false" class="text-slate-400 hover:text-slate-600 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">View Name</label>
+                            <input type="text" x-model="newViewName" @keyup.enter="saveView()" autofocus placeholder="e.g. Sales Q1, Urgent Stock" class="w-full text-sm border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 py-2.5">
+                        </div>
+                        <div class="flex gap-3 pt-2">
+                            <button @click="showSaveModal = false" class="flex-1 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors">Cancel</button>
+                            <button @click="saveView()" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">Save View</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <!-- Top Bar -->
     <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -450,25 +495,6 @@
         </div>
     </div>
 
-    <!-- Save View Modal -->
-    <div x-show="showSaveModal" class="fixed inset-0 z-[100] overflow-y-auto" x-cloak>
-        <div class="flex items-center justify-center min-h-screen p-4 text-center">
-            <div @click="showSaveModal = false" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"></div>
-            
-            <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-left transform transition-all">
-                <h3 class="text-lg font-bold text-slate-800 mb-4">Save Current View</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">View Name</label>
-                        <input type="text" x-model="newViewName" @keyup.enter="saveView()" placeholder="e.g. Sales Q1, Urgent Stock" class="w-full text-sm border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 py-2">
-                    </div>
-                    <div class="flex gap-3 pt-2">
-                        <button @click="showSaveModal = false" class="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-medium hover:bg-slate-50 transition-colors">Cancel</button>
-                        <button @click="saveView()" class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100">Save</button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 @endsection
