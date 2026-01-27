@@ -19,6 +19,22 @@
         </div>
 
         <div class="flex gap-2">
+            <!-- Columns Dropdown -->
+            <div x-data="{ open: false }" class="relative">
+                <button @click="open = !open" @click.away="open = false" class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 font-medium hover:bg-slate-50 transition-colors shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                    Cols
+                </button>
+                <div x-show="open" class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-20 max-h-96 overflow-y-auto">
+                    <template x-for="(col, id) in columns" :key="id">
+                        <label class="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
+                            <input type="checkbox" x-model="col.visible" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mr-2">
+                            <span class="text-sm text-slate-700" x-text="col.label"></span>
+                        </label>
+                    </template>
+                </div>
+            </div>
+
             <button @click="fetchData()" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200 font-medium">
                 <svg x-show="!isLoading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 <svg x-show="isLoading" class="animate-spin -ml-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -117,6 +133,8 @@
                                                     <option value="in_stock">In Stock (All)</option>
                                                     <option value="stock_pure">Pure Stock (No Rental)</option>
                                                     <option value="stock_reserve">Reserve Stock</option>
+                                                    <option value="stock_original_with_replace">Original w/ Replacement</option>
+                                                    <option value="stock_original_no_replace">Original w/o Replacement</option>
                                                 </optgroup>
                                                 <optgroup label="Rented">
                                                     <option value="rented">Rented (All Active)</option>
@@ -127,10 +145,26 @@
                                                     <option value="rented_check_position">Check Rent Position</option>
                                                     <option value="vendor_rent">Vendor Rent</option>
                                                 </optgroup>
-                                                <optgroup label="Service/Other">
-                                                    <option value="in_service">In Service (All)</option>
-                                                    <option value="service_external">External Service</option>
-                                                    <option value="service_internal">Internal Service</option>
+                                                <optgroup label="Service (External)">
+                                                    <option value="service_external">External (All)</option>
+                                                    <option value="service_external_original_with_replace">Ext: Original w/ Replace</option>
+                                                    <option value="service_external_original_no_replace">Ext: Original w/o Replace</option>
+                                                    <option value="service_external_rented_replacement">Ext: Rented Replacement</option>
+                                                    <option value="service_external_stock">Ext: Stock In Service</option>
+                                                </optgroup>
+                                                <optgroup label="Service (Internal)">
+                                                    <option value="service_internal">Internal (All)</option>
+                                                    <option value="service_internal_original_with_replace">Int: Original w/ Replace</option>
+                                                    <option value="service_internal_original_no_replace">Int: Original w/o Replace</option>
+                                                    <option value="service_internal_rented_replacement">Int: Rented Replacement</option>
+                                                    <option value="service_internal_stock">Int: Stock In Service</option>
+                                                </optgroup>
+                                                <optgroup label="Insurance">
+                                                    <option value="service_insurance">Insurance (All)</option>
+                                                    <option value="service_insurance_original_with_replace">Ins: Original w/ Replace</option>
+                                                    <option value="service_insurance_original_no_replace">Ins: Original w/o Replace</option>
+                                                    <option value="service_insurance_rented_replacement">Ins: Rented Replacement</option>
+                                                    <option value="service_insurance_stock">Ins: Stock In Service</option>
                                                 </optgroup>
                                             </select>
                                         </div>
@@ -206,6 +240,8 @@
                                             <option value="in_stock">In Stock (All)</option>
                                             <option value="stock_pure">Pure Stock (No Rental)</option>
                                             <option value="stock_reserve">Reserve Stock</option>
+                                            <option value="stock_original_with_replace">Original w/ Replacement</option>
+                                            <option value="stock_original_no_replace">Original w/o Replacement</option>
                                         </optgroup>
                                         <optgroup label="Rented">
                                             <option value="rented">Rented (All Active)</option>
@@ -216,10 +252,26 @@
                                             <option value="rented_check_position">Check Rent Position</option>
                                             <option value="vendor_rent">Vendor Rent</option>
                                         </optgroup>
-                                        <optgroup label="Service/Other">
-                                            <option value="in_service">In Service (All)</option>
-                                            <option value="service_external">External Service</option>
-                                            <option value="service_internal">Internal Service</option>
+                                        <optgroup label="Service (External)">
+                                            <option value="service_external">External (All)</option>
+                                            <option value="service_external_original_with_replace">Ext: Original w/ Replace</option>
+                                            <option value="service_external_original_no_replace">Ext: Original w/o Replace</option>
+                                            <option value="service_external_rented_replacement">Ext: Rented Replacement</option>
+                                            <option value="service_external_stock">Ext: Stock In Service</option>
+                                        </optgroup>
+                                        <optgroup label="Service (Internal)">
+                                            <option value="service_internal">Internal (All)</option>
+                                            <option value="service_internal_original_with_replace">Int: Original w/ Replace</option>
+                                            <option value="service_internal_original_no_replace">Int: Original w/o Replace</option>
+                                            <option value="service_internal_rented_replacement">Int: Rented Replacement</option>
+                                            <option value="service_internal_stock">Int: Stock In Service</option>
+                                        </optgroup>
+                                        <optgroup label="Insurance">
+                                            <option value="service_insurance">Insurance (All)</option>
+                                            <option value="service_insurance_original_with_replace">Ins: Original w/ Replace</option>
+                                            <option value="service_insurance_original_no_replace">Ins: Original w/o Replace</option>
+                                            <option value="service_insurance_rented_replacement">Ins: Rented Replacement</option>
+                                            <option value="service_insurance_stock">Ins: Stock In Service</option>
                                         </optgroup>
                                     </select>
                                 </div>
@@ -239,26 +291,65 @@
         <!-- Results Table -->
         <div class="flex-1 bg-white overflow-hidden flex flex-col min-h-0">
             <div class="flex-1 overflow-auto">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full text-left border-collapse" style="table-layout: fixed;">
                     <thead class="bg-slate-50 sticky top-0 z-10 text-xs uppercase font-semibold text-slate-500">
                         <tr>
-                            <th class="p-4 border-b border-slate-100">Lot Number</th>
-                            <th class="p-4 border-b border-slate-100">Product</th>
-                            <th class="p-4 border-b border-slate-100">Location</th>
-                            <th class="p-4 border-b border-slate-100">Rental ID</th>
-                            <th class="p-4 border-b border-slate-100">Status</th>
+                            <th x-show="columns.lot_number.visible" :style="'width: ' + columns.lot_number.width + 'px'" class="relative p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none group">
+                                <div @click="sortBy('lot_number')" class="flex items-center gap-1">Lot Number <span x-show="sortCol === 'lot_number'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                                <div @mousedown="startResize($event, 'lot_number')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.product.visible" :style="'width: ' + columns.product.width + 'px'" class="relative p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none group">
+                                <div @click="sortBy('product')" class="flex items-center gap-1">Product <span x-show="sortCol === 'product'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                                <div @mousedown="startResize($event, 'product')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.location.visible" :style="'width: ' + columns.location.width + 'px'" class="relative p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none group">
+                                <div @click="sortBy('location')" class="flex items-center gap-1">Location <span x-show="sortCol === 'location'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                                <div @mousedown="startResize($event, 'location')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.rental_id.visible" :style="'width: ' + columns.rental_id.width + 'px'" class="relative p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none group">
+                                <div @click="sortBy('rental_id')" class="flex items-center gap-1">Rental ID <span x-show="sortCol === 'rental_id'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                                <div @mousedown="startResize($event, 'rental_id')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.status.visible" :style="'width: ' + columns.status.width + 'px'" class="relative p-4 border-b border-slate-100 select-none group">
+                                Status
+                                <div @mousedown="startResize($event, 'status')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.on_hand_quantity.visible" :style="'width: ' + columns.on_hand_quantity.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Qty
+                                <div @mousedown="startResize($event, 'on_hand_quantity')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.rental_type.visible" :style="'width: ' + columns.rental_type.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Type
+                                <div @mousedown="startResize($event, 'rental_type')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.vehicle_role.visible" :style="'width: ' + columns.vehicle_role.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Role
+                                <div @mousedown="startResize($event, 'vehicle_role')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.actual_start_rental.visible" :style="'width: ' + columns.actual_start_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Start
+                                <div @mousedown="startResize($event, 'actual_start_rental')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.actual_end_rental.visible" :style="'width: ' + columns.actual_end_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                End
+                                <div @mousedown="startResize($event, 'actual_end_rental')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                             <th x-show="columns.linked_vehicle.visible" :style="'width: ' + columns.linked_vehicle.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Linked
+                                <div @mousedown="startResize($event, 'linked_vehicle')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <template x-for="item in items" :key="item.id">
                             <tr class="hover:bg-slate-50/50 transition-colors">
-                                <td class="p-4 font-medium text-indigo-600" x-text="item.lot_number"></td>
-                                <td class="p-4 text-slate-600 text-sm" x-text="item.product"></td>
-                                <td class="p-4">
+                                <td x-show="columns.lot_number.visible" class="p-4 font-medium text-indigo-600 break-words" x-text="item.lot_number"></td>
+                                <td x-show="columns.product.visible" class="p-4 text-slate-600 text-sm break-words" x-text="item.product"></td>
+                                <td x-show="columns.location.visible" class="p-4 break-words">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800" x-text="item.location"></span>
                                 </td>
-                                <td class="p-4 text-sm text-slate-600" x-text="item.rental_id || '-'"></td>
-                                <td class="p-4">
+                                <td x-show="columns.rental_id.visible" class="p-4 text-sm text-slate-600 break-all" x-text="item.rental_id || '-'"></td>
+                                <td x-show="columns.status.visible" class="p-4">
                                     <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold"
                                           :class="{
                                               'bg-emerald-100 text-emerald-700': item.in_stock,
@@ -268,10 +359,18 @@
                                         <span x-text="item.in_stock ? 'In Stock' : (item.is_active_rental ? 'Rented' : 'Other')"></span>
                                     </span>
                                 </td>
+                                <td x-show="columns.on_hand_quantity.visible" class="p-4 text-center font-bold text-slate-600" x-text="item.on_hand_quantity"></td>
+                                <td x-show="columns.rental_type.visible" class="p-4 text-center text-xs text-slate-500" x-text="item.rental_type || '-'"></td>
+                                <td x-show="columns.vehicle_role.visible" class="p-4 text-center">
+                                    <span x-show="item.vehicle_role" class="px-2 py-0.5 rounded text-[10px] bg-slate-100 border border-slate-200" x-text="item.vehicle_role"></span>
+                                </td>
+                                <td x-show="columns.actual_start_rental.visible" class="p-4 text-center text-xs text-slate-500" x-text="formatDate(item.actual_start_rental)"></td>
+                                <td x-show="columns.actual_end_rental.visible" class="p-4 text-center text-xs text-slate-500" x-text="formatDate(item.actual_end_rental)"></td>
+                                <td x-show="columns.linked_vehicle.visible" class="p-4 text-center text-xs text-slate-400 font-mono" x-text="item.linked_vehicle || '-'"></td>
                             </tr>
                         </template>
                         <tr x-show="items.length === 0 && !isLoading">
-                            <td colspan="5" class="p-12 text-center text-slate-500">
+                            <td :colspan="Object.values(columns).filter(c => c.visible).length" class="p-12 text-center text-slate-500">
                                 <div class="flex flex-col items-center">
                                     <svg class="w-12 h-12 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                     <p class="text-lg font-medium">No results found</p>
@@ -312,7 +411,56 @@
                 ]
             },
 
+            // Table State
+            sortCol: 'lot_number',
+            sortAsc: true,
+            columns: {
+                lot_number: { label: 'Lot Number', visible: true, width: 150 },
+                product: { label: 'Product', visible: true, width: 250 },
+                location: { label: 'Location', visible: true, width: 140 },
+                rental_id: { label: 'Rental ID', visible: true, width: 120 },
+                status: { label: 'Status', visible: true, width: 140 },
+                on_hand_quantity: { label: 'Qty', visible: true, width: 60 },
+                rental_type: { label: 'Type', visible: false, width: 80 },
+                vehicle_role: { label: 'Role', visible: false, width: 80 },
+                actual_start_rental: { label: 'Start', visible: false, width: 100 },
+                actual_end_rental: { label: 'End', visible: false, width: 100 },
+                linked_vehicle: { label: 'Linked', visible: false, width: 120 }
+            },
+            resizingCol: null,
+            startX: 0,
+            startWidth: 0,
+
             init() {
+                // Load prefs
+                let saved = localStorage.getItem('total_stock_table_columns');
+                if (saved) {
+                    try {
+                        let parsed = JSON.parse(saved);
+                        for (let key in this.columns) {
+                            if (parsed[key]) {
+                                this.columns[key].visible = parsed[key].visible;
+                                this.columns[key].width = parsed[key].width;
+                            }
+                        }
+                    } catch (e) {}
+                }
+                
+                this.$watch('columns', (val) => {
+                    localStorage.setItem('total_stock_table_columns', JSON.stringify(val));
+                }, { deep: true });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (this.resizingCol) {
+                        const diff = e.clientX - this.startX;
+                        this.columns[this.resizingCol].width = Math.max(50, this.startWidth + diff);
+                    }
+                });
+                window.addEventListener('mouseup', () => {
+                    this.resizingCol = null;
+                    document.body.style.cursor = 'default';
+                });
+
                 this.fetchData();
             },
 
@@ -329,6 +477,29 @@
                 this.page = 1;
                 this.fetchData();
             },
+            
+            startResize(e, colId) {
+                this.resizingCol = colId;
+                this.startX = e.clientX;
+                this.startWidth = this.columns[colId].width;
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault(); 
+            },
+            
+            sortBy(col) {
+                if (this.sortCol === col) {
+                    this.sortAsc = !this.sortAsc;
+                } else {
+                    this.sortCol = col;
+                    this.sortAsc = true;
+                }
+                this.fetchData();
+            },
+            
+            formatDate(dateStr) {
+                if (!dateStr) return '-';
+                return dateStr.substring(0, 10);
+            },
 
             async fetchData() {
                 this.isLoading = true;
@@ -342,7 +513,9 @@
                         body: JSON.stringify({
                             filters: this.query,
                             page: this.page,
-                            perPage: this.perPage
+                            perPage: this.perPage,
+                            sortCol: this.sortCol,
+                            sortAsc: this.sortAsc
                         })
                     });
                     

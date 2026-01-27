@@ -296,7 +296,13 @@ class DashboardController extends Controller
         // Apply sorting
         $sortCol = $request->input('sortCol', 'id');
         $sortAsc = $request->input('sortAsc', true);
-        $query->orderBy($sortCol, $sortAsc ? 'asc' : 'desc');
+        $direction = $sortAsc ? 'asc' : 'desc';
+
+        if ($sortCol === 'status') {
+             $query->orderBy('rental_id', $direction);
+        } else {
+             $query->orderBy($sortCol, $direction);
+        }
 
         // Pagination
         $perPage = $request->input('perPage', 50);
@@ -394,11 +400,38 @@ class DashboardController extends Controller
                     ->where(function($q) { $q->whereNull('rental_id')->orWhere('rental_id', ''); })
                     ->where('is_vendor_rent', false);
             }
-            elseif ($value === 'service_external') {
-                $inventory->scopeExternalService($query);
+            elseif ($value === 'stock_original_with_replace') {
+                $inventory->scopeInStock($query)->whereColumn('lot_number', 'reserved_lot')->whereNotNull('rental_id')->where('rental_id_count', '>', 1);
             }
-            elseif ($value === 'service_internal') {
-                $inventory->scopeInternalService($query);
+            elseif ($value === 'stock_original_no_replace') {
+                $inventory->scopeInStock($query)->whereColumn('lot_number', 'reserved_lot')->whereNotNull('rental_id')->where('rental_id_count', 1);
+            }
+            elseif (str_starts_with($value, 'service_')) {
+                 $parts = explode('_', $value, 3); // service, TYPE, SUB
+                 // Handle base types
+                 if (count($parts) < 3) {
+                     if ($value == 'service_external') $inventory->scopeExternalService($query);
+                     elseif ($value == 'service_internal') $inventory->scopeInternalService($query);
+                     elseif ($value == 'service_insurance') $inventory->scopeInsurance($query);
+                     return;
+                 }
+                 
+                 $type = $parts[1]; // external, internal, insurance
+                 $sub = $parts[2]; // original_with_replace, etc.
+                 
+                 if ($type == 'external') $inventory->scopeExternalService($query);
+                 elseif ($type == 'internal') $inventory->scopeInternalService($query);
+                 elseif ($type == 'insurance') $inventory->scopeInsurance($query);
+                 
+                 if ($sub == 'original_with_replace') {
+                      $query->whereNotNull('rental_id')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', '>', 1);
+                 } elseif ($sub == 'original_no_replace') {
+                      $query->whereNotNull('rental_id')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', 1);
+                 } elseif ($sub == 'rented_replacement') {
+                      $query->whereNotNull('rental_id')->whereColumn('lot_number', '!=', 'reserved_lot');
+                 } elseif ($sub == 'stock') {
+                      $query->where(function($q) { $q->whereNull('rental_id')->orWhere('rental_id', ''); });
+                 }
             }
             
             return;
