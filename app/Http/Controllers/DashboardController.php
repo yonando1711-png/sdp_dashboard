@@ -274,4 +274,94 @@ class DashboardController extends Controller
 
         return view('rental_pairs', compact('rentalPairs', 'pairsCount', 'metadata'));
     }
+    public function totalStock()
+    {
+        // Get all unique values for filters
+        $locations = Item::select('location')->distinct()->orderBy('location')->pluck('location');
+        $products = Item::select('product')->distinct()->orderBy('product')->pluck('product');
+        $types = Item::whereNotNull('rental_type')->where('rental_type', '!=', '')->select('rental_type')->distinct()->pluck('rental_type');
+        
+        return view('total_stock', compact('locations', 'products', 'types'));
+    }
+
+    public function filterTotalStock(Request $request)
+    {
+        $query = Item::query();
+        $filters = $request->input('filters', []);
+
+        if (!empty($filters)) {
+            $this->applyAdvancedFilters($query, $filters);
+        }
+
+        // Apply sorting
+        $sortCol = $request->input('sortCol', 'id');
+        $sortAsc = $request->input('sortAsc', true);
+        $query->orderBy($sortCol, $sortAsc ? 'asc' : 'desc');
+
+        // Pagination
+        $perPage = $request->input('perPage', 50);
+        $items = $query->paginate($perPage);
+
+        return response()->json($items);
+    }
+
+    private function applyAdvancedFilters($query, $group)
+    {
+        // $group is { operator: 'AND'|'OR', rules: [] }
+        $operator = strtoupper($group['operator'] ?? 'AND');
+        $rules = $group['rules'] ?? [];
+
+        $query->where(function ($q) use ($operator, $rules) {
+            foreach ($rules as $rule) {
+                // If rule has 'rules', it's a nested group
+                if (isset($rule['rules'])) {
+                    if ($operator === 'OR') {
+                        $q->orWhere(function ($subQ) use ($rule) {
+                            $this->applyAdvancedFilters($subQ, $rule);
+                        });
+                    } else {
+                        $q->where(function ($subQ) use ($rule) {
+                            $this->applyAdvancedFilters($subQ, $rule);
+                        });
+                    }
+                    continue;
+                }
+
+                // It's a condition
+                $field = $rule['field'];
+                $op = $rule['operator'];
+                $value = $rule['value'];
+
+                if ($operator === 'OR') {
+                    $q->orWhere(function ($subQ) use ($field, $op, $value) {
+                         $this->applyCondition($subQ, $field, $op, $value);
+                    });
+                } else {
+                    $this->applyCondition($q, $field, $op, $value);
+                }
+            }
+        });
+    }
+
+    private function applyCondition($query, $field, $op, $value)
+    {
+        if ($op === 'contains') {
+            $query->where($field, 'like', '%' . $value . '%');
+        } elseif ($op === 'not_contains') {
+            $query->where($field, 'not like', '%' . $value . '%');
+        } elseif ($op === 'starts_with') {
+            $query->where($field, 'like', $value . '%');
+        } elseif ($op === 'ends_with') {
+            $query->where($field, 'like', '%' . $value);
+        } elseif ($op === 'is_empty') {
+            $query->where(function($q) use ($field) {
+                $q->whereNull($field)->orWhere($field, '');
+            });
+        } elseif ($op === 'is_not_empty') {
+             $query->whereNotNull($field)->where($field, '!=', '');
+        } else {
+            // =, !=, >, <, >=, <=
+            $query->where($field, $op, $value);
+        }
+    }
 }

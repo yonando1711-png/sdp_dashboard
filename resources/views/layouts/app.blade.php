@@ -75,6 +75,12 @@
                     <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300" 
                           :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Rental Pairs</span>
                 </a>
+                <a href="{{ route('total.stock') }}" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group {{ request()->routeIs('total.stock') ? 'active' : '' }}"
+                   title="Total Stock">
+                   <svg class="w-5 h-5 group-hover:scale-110 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300" 
+                          :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Total Stock</span>
+                </a>
 
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-6 px-2 whitespace-nowrap overflow-hidden transition-all duration-300"
                      :class="sidebarCollapsed ? 'text-center' : 'px-4'">
