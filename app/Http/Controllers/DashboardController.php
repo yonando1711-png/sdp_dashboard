@@ -315,6 +315,11 @@ class DashboardController extends Controller
     {
         $filters = $request->input('filters', []);
         
+        // When sent via form.submit(), JSON might be a string
+        if (is_string($filters)) {
+            $filters = json_decode($filters, true) ?? [];
+        }
+        
         // Handle sorting from request
         $sortCol = $request->input('sortCol', 'lot_number');
         $sortAsc = filter_var($request->input('sortAsc', true), FILTER_VALIDATE_BOOLEAN);
