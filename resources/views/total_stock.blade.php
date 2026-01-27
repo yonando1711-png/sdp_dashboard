@@ -27,9 +27,9 @@
         </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row h-full">
+    <div class="flex flex-col h-full">
         <!-- Sidebar: Query Builder -->
-        <div class="w-full lg:w-96 bg-slate-50 border-r border-slate-200 p-4 overflow-y-auto max-h-[calc(100vh-200px)]">
+        <div class="w-full bg-slate-50 border-b border-slate-200 p-4 overflow-y-auto min-h-[200px] max-h-[40vh]">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="font-bold text-slate-700">Filter Logic</h3>
                 <button @click="resetQuery()" class="text-xs text-red-500 hover:text-red-700 hover:underline">Reset All</button>
@@ -56,45 +56,36 @@
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                 </button>
 
-                                <!-- If it's a nested group -->
                                 <template x-if="rule.rules">
                                     <div x-data="{ group: rule }" x-bind="filterGroup">
-                                        <!-- Self-referencing template logic is hard in vanilla Alpine, 
-                                             so we flatten logic for MVP: 1 Level Nested Groups only or implement recursive component manually -->
-                                        <!-- For MVP, let's stick to 1 level of nesting or use a flat list of conditions for simplicity if recursion is tricky without plugins -->
-                                        <!-- ACTUALLY: Let's simplify. Standard Query Builder:
-                                             Root Group -> List of (Rules OR Groups).
-                                             We will implement a simple recursive render manually if needed, but for now 
-                                             let's support ONE level of nesting to keep UI clean, or just flat list if user prefers. 
-                                             Wait, "Total Stock where user can see all data and add all sort of filter that can have logic like and /or".
-                                             So complexity IS required. -->
-                                             
-                                         <!-- Re-using recursive structure via x-html or similar is unsafe. 
-                                              Let's do a rigorous approach: A dedicated method to render. 
-                                              Actually, Alpine component recursion is tricky. 
-                                              Let's pivot: A flat list of rules combined by a SINGLE operator (AND/OR) for the group is standard.
-                                              To support nested AND/OR, we need a tree. 
-                                              Let's try to render the tree using nested templates if possible. -->
-                                         <div class="text-xs text-slate-400">Nested Group (Not fully supported in MVP UI, backend ready)</div>
+                                         <div class="text-xs text-slate-400">Nested Group</div>
                                     </div>
                                 </template>
 
                                 <!-- Condition Rule -->
                                 <template x-if="!rule.rules">
-                                    <div class="space-y-2">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                         <!-- Field -->
                                         <select x-model="rule.field" class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                                            <option value="lot_number">Lot Number</option>
-                                            <option value="product">Product</option>
-                                            <option value="location">Location</option>
-                                            <option value="rental_type">Rental Type</option>
-                                            <option value="vehicle_role">Role</option>
-                                            <option value="on_hand_quantity">Qty</option>
-                                            <option value="status">Status (Calc)</option>
+                                            <optgroup label="General">
+                                                <option value="lot_number">Lot Number</option>
+                                                <option value="product">Product</option>
+                                                <option value="category">Category (Logic)</option>
+                                            </optgroup>
+                                            <optgroup label="Inventory">
+                                                <option value="location">Location</option>
+                                                <option value="on_hand_quantity">Qty</option>
+                                            </optgroup>
+                                            <optgroup label="Rental Info">
+                                                <option value="rental_id">Rental ID</option>
+                                                <option value="rental_type">Rental Type</option>
+                                                <option value="vehicle_role">Role</option>
+                                                <option value="rental_id_count">Rental Count</option>
+                                            </optgroup>
                                         </select>
                                         
-                                        <!-- Operator -->
-                                        <select x-model="rule.operator" class="w-full text-sm border-slate-200 rounded-md bg-slate-50">
+                                        <!-- Operator (Hidden for Category) -->
+                                        <select x-show="rule.field !== 'category'" x-model="rule.operator" class="w-full text-sm border-slate-200 rounded-md bg-slate-50">
                                             <option value="contains">Contains</option>
                                             <option value="not_contains">Not Contains</option>
                                             <option value="=">Equals (=)</option>
@@ -104,13 +95,41 @@
                                             <option value="is_empty">Is Empty</option>
                                             <option value="is_not_empty">Is Not Empty</option>
                                         </select>
+                                        
+                                        <!-- Fixed 'IS' for Category -->
+                                        <div x-show="rule.field === 'category'" class="flex items-center justify-center text-sm font-bold text-slate-400 bg-slate-50 rounded-md border border-slate-200">
+                                            IS
+                                        </div>
 
-                                        <!-- Value -->
-                                        <input x-show="!['is_empty', 'is_not_empty'].includes(rule.operator)" 
-                                               x-model="rule.value" 
-                                               type="text" 
-                                               placeholder="Value..." 
-                                               class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <!-- Value Input -->
+                                        <div x-show="rule.field !== 'category' && !['is_empty', 'is_not_empty'].includes(rule.operator)">
+                                            <input x-model="rule.value" 
+                                                   type="text" 
+                                                   placeholder="Value..." 
+                                                   class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        </div>
+
+                                        <!-- Category Select -->
+                                        <div x-show="rule.field === 'category'">
+                                            <select x-model="rule.value" class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                                <option value="" disabled>Select Category</option>
+                                                <optgroup label="In Stock">
+                                                    <option value="in_stock">In Stock (All)</option>
+                                                    <option value="stock_pure">Pure Stock (No Rental)</option>
+                                                    <option value="stock_reserve">Reserve Stock</option>
+                                                </optgroup>
+                                                <optgroup label="Rented">
+                                                    <option value="rented">Rented (All Active)</option>
+                                                    <option value="rented_visual">Rented in Customer</option>
+                                                    <option value="vendor_rent">Vendor Rent</option>
+                                                </optgroup>
+                                                <optgroup label="Service/Other">
+                                                    <option value="in_service">In Service (All)</option>
+                                                    <option value="service_external">External Service</option>
+                                                    <option value="service_internal">Internal Service</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
                                     </div>
                                 </template>
                             </div>
@@ -120,7 +139,6 @@
                     <!-- Add Buttons -->
                     <div class="mt-3 flex gap-2">
                         <button @click="addRule(group)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-50">+ Condition</button>
-                        <!-- <button @click="addGroup(group)" class="text-xs bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-50">+ Group</button> -->
                     </div>
                 </div>
             </template>
@@ -141,17 +159,26 @@
                             <button @click="removeRule(query, index)" class="absolute -right-2 -top-2 bg-white rounded-full text-red-400 hover:text-red-600 shadow-sm border border-slate-200 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
-                            <div class="space-y-2">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                 <select x-model="rule.field" class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                                    <option value="lot_number">Lot Number</option>
-                                    <option value="product">Product</option>
-                                    <option value="location">Location</option>
-                                    <option value="rental_id">Rental ID</option>
-                                    <option value="rental_type">Rental Type</option>
-                                    <option value="vehicle_role">Role</option>
-                                    <option value="rental_id_count">Rental Count</option>
+                                    <optgroup label="General">
+                                        <option value="lot_number">Lot Number</option>
+                                        <option value="product">Product</option>
+                                        <option value="category">Category (Logic)</option>
+                                    </optgroup>
+                                    <optgroup label="Inventory">
+                                        <option value="location">Location</option>
+                                        <option value="on_hand_quantity">Qty</option>
+                                    </optgroup>
+                                    <optgroup label="Rental Info">
+                                        <option value="rental_id">Rental ID</option>
+                                        <option value="rental_type">Rental Type</option>
+                                        <option value="vehicle_role">Role</option>
+                                        <option value="rental_id_count">Rental Count</option>
+                                    </optgroup>
                                 </select>
-                                <select x-model="rule.operator" class="w-full text-sm border-slate-200 rounded-md bg-slate-50">
+                                
+                                <select x-show="rule.field !== 'category'" x-model="rule.operator" class="w-full text-sm border-slate-200 rounded-md bg-slate-50">
                                     <option value="contains">Contains</option>
                                     <option value="not_contains">Not Contains</option>
                                     <option value="=">Equals (=)</option>
@@ -161,7 +188,33 @@
                                     <option value="is_empty">Is Empty</option>
                                     <option value="is_not_empty">Is Not Empty</option>
                                 </select>
-                                <input x-show="!['is_empty', 'is_not_empty'].includes(rule.operator)" x-model="rule.value" type="text" placeholder="Value..." class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                <div x-show="rule.field === 'category'" class="flex items-center justify-center text-sm font-bold text-slate-400 bg-slate-50 rounded-md border border-slate-200">
+                                    IS
+                                </div>
+                                
+                                <div x-show="rule.field !== 'category' && !['is_empty', 'is_not_empty'].includes(rule.operator)">
+                                    <input x-model="rule.value" type="text" placeholder="Value..." class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                </div>
+                                <div x-show="rule.field === 'category'">
+                                    <select x-model="rule.value" class="w-full text-sm border-slate-200 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <option value="" disabled>Select Category</option>
+                                        <optgroup label="In Stock">
+                                            <option value="in_stock">In Stock (All)</option>
+                                            <option value="stock_pure">Pure Stock (No Rental)</option>
+                                            <option value="stock_reserve">Reserve Stock</option>
+                                        </optgroup>
+                                        <optgroup label="Rented">
+                                            <option value="rented">Rented (All Active)</option>
+                                            <option value="rented_visual">Rented in Customer</option>
+                                            <option value="vendor_rent">Vendor Rent</option>
+                                        </optgroup>
+                                        <optgroup label="Service/Other">
+                                            <option value="in_service">In Service (All)</option>
+                                            <option value="service_external">External Service</option>
+                                            <option value="service_internal">Internal Service</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </template>

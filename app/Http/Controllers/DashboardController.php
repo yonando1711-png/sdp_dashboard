@@ -345,6 +345,37 @@ class DashboardController extends Controller
 
     private function applyCondition($query, $field, $op, $value)
     {
+        if ($field === 'category') {
+            $inventory = app(\App\Services\InventoryService::class);
+            
+            // Map 'value' to logic
+            if ($value === 'in_stock') $inventory->scopeInStock($query);
+            elseif ($value === 'rented') $inventory->scopeRented($query);
+            elseif ($value === 'in_service') $inventory->scopeInService($query);
+            elseif ($value === 'vendor_rent') $query->where('is_vendor_rent', true);
+            elseif ($value === 'stock_pure') {
+                $inventory->scopeInStock($query)->where(function($q) {
+                    $q->whereNull('rental_id')->orWhere('rental_id', '');
+                });
+            }
+            elseif ($value === 'stock_reserve') {
+                $today = now()->format('Y-m-d');
+                $inventory->scopeInStock($query)->whereNotNull('rental_id')->where('actual_start_rental', '>', $today);
+            }
+            elseif ($value === 'rented_visual') {
+                // Rented in Customer (Location based)
+                $query->where('location', \App\Constants\Location::RENTAL_CUSTOMER);
+            }
+            elseif ($value === 'service_external') {
+                $inventory->scopeExternalService($query);
+            }
+            elseif ($value === 'service_internal') {
+                $inventory->scopeInternalService($query);
+            }
+            
+            return;
+        }
+
         if ($op === 'contains') {
             $query->where($field, 'like', '%' . $value . '%');
         } elseif ($op === 'not_contains') {
