@@ -389,6 +389,10 @@
         </div>
         
 
+
+    
+    @endif
+
     <!-- Upload Modal (Alpine.js) -->
     <div x-show="showUploadModal" 
          x-cloak 
@@ -463,8 +467,6 @@
             </div>
         </div>
     </div>
-    
-    @endif
     </div>
 @endsection
 
