@@ -120,7 +120,11 @@
                                                 </optgroup>
                                                 <optgroup label="Rented">
                                                     <option value="rented">Rented (All Active)</option>
-                                                    <option value="rented_visual">Rented in Customer</option>
+                                                    <option value="rented_visual">Rented in Customer (All)</option>
+                                                    <option value="rented_original">Original in Customer</option>
+                                                    <option value="rented_replacement_service">Replacement - Service</option>
+                                                    <option value="rented_replacement_rbo">Replacement - RBO</option>
+                                                    <option value="rented_check_position">Check Rent Position</option>
                                                     <option value="vendor_rent">Vendor Rent</option>
                                                 </optgroup>
                                                 <optgroup label="Service/Other">
@@ -205,7 +209,11 @@
                                         </optgroup>
                                         <optgroup label="Rented">
                                             <option value="rented">Rented (All Active)</option>
-                                            <option value="rented_visual">Rented in Customer</option>
+                                            <option value="rented_visual">Rented in Customer (All)</option>
+                                            <option value="rented_original">Original in Customer</option>
+                                            <option value="rented_replacement_service">Replacement - Service</option>
+                                            <option value="rented_replacement_rbo">Replacement - RBO</option>
+                                            <option value="rented_check_position">Check Rent Position</option>
                                             <option value="vendor_rent">Vendor Rent</option>
                                         </optgroup>
                                         <optgroup label="Service/Other">

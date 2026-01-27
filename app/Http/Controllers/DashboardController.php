@@ -366,6 +366,34 @@ class DashboardController extends Controller
                 // Rented in Customer (Location based)
                 $query->where('location', \App\Constants\Location::RENTAL_CUSTOMER);
             }
+            elseif ($value === 'rented_original') {
+                $inventory->scopeRented($query)
+                    ->whereColumn('lot_number', 'reserved_lot')
+                    ->whereNotNull('reserved_lot')
+                    ->where('reserved_lot', '!=', '')
+                    ->where('is_vendor_rent', false);
+            }
+            elseif ($value === 'rented_replacement_service') {
+                 $inventory->scopeRented($query)
+                    ->whereNotNull('rental_id')
+                    ->where('rental_id', '!=', '')
+                    ->whereColumn('lot_number', '!=', 'reserved_lot')
+                    ->where('is_vendor_rent', false)
+                    ->where('rental_id_count', '>', 1);
+            }
+            elseif ($value === 'rented_replacement_rbo') {
+                 $inventory->scopeRented($query)
+                    ->whereNotNull('rental_id')
+                    ->where('rental_id', '!=', '')
+                    ->whereColumn('lot_number', '!=', 'reserved_lot')
+                    ->where('is_vendor_rent', false)
+                    ->where('rental_id_count', 1);
+            }
+             elseif ($value === 'rented_check_position') {
+                 $inventory->scopeRented($query)
+                    ->where(function($q) { $q->whereNull('rental_id')->orWhere('rental_id', ''); })
+                    ->where('is_vendor_rent', false);
+            }
             elseif ($value === 'service_external') {
                 $inventory->scopeExternalService($query);
             }
