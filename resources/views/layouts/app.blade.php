@@ -48,7 +48,7 @@
                 <div class="bg-indigo-600 text-white p-1.5 rounded-lg shadow-lg shadow-indigo-200 flex-shrink-0">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
-                <div class="font-bold text-2xl text-indigo-600 whitespace-nowrap overflow-hidden transition-all duration-300" 
+                <div class="font-bold text-xl text-indigo-600 whitespace-nowrap overflow-hidden transition-all duration-300" 
                      :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'" x-show="!sidebarCollapsed">
                     SDP<span class="text-slate-600 font-light">Dashboard</span>
                 </div>
