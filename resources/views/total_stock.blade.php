@@ -137,7 +137,6 @@
                                                     <option value="stock_original_no_replace">Original w/o Replacement</option>
                                                 </optgroup>
                                                 <optgroup label="Rented">
-                                                    <option value="rented">Rented (All Active)</option>
                                                     <option value="rented_visual">Rented in Customer (All)</option>
                                                     <option value="rented_original">Original in Customer</option>
                                                     <option value="rented_replacement_service">Replacement - Service</option>
@@ -244,7 +243,6 @@
                                             <option value="stock_original_no_replace">Original w/o Replacement</option>
                                         </optgroup>
                                         <optgroup label="Rented">
-                                            <option value="rented">Rented (All Active)</option>
                                             <option value="rented_visual">Rented in Customer (All)</option>
                                             <option value="rented_original">Original in Customer</option>
                                             <option value="rented_replacement_service">Replacement - Service</option>
@@ -306,67 +304,79 @@
                                 <div @click="sortBy('location')" class="flex items-center gap-1">Location <span x-show="sortCol === 'location'" x-text="sortAsc ? '↑' : '↓'"></span></div>
                                 <div @mousedown="startResize($event, 'location')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                            <th x-show="columns.rental_id.visible" :style="'width: ' + columns.rental_id.width + 'px'" class="relative p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none group">
-                                <div @click="sortBy('rental_id')" class="flex items-center gap-1">Rental ID <span x-show="sortCol === 'rental_id'" x-text="sortAsc ? '↑' : '↓'"></span></div>
-                                <div @mousedown="startResize($event, 'rental_id')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
-                            </th>
-                            <th x-show="columns.status.visible" :style="'width: ' + columns.status.width + 'px'" class="relative p-4 border-b border-slate-100 select-none group">
-                                Status
-                                <div @mousedown="startResize($event, 'status')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
-                            </th>
-                             <th x-show="columns.on_hand_quantity.visible" :style="'width: ' + columns.on_hand_quantity.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                            <th x-show="columns.on_hand_quantity.visible" :style="'width: ' + columns.on_hand_quantity.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
                                 Qty
                                 <div @mousedown="startResize($event, 'on_hand_quantity')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                             <th x-show="columns.rental_type.visible" :style="'width: ' + columns.rental_type.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                            <th x-show="columns.rental_type.visible" :style="'width: ' + columns.rental_type.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
                                 Type
                                 <div @mousedown="startResize($event, 'rental_type')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                             <th x-show="columns.vehicle_role.visible" :style="'width: ' + columns.vehicle_role.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
-                                Role
-                                <div @mousedown="startResize($event, 'vehicle_role')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            <th x-show="columns.status.visible" :style="'width: ' + columns.status.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Rental Status
+                                <div @mousedown="startResize($event, 'status')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                             <th x-show="columns.actual_start_rental.visible" :style="'width: ' + columns.actual_start_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                            <th x-show="columns.actual_start_rental.visible" :style="'width: ' + columns.actual_start_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
                                 Start
                                 <div @mousedown="startResize($event, 'actual_start_rental')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                             <th x-show="columns.actual_end_rental.visible" :style="'width: ' + columns.actual_end_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                            <th x-show="columns.actual_end_rental.visible" :style="'width: ' + columns.actual_end_rental.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
                                 End
                                 <div @mousedown="startResize($event, 'actual_end_rental')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
-                             <th x-show="columns.linked_vehicle.visible" :style="'width: ' + columns.linked_vehicle.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                            <th x-show="columns.vehicle_role.visible" :style="'width: ' + columns.vehicle_role.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Role
+                                <div @mousedown="startResize($event, 'vehicle_role')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.linked_vehicle.visible" :style="'width: ' + columns.linked_vehicle.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
                                 Linked
                                 <div @mousedown="startResize($event, 'linked_vehicle')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
+                            </th>
+                            <th x-show="columns.in_stock.visible" :style="'width: ' + columns.in_stock.width + 'px'" class="relative p-4 border-b border-slate-100 text-center select-none group">
+                                Stock
+                                <div @mousedown="startResize($event, 'in_stock')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 transition-colors"></div>
                             </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <template x-for="item in items" :key="item.id">
                             <tr class="hover:bg-slate-50/50 transition-colors">
-                                <td x-show="columns.lot_number.visible" class="p-4 font-medium text-indigo-600 break-words" x-text="item.lot_number"></td>
-                                <td x-show="columns.product.visible" class="p-4 text-slate-600 text-sm break-words" x-text="item.product"></td>
+                                <td x-show="columns.lot_number.visible" class="p-4 font-mono text-sm font-medium text-indigo-600 break-words" x-text="item.lot_number"></td>
+                                <td x-show="columns.product.visible" class="p-4 break-words">
+                                    <div class="font-medium text-slate-800 text-sm" x-text="item.product"></div>
+                                    <div class="text-xs text-slate-400" x-text="item.internal_reference || 'No Ref'"></div>
+                                </td>
                                 <td x-show="columns.location.visible" class="p-4 break-words">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800" x-text="item.location"></span>
                                 </td>
-                                <td x-show="columns.rental_id.visible" class="p-4 text-sm text-slate-600 break-all" x-text="item.rental_id || '-'"></td>
-                                <td x-show="columns.status.visible" class="p-4">
-                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold"
-                                          :class="{
-                                              'bg-emerald-100 text-emerald-700': item.in_stock,
-                                              'bg-amber-100 text-amber-700': item.is_active_rental && !item.in_stock,
-                                              'bg-red-100 text-red-700': !item.in_stock && !item.is_active_rental
-                                          }">
-                                        <span x-text="item.in_stock ? 'In Stock' : (item.is_active_rental ? 'Rented' : 'Other')"></span>
-                                    </span>
-                                </td>
                                 <td x-show="columns.on_hand_quantity.visible" class="p-4 text-center font-bold text-slate-600" x-text="item.on_hand_quantity"></td>
-                                <td x-show="columns.rental_type.visible" class="p-4 text-center text-xs text-slate-500" x-text="item.rental_type || '-'"></td>
-                                <td x-show="columns.vehicle_role.visible" class="p-4 text-center">
-                                    <span x-show="item.vehicle_role" class="px-2 py-0.5 rounded text-[10px] bg-slate-100 border border-slate-200" x-text="item.vehicle_role"></span>
+                                <td x-show="columns.rental_type.visible" class="p-4 text-center">
+                                    <span x-show="item.is_vendor_rent" class="px-2 py-1 rounded text-xs font-bold bg-cyan-100 text-cyan-700">Vendor</span>
+                                    <span x-show="!item.is_vendor_rent" class="px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">Owned</span>
+                                </td>
+                                <td x-show="columns.status.visible" class="p-4 text-center">
+                                    <template x-if="item.rental_id">
+                                        <div class="flex flex-col items-center">
+                                            <span class="px-2 py-1 rounded text-xs font-bold bg-amber-100 text-amber-700 mb-1 break-all" x-text="item.rental_id"></span>
+                                            <span class="text-[10px] text-slate-400" x-text="item.rental_type"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!item.rental_id && item.in_stock">
+                                        <span class="px-2 py-1 rounded text-xs font-bold bg-emerald-100 text-emerald-700">In Stock</span>
+                                    </template>
+                                    <template x-if="!item.rental_id && !item.in_stock">
+                                        <span class="px-2 py-1 rounded text-xs font-bold bg-slate-100 text-slate-500">-</span>
+                                    </template>
                                 </td>
                                 <td x-show="columns.actual_start_rental.visible" class="p-4 text-center text-xs text-slate-500" x-text="formatDate(item.actual_start_rental)"></td>
                                 <td x-show="columns.actual_end_rental.visible" class="p-4 text-center text-xs text-slate-500" x-text="formatDate(item.actual_end_rental)"></td>
+                                <td x-show="columns.vehicle_role.visible" class="p-4 text-center">
+                                    <span x-show="item.vehicle_role" class="px-2 py-0.5 rounded text-[10px] bg-slate-100 border border-slate-200" x-text="item.vehicle_role"></span>
+                                </td>
                                 <td x-show="columns.linked_vehicle.visible" class="p-4 text-center text-xs text-slate-400 font-mono" x-text="item.linked_vehicle || '-'"></td>
+                                <td x-show="columns.in_stock.visible" class="p-4 text-center">
+                                    <span class="w-2 h-2 inline-block rounded-full" :class="item.in_stock ? 'bg-green-500' : 'bg-red-200'"></span>
+                                </td>
                             </tr>
                         </template>
                         <tr x-show="items.length === 0 && !isLoading">
@@ -418,14 +428,14 @@
                 lot_number: { label: 'Lot Number', visible: true, width: 150 },
                 product: { label: 'Product', visible: true, width: 250 },
                 location: { label: 'Location', visible: true, width: 140 },
-                rental_id: { label: 'Rental ID', visible: true, width: 120 },
-                status: { label: 'Status', visible: true, width: 140 },
                 on_hand_quantity: { label: 'Qty', visible: true, width: 60 },
-                rental_type: { label: 'Type', visible: false, width: 80 },
-                vehicle_role: { label: 'Role', visible: false, width: 80 },
-                actual_start_rental: { label: 'Start', visible: false, width: 100 },
-                actual_end_rental: { label: 'End', visible: false, width: 100 },
-                linked_vehicle: { label: 'Linked', visible: false, width: 120 }
+                rental_type: { label: 'Type', visible: true, width: 80 },
+                status: { label: 'Rental Status', visible: true, width: 140 },
+                actual_start_rental: { label: 'Start', visible: true, width: 100 },
+                actual_end_rental: { label: 'End', visible: true, width: 100 },
+                vehicle_role: { label: 'Role', visible: true, width: 80 },
+                linked_vehicle: { label: 'Linked', visible: true, width: 100 },
+                in_stock: { label: 'Stock', visible: true, width: 60 }
             },
             resizingCol: null,
             startX: 0,
