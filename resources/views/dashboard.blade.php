@@ -45,24 +45,50 @@
         </form>
     </div>
 
-    <!-- Hero Card -->
-    <a href="{{ route('total.stock') }}" class="block relative overflow-hidden bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-8 mb-8 text-white shadow-xl shadow-indigo-200 hover:scale-[1.01] transition-transform cursor-pointer">
-        <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white opacity-10 blur-3xl"></div>
-        <div class="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-white opacity-10 blur-3xl"></div>
+    <!-- Hero Card - Total Active Stock -->
+    <a href="{{ route('total.stock') }}" class="block relative overflow-hidden bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 rounded-3xl p-8 lg:p-10 mb-8 text-white shadow-2xl shadow-indigo-300/30 hover:shadow-indigo-400/40 transition-all duration-500 cursor-pointer group">
+        <!-- Decorative Elements -->
+        <div class="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-white opacity-5 blur-3xl group-hover:opacity-10 transition-opacity duration-700"></div>
+        <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-cyan-400 opacity-10 blur-3xl group-hover:opacity-20 transition-opacity duration-700"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gradient-to-r from-white/5 to-transparent blur-2xl"></div>
         
-        <div class="relative flex justify-between items-center">
-            <div>
-                <p class="text-indigo-100 font-medium mb-1 uppercase tracking-wider text-sm">Total Active Stock</p>
-                <h2 class="text-5xl font-bold tracking-tight mb-4">{{ number_format($summary['sdp_stock']) }}</h2>
+        <div class="relative">
+            <!-- Header Row -->
+            <div class="flex items-center gap-3 mb-6">
+                <div class="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                </div>
+                <h2 class="text-xl lg:text-2xl font-bold text-white tracking-wide">Total Active Stock</h2>
                 @if(isset($metadata['imported_at']))
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-sm border border-white/10">
+                <div class="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 backdrop-blur-sm text-sm border border-white/20 text-white/90">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     <span>Updated {{ \Carbon\Carbon::parse($metadata['imported_at'])->diffForHumans() }}</span>
                 </div>
                 @endif
             </div>
-            <div class="hidden md:block">
-                <svg class="w-32 h-32 text-white opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            
+            <!-- Main Stats Row -->
+            <div class="flex flex-col lg:flex-row lg:items-end gap-8 lg:gap-16">
+                <!-- Total Count - Main Focus -->
+                <div class="flex-shrink-0">
+                    <p class="text-5xl lg:text-7xl xl:text-8xl font-black tracking-tight text-white drop-shadow-lg">{{ number_format($summary['sdp_stock']) }}</p>
+                    <p class="text-indigo-200 text-base lg:text-lg font-medium mt-2">Active Inventory Units</p>
+                </div>
+
+                <!-- Ownership Stats - Secondary -->
+                <div class="flex items-center gap-6 lg:gap-12 lg:ml-auto">
+                    <div onclick="window.location='{{ route('details', ['category' => 'sdp_owned']) }}'; event.stopPropagation();" class="group/stat cursor-pointer text-center lg:text-right hover:scale-105 transition-transform">
+                        <p class="text-4xl lg:text-5xl xl:text-6xl font-bold text-white/95 group-hover/stat:text-white transition-colors">{{ number_format($summary['sdp_stock'] - $summary['vendor_rent']) }}</p>
+                        <p class="text-indigo-200 text-sm lg:text-base font-semibold uppercase tracking-wider mt-1 group-hover/stat:text-white transition-colors">SDP Owned</p>
+                    </div>
+                    
+                    <div class="w-px h-20 bg-gradient-to-b from-transparent via-white/30 to-transparent"></div>
+                    
+                    <div onclick="window.location='{{ route('details', ['category' => 'vendor_rent']) }}'; event.stopPropagation();" class="group/stat cursor-pointer text-center lg:text-right hover:scale-105 transition-transform">
+                        <p class="text-4xl lg:text-5xl xl:text-6xl font-bold text-cyan-300 group-hover/stat:text-cyan-200 transition-colors">{{ number_format($summary['vendor_rent']) }}</p>
+                        <p class="text-indigo-200 text-sm lg:text-base font-semibold uppercase tracking-wider mt-1 group-hover/stat:text-white transition-colors">Vendor Rent</p>
+                    </div>
+                </div>
             </div>
         </div>
     </a>
@@ -91,7 +117,7 @@
             </div>
             <h3 class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ number_format($summary['rented_in_customer']['total']) }}</h3>
             <div class="mt-4 flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 w-fit px-2 py-1 rounded">
-                Active Rentals
+                Vehicle In Customer
             </div>
         </a>
 
@@ -106,6 +132,7 @@
             <div class="mt-4 text-xs text-slate-500 dark:text-slate-400 flex gap-2">
                 <span class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-medium">Ext: {{ $summary['stock_external_service']['total'] }}</span>
                 <span class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-medium">Int: {{ $summary['stock_internal_service']['total'] }}</span>
+                <span class="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-medium">Ins: {{ $summary['stock_insurance']['total'] ?? 0 }}</span>
             </div>
         </a>
 
@@ -146,7 +173,7 @@
                     <div class="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">In Stock Breakdown</h3>
+                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">In Stock Detail</h3>
                 </div>
                 
                 <!-- Mini Stats Grid -->
@@ -204,69 +231,118 @@
                 </div>
             </div>
 
-            <!-- Rented Breakdown -->
+            <!-- Active Rental Detail -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
                 <div class="flex items-center gap-2 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
                     <div class="p-2 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">Rented In Customer Breakdown</h3>
+                    <div>
+                        <a href="{{ route('details', ['category' => 'active_rentals']) }}" class="group/title">
+                             <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 group-hover/title:text-indigo-600 transition-colors">Active Rental Detail</h3>
+                        </a>
+                        <p class="text-xs text-slate-500">Total Active: {{ number_format($activeRentalData['total'] ?? 0) }}</p>
+                    </div>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                     <!-- Left Side: Main Categories -->
-                     <div class="space-y-3">
-                         @if(isset($summary['rented_in_customer']['details']['Original in Customer']) && $summary['rented_in_customer']['details']['Original in Customer'] > 0)
-                         <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Original in Customer']) }}" class="flex justify-between items-center p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
-                             <div class="flex items-center gap-3">
-                                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                 <span class="text-slate-600 dark:text-slate-300 font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Original in Customer</span>
+                     <!-- Left Side: Rented In Customer -->
+                     <div>
+                         <h4 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">In Customer ({{ number_format($activeRentalData['customer'] ?? 0) }})</h4>
+                         <div class="space-y-3">
+                             @if(isset($summary['rented_in_customer']['details']['Original in Customer']) && $summary['rented_in_customer']['details']['Original in Customer'] > 0)
+                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Original in Customer']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                 <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Original in Customer</span>
+                                 <span class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Original in Customer'] }}</span>
+                             </a>
+                             @endif
+                             
+                             @if(isset($summary['rented_in_customer']['details']['Vendor Rent']) && $summary['rented_in_customer']['details']['Vendor Rent'] > 0)
+                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Vendor Rent']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                 <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Vendor Rent</span>
+                                 <span class="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Vendor Rent'] }}</span>
+                             </a>
+                             @endif
+
+                             @if(isset($summary['rented_in_customer']['details']['Replacement - Service']) && $summary['rented_in_customer']['details']['Replacement - Service'] > 0)
+                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Replacement - Service']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                 <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Replacement (Service/Stock)</span>
+                                 <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Replacement - Service'] }}</span>
+                             </a>
+                             @endif
+
+                             @if(isset($summary['rented_in_customer']['details']['Replacement - RBO']) && $summary['rented_in_customer']['details']['Replacement - RBO'] > 0)
+                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Replacement - RBO']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                 <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Replacement (RBO)</span>
+                                 <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Replacement - RBO'] }}</span>
+                             </a>
+                             @endif
+                             
+                             @if(isset($summary['rented_in_customer']['details']['Check Rent position']) && $summary['rented_in_customer']['details']['Check Rent position'] > 0)
+                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Check Rent position']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors group">
+                                 <span class="text-red-600 dark:text-red-400 text-sm font-medium">Check Rent Position</span>
+                                 <span class="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Check Rent position'] }}</span>
+                             </a>
+                             @endif
+
+                             {{-- Overdue Rentals Alert --}}
+                             @if(($activeRentalData['overdue'] ?? 0) > 0)
+                             <div class="mt-4 p-3 rounded-xl bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 border border-orange-200 dark:border-orange-800">
+                                 <a href="{{ route('details', ['category' => 'overdue_rentals']) }}" class="flex items-center gap-3 group">
+                                     <div class="p-2 bg-orange-100 dark:bg-orange-900/50 rounded-lg">
+                                         <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                     </div>
+                                     <div class="flex-1">
+                                         <p class="text-sm font-bold text-orange-700 dark:text-orange-300 group-hover:text-orange-800 transition-colors">Overdue Rentals</p>
+                                         <p class="text-xs text-orange-600 dark:text-orange-400">Vehicles past rental end date</p>
+                                     </div>
+                                     <span class="text-2xl font-bold text-orange-600 dark:text-orange-400">{{ $activeRentalData['overdue'] }}</span>
+                                 </a>
                              </div>
-                             <span class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Original in Customer'] }}</span>
-                         </a>
-                         @endif
-                         
-                         @if(isset($summary['rented_in_customer']['details']['Vendor Rent']) && $summary['rented_in_customer']['details']['Vendor Rent'] > 0)
-                         <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Vendor Rent']) }}" class="flex justify-between items-center p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
-                             <div class="flex items-center gap-3">
-                                 <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                                 <span class="text-slate-600 dark:text-slate-300 font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Vendor Rent</span>
-                             </div>
-                             <span class="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Vendor Rent'] }}</span>
-                         </a>
-                         @endif
+                             @endif
+                         </div>
                      </div>
 
-                     <!-- Right Side: Replacements & Issues -->
-                     <div class="space-y-3">
-                         @if(isset($summary['rented_in_customer']['details']['Replacement - Service']) && $summary['rented_in_customer']['details']['Replacement - Service'] > 0)
-                         <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Replacement - Service']) }}" class="flex justify-between items-center p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
-                             <div class="flex items-center gap-3">
-                                 <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                                 <span class="text-slate-600 dark:text-slate-300 font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Replacement (Service)</span>
-                             </div>
-                             <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Replacement - Service'] }}</span>
-                         </a>
+                     <!-- Right Side: Other Active Status -->
+                     <div>
+                         <!-- Active In Stock -->
+                         @if(($activeRentalData['stock'] ?? 0) > 0)
+                         <div class="mb-4">
+                             <h4 class="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-2">Active In Stock ({{ $activeRentalData['stock'] }})</h4>
+                             <a href="{{ route('details', ['category' => 'stock_original', 'sub' => 'no_replace']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors group">
+                                 <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Original (No Replace)</span>
+                                 <span class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-2 py-1 rounded-md">{{ $activeRentalData['stock'] }}</span>
+                             </a>
+                         </div>
                          @endif
 
-                         @if(isset($summary['rented_in_customer']['details']['Replacement - RBO']) && $summary['rented_in_customer']['details']['Replacement - RBO'] > 0)
-                         <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Replacement - RBO']) }}" class="flex justify-between items-center p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
-                             <div class="flex items-center gap-3">
-                                 <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-                                 <span class="text-slate-600 dark:text-slate-300 font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Replacement (RBO)</span>
+                         <!-- Active In Service -->
+                         @if(($activeRentalData['service']['total'] ?? 0) > 0)
+                         <div>
+                             <h4 class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2">Active In Service ({{ $activeRentalData['service']['total'] }})</h4>
+                             <div class="space-y-2">
+                                 @if($activeRentalData['service']['external'] > 0)
+                                 <a href="{{ route('details', ['category' => 'service_external', 'sub' => 'original_no_replace']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                     <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">External</span>
+                                     <span class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-md">{{ $activeRentalData['service']['external'] }}</span>
+                                 </a>
+                                 @endif
+                                 
+                                 @if($activeRentalData['service']['internal'] > 0)
+                                 <a href="{{ route('details', ['category' => 'service_internal', 'sub' => 'original_no_replace']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                     <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Internal</span>
+                                     <span class="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-bold px-2 py-1 rounded-md">{{ $activeRentalData['service']['internal'] }}</span>
+                                 </a>
+                                 @endif
+
+                                 @if($activeRentalData['service']['insurance'] > 0)
+                                 <a href="{{ route('details', ['category' => 'service_insurance', 'sub' => 'original_no_replace']) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                                     <span class="text-slate-600 dark:text-slate-300 text-sm font-medium">Insurance</span>
+                                     <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-bold px-2 py-1 rounded-md">{{ $activeRentalData['service']['insurance'] }}</span>
+                                 </a>
+                                 @endif
                              </div>
-                             <span class="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Replacement - RBO'] }}</span>
-                         </a>
-                         @endif
-                         
-                         @if(isset($summary['rented_in_customer']['details']['Check Rent position']) && $summary['rented_in_customer']['details']['Check Rent position'] > 0)
-                         <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Check Rent position']) }}" class="flex justify-between items-center p-3 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/20 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors group">
-                             <div class="flex items-center gap-3">
-                                 <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                 <span class="text-red-700 dark:text-red-400 font-medium group-hover:text-red-800 dark:group-hover:text-red-300 transition-colors">Check Rent Position</span>
-                             </div>
-                             <span class="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 text-xs font-bold px-2 py-1 rounded-md">{{ $summary['rented_in_customer']['details']['Check Rent position'] }}</span>
-                         </a>
+                         </div>
                          @endif
                      </div>
                 </div>
@@ -278,12 +354,14 @@
                     <div class="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">In Service Breakdown</h3>
+                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">In Service Detail</h3>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
                     <div>
-                         <h4 class="text-xs font-bold text-red-500 uppercase tracking-wider mb-3">External ({{ $summary['stock_external_service']['total'] }})</h4>
+                         <a href="{{ route('details', ['category' => 'external_service']) }}" class="block mb-3 group/link">
+                             <h4 class="text-xs font-bold text-red-500 uppercase tracking-wider group-hover/link:underline group-hover/link:text-red-600 transition-all">External ({{ $summary['stock_external_service']['total'] }})</h4>
+                         </a>
                          <div class="space-y-2">
                             @foreach($summary['stock_external_service']['details'] as $desc => $val)
                             <a href="{{ route('details', ['category' => 'external_service', 'sub' => $desc]) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm">
@@ -294,7 +372,9 @@
                          </div>
                     </div>
                     <div>
-                         <h4 class="text-xs font-bold text-blue-500 uppercase tracking-wider mb-3">Internal ({{ $summary['stock_internal_service']['total'] }})</h4>
+                         <a href="{{ route('details', ['category' => 'internal_service']) }}" class="block mb-3 group/link">
+                             <h4 class="text-xs font-bold text-blue-500 uppercase tracking-wider group-hover/link:underline group-hover/link:text-blue-600 transition-all">Internal ({{ $summary['stock_internal_service']['total'] }})</h4>
+                         </a>
                          <div class="space-y-2">
                             @foreach($summary['stock_internal_service']['details'] as $desc => $val)
                             <a href="{{ route('details', ['category' => 'internal_service', 'sub' => $desc]) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm">
@@ -305,7 +385,9 @@
                          </div>
                     </div>
                     <div>
-                         <h4 class="text-xs font-bold text-purple-500 uppercase tracking-wider mb-3">Insurance ({{ $summary['stock_insurance']['total'] ?? 0 }})</h4>
+                         <a href="{{ route('details', ['category' => 'insurance']) }}" class="block mb-3 group/link">
+                             <h4 class="text-xs font-bold text-purple-500 uppercase tracking-wider group-hover/link:underline group-hover/link:text-purple-600 transition-all">Insurance ({{ $summary['stock_insurance']['total'] ?? 0 }})</h4>
+                         </a>
                          <div class="space-y-2">
                             @foreach(($summary['stock_insurance']['details'] ?? []) as $desc => $val)
                             <a href="{{ route('details', ['category' => 'insurance', 'sub' => $desc]) }}" class="flex justify-between items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm">
@@ -323,36 +405,32 @@
         <!-- Right Column: Ownership & Charts -->
         <div class="space-y-8">
             
-            <!-- Ownership -->
+            <!-- Attention Needed (Uncategorized) -->
+            @if(($summary['uncategorized']['total'] ?? 0) > 0)
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-                <div class="flex items-center gap-2 mb-4">
-                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                    <h3 class="font-bold text-slate-800 dark:text-slate-100">Ownership</h3>
+                 <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">Attention Needed</h3>
                 </div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <a href="{{ route('details', ['category' => 'sdp_owned']) }}" class="p-4 rounded-xl bg-indigo-50 border border-indigo-100 flex flex-col items-center justify-center text-center hover:bg-indigo-100 transition-colors">
-                        <span class="text-3xl font-bold text-indigo-600">{{ number_format($summary['sdp_stock'] - $summary['vendor_rent']) }}</span>
-                        <span class="text-xs font-semibold text-indigo-400 mt-1 uppercase">SDP Owned</span>
-                    </a>
-                    <a href="{{ route('details', ['category' => 'vendor_rent']) }}" class="p-4 rounded-xl bg-cyan-50 border border-cyan-100 flex flex-col items-center justify-center text-center hover:bg-cyan-100 transition-colors">
-                        <span class="text-3xl font-bold text-cyan-600">{{ number_format($summary['vendor_rent']) }}</span>
-                        <span class="text-xs font-semibold text-cyan-500 mt-1 uppercase">Vendor Rent</span>
-                    </a>
-                </div>
-
-                @if(($summary['uncategorized']['total'] ?? 0) > 0)
-                <a href="{{ route('details', ['category' => 'uncategorized']) }}" class="mt-4 flex items-center justify-center gap-2 w-full py-2 bg-red-50 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <a href="{{ route('details', ['category' => 'uncategorized']) }}" class="flex items-center justify-center gap-2 w-full py-3 bg-red-50 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-100 transition-colors border border-red-100">
                     {{ $summary['uncategorized']['total'] }} Uncategorized Items
                 </a>
-                @endif
             </div>
+            @endif
 
-            <!-- Charts Placeholder (using ApexCharts) -->
+            <!-- Stock Distribution Chart -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 h-auto">
                 <h3 class="font-bold text-slate-800 dark:text-slate-100 mb-4">Stock Distribution</h3>
                 <div id="drilldownChart" class="h-64"></div>
+            </div>
+
+            <!-- Active Rental Chart -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 h-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">Active Rental Distribution</h3>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">Total: {{ number_format($activeRentalData['total'] ?? 0) }}</span>
+                </div>
+                <div id="activeRentalChart" class="h-64"></div>
             </div>
         </div>
     </div>
@@ -499,7 +577,7 @@
                             chart.updateOptions({
                                 series: drillData[label].series,
                                 labels: drillData[label].labels,
-                                title: { text: label + ' Breakdown', align: 'center', style: { fontSize: '14px' } },
+                                title: { text: label + ' Detail', align: 'center', style: { fontSize: '14px' } },
                                 colors: undefined
                             });
                             isDrilled = true;
@@ -526,6 +604,53 @@
 
     var chart = new ApexCharts(document.querySelector("#drilldownChart"), chartOptions);
     chart.render();
+
+    // 3. Active Rental Distribution Chart
+    const activeRentalData = {
+        customer: {{ $activeRentalData['customer'] ?? 0 }},
+        stock: {{ $activeRentalData['stock'] ?? 0 }},
+        external: {{ $activeRentalData['service']['external'] ?? 0 }},
+        internal: {{ $activeRentalData['service']['internal'] ?? 0 }},
+        insurance: {{ $activeRentalData['service']['insurance'] ?? 0 }}
+    };
+    
+    const activeRentalOptions = {
+        chart: {
+            type: 'donut',
+            height: 250,
+            fontFamily: 'Outfit, sans-serif',
+        },
+        series: [
+            activeRentalData.customer,
+            activeRentalData.stock,
+            activeRentalData.external + activeRentalData.internal + activeRentalData.insurance
+        ],
+        labels: ['In Customer', 'In Stock (Active)', 'In Service (Active)'],
+        colors: ['#f59e0b', '#10b981', '#ef4444'],
+        dataLabels: { enabled: false },
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '65%',
+                    labels: { 
+                        show: true, 
+                        total: { 
+                            show: true, 
+                            label: 'Active', 
+                            fontSize: '14px', 
+                            fontWeight: 600, 
+                            color: '#334155' 
+                        } 
+                    }
+                }
+            }
+        },
+        stroke: { show: false },
+        legend: { position: 'bottom', fontSize: '12px', fontFamily: 'Outfit, sans-serif', markers: { radius: 12 } },
+    };
+    
+    const activeRentalChart = new ApexCharts(document.querySelector("#activeRentalChart"), activeRentalOptions);
+    activeRentalChart.render();
 </script>
 @endif
     </div>

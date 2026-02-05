@@ -141,7 +141,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title success">In Stock Breakdown</div>
+        <div class="section-title success">In Stock Detail</div>
         <table>
             <tr><th>Location</th><th class="text-right">Count</th></tr>
             @if(isset($summary['in_stock']['details']['SDP/OPERATION']))
@@ -156,7 +156,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title warning">Rented Breakdown</div>
+        <div class="section-title warning">Rented Detail</div>
         <table>
             <tr><th>Category</th><th class="text-right">Count</th></tr>
             @foreach($summary['rented_in_customer']['details'] as $desc => $val)
@@ -166,7 +166,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title danger">External Service Breakdown</div>
+        <div class="section-title danger">External Service Detail</div>
         <table>
             <tr><th>Provider</th><th class="text-right">Count</th></tr>
             @foreach($summary['stock_external_service']['details'] as $desc => $val)
@@ -176,7 +176,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title info">Internal Service Breakdown</div>
+        <div class="section-title info">Internal Service Detail</div>
         <table>
             <tr><th>Category</th><th class="text-right">Count</th></tr>
             @foreach($summary['stock_internal_service']['details'] as $desc => $val)
@@ -186,7 +186,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">Insurance Breakdown</div>
+        <div class="section-title" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">Insurance Detail</div>
         <table>
             <tr><th>Category</th><th class="text-right">Count</th></tr>
             @foreach(($summary['stock_insurance']['details'] ?? []) as $desc => $val)

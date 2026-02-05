@@ -110,6 +110,31 @@ class InventoryService
     }
 
     /**
+     * Scope: Active Rentals (Rented in Customer OR Original w/o Replacement in Service/Stock)
+     */
+    public function scopeActiveRentals(Builder $query): Builder
+    {
+        return $query->where(function ($q) {
+            // 1. Rented in Customer
+            $q->where('location', Location::RENTAL_CUSTOMER)
+            // 2. In Service (Active) = In Service + Original + No Replace (Count=1)
+              ->orWhere(function ($sub) {
+                  $this->scopeInService($sub)
+                       ->whereColumn('lot_number', 'reserved_lot')
+                       ->whereNotNull('rental_id')
+                       ->where('rental_id_count', 1);
+              })
+            // 3. In Stock (Active) = In Stock + Original + No Replace (Count=1)
+              ->orWhere(function ($sub) {
+                  $this->scopeInStock($sub)
+                       ->whereColumn('lot_number', 'reserved_lot')
+                       ->whereNotNull('rental_id')
+                       ->where('rental_id_count', 1);
+              });
+        });
+    }
+
+    /**
      * Apply complex nested filters
      */
     public function applyAdvancedFilters(Builder $query, array $group): Builder
@@ -156,6 +181,15 @@ class InventoryService
             // Map 'value' to logic
             if ($value === 'in_stock') $this->scopeInStock($query);
             elseif ($value === 'rented') $this->scopeRented($query);
+            elseif ($value === 'active_rentals') $this->scopeActiveRentals($query); // New scope
+            elseif ($value === 'overdue_rentals') {
+                // Vehicles still at customer location but past their rental end date
+                $today = now()->format('Y-m-d');
+                $query->where('location', Location::RENTAL_CUSTOMER)
+                      ->where('is_sold', false)
+                      ->whereNotNull('actual_end_rental')
+                      ->whereDate('actual_end_rental', '<', $today);
+            }
             elseif ($value === 'in_service') $this->scopeInService($query);
             elseif ($value === 'vendor_rent') $query->where('is_vendor_rent', true);
             elseif ($value === 'stock_pure') {

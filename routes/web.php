@@ -4,8 +4,16 @@ use Illuminate\Support\Facades\Route;
 
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImportController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+// Import Data Routes
+Route::get('/import', [ImportController::class, 'index'])->name('import');
+Route::post('/import/excel', [ImportController::class, 'uploadExcel'])->name('import.excel');
+Route::post('/import/odoo/config', [ImportController::class, 'saveOdooConfig'])->name('import.odoo.config');
+Route::post('/import/odoo/test', [ImportController::class, 'testOdooConnection'])->name('import.odoo.test');
+Route::post('/import/odoo/sync', [ImportController::class, 'syncOdoo'])->name('import.odoo.sync');
 Route::get('/details', [DashboardController::class, 'details'])->name('details');
 Route::get('/export', [DashboardController::class, 'export'])->name('export');
 Route::get('/print', [DashboardController::class, 'print'])->name('print');

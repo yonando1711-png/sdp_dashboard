@@ -68,7 +68,65 @@ class DashboardController extends Controller
             'reserve' => $reserveStock,
         ];
 
-        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus'));
+        // --- Active Rental Logic ---
+        // Exclude RESERVE (future start date) from all Active Rental calculations
+        // 1. Rented In Customer - need to recalculate excluding reserve
+        $activeCustomer = Item::where('location', Location::RENTAL_CUSTOMER)
+                              ->where('is_sold', false)
+                              ->where(function($q) use ($today) {
+                                  $q->whereNull('actual_start_rental')
+                                    ->orWhere('actual_start_rental', '<=', $today);
+                              })
+                              ->count();
+        
+        // 2. In Stock Active (Original w/o Replace, Count=1, NOT Reserve)
+        $inStockActive = Item::where('in_stock', true)
+                             ->whereColumn('lot_number', 'reserved_lot')
+                             ->whereNotNull('rental_id')
+                             ->where('rental_id_count', 1)
+                             ->where(function($q) use ($today) {
+                                 $q->whereNull('actual_start_rental')
+                                   ->orWhere('actual_start_rental', '<=', $today);
+                             })
+                             ->count();
+        
+        // 3. In Service Active (Original w/o Replace, Count=1, NOT Reserve)
+        // Group by type for detail view (Ext, Int, Ins)
+        $serviceActiveQuery = function($q) use ($today) {
+             $q->whereColumn('lot_number', 'reserved_lot')
+               ->whereNotNull('rental_id')
+               ->where('rental_id_count', 1)
+               ->where(function($sub) use ($today) {
+                   $sub->whereNull('actual_start_rental')
+                       ->orWhere('actual_start_rental', '<=', $today);
+               });
+        };
+
+        $inServiceActiveExt = Item::where('location', 'like', Location::SERVICE_EXTERNAL . '%')->tap($serviceActiveQuery)->count();
+        $inServiceActiveInt = Item::where('location', Location::SERVICE_INTERNAL)->tap($serviceActiveQuery)->count();
+        $inServiceActiveIns = Item::where('location', 'like', Location::INSURANCE . '%')->tap($serviceActiveQuery)->count();
+        
+        // 4. Overdue Rentals - Still at customer but actual_end_rental is in the past
+        $overdueRentals = Item::where('location', Location::RENTAL_CUSTOMER)
+                              ->where('is_sold', false)
+                              ->whereNotNull('actual_end_rental')
+                              ->whereDate('actual_end_rental', '<', $today)
+                              ->count();
+        
+        $activeRentalData = [
+            'total' => $activeCustomer + $inStockActive + $inServiceActiveExt + $inServiceActiveInt + $inServiceActiveIns,
+            'customer' => $activeCustomer,
+            'stock' => $inStockActive,
+            'service' => [
+                'total' => $inServiceActiveExt + $inServiceActiveInt + $inServiceActiveIns,
+                'external' => $inServiceActiveExt,
+                'internal' => $inServiceActiveInt,
+                'insurance' => $inServiceActiveIns
+            ],
+            'overdue' => $overdueRentals
+        ];
+
+        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus', 'activeRentalData'));
     }
     
     public function summary()
@@ -164,6 +222,11 @@ class DashboardController extends Controller
                   ->orWhere('location', 'like', "%$searchQuery%")
                   ->orWhere('internal_reference', 'like', "%$searchQuery%");
             });
+        } elseif ($category == 'overdue_rentals') {
+            // Vehicles still at customer location but past their rental end date
+            $query->where('location', Location::RENTAL_CUSTOMER)
+                  ->whereNotNull('actual_end_rental')
+                  ->whereDate('actual_end_rental', '<', $today);
         } elseif ($category == 'vendor_rent') {
             $query->where('is_vendor_rent', true);
         } elseif ($category == 'in_stock') {
