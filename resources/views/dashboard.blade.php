@@ -281,7 +281,7 @@
                          
                          <div class="grid grid-cols-2 gap-3 mb-3">
                              <!-- Original -->
-                             <a href="{{ route('details', ['category' => 'rented', 'sub' => 'Original in Customer']) }}" class="flex flex-col items-center p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors text-center group">
+                             <a href="{{ route('details', ['category' => 'rented_original_customer']) }}" class="flex flex-col items-center p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors text-center group">
                                  <span class="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{{ $summary['rented_in_customer']['details']['Original in Customer'] ?? 0 }}</span>
                                  <span class="text-xs font-bold uppercase text-emerald-600 dark:text-emerald-500 mt-1">Original</span>
                              </a>
