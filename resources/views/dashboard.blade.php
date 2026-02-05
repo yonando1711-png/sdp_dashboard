@@ -169,7 +169,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8 animate-enter delay-200">
         
         <!-- Left Column: Breakdowns -->
-        <div class="lg:col-span-2 space-y-8">
+        <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             
             <!-- In Stock Breakdown -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-800 p-6">
@@ -235,6 +235,9 @@
                 </div>
             </div>
 
+            <!-- Right Side Stack -->
+            <div class="space-y-8">
+            
             <!-- Active Rental Detail -->
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
                 <div class="flex items-center gap-2 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -402,6 +405,7 @@
                 </div>
             </div>
 
+            </div>
         </div>
 
         <!-- Right Column: Ownership & Charts -->
