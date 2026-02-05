@@ -296,23 +296,43 @@ class OdooService
     }
 
     /**
-     * Calculate location-based flags
+     * Calculate location-based flags using Location constants
      */
     protected function calculateLocationFlags(array $item, string $today): array
     {
         $location = $item['location'] ?? '';
         
-        // Determine if in stock vs rented
-        $isRental = str_contains(strtolower($location), 'rental') || 
-                    str_contains(strtolower($location), 'customer');
-        $isService = str_contains(strtolower($location), 'service') ||
-                     str_contains(strtolower($location), 'workshop');
+        // Check if it's a rental location
+        $isRentalCustomer = $location === Location::RENTAL_CUSTOMER || 
+                            str_contains($location, 'Partners/Customers/Rental');
         
-        $item['is_sold'] = str_contains(strtolower($location), 'sold') || 
-                           str_contains(strtolower($location), 'disposal');
-        $item['in_stock'] = !$isRental && !$isService && !$item['is_sold'];
-        $item['is_active_rental'] = $isRental && !empty($item['rental_id']) && 
-                                     $item['actual_start_rental'] <= $today;
+        // Check if sold
+        $isSold = str_contains($location, 'SOLD') || 
+                  str_contains($location, 'Disposal') ||
+                  $location === Location::SOLD ||
+                  $location === Location::SOLD_STOCK;
+        
+        // Check if in service
+        $isService = str_contains($location, 'Service') ||
+                     str_contains($location, 'Workshop') ||
+                     $location === Location::SERVICE_INTERNAL ||
+                     $location === Location::SERVICE_EXTERNAL ||
+                     $location === Location::INSURANCE;
+        
+        // Check if in stock (any stock car location)
+        $isStock = str_contains($location, 'STOCK CAR') ||
+                   str_contains($location, 'Transit') ||
+                   $location === Location::OPERATION ||
+                   $location === Location::TRANSIT;
+        
+        // Set flags as integers for SQLite compatibility
+        $item['is_sold'] = $isSold ? 1 : 0;
+        $item['in_stock'] = ($isStock && !$isSold) ? 1 : 0;
+        $item['is_active_rental'] = $isRentalCustomer ? 1 : 0;
+        $item['is_vendor_rent'] = ($item['is_vendor_rent'] ?? false) ? 1 : 0;
+        $item['is_on_hand'] = 1;
+        $item['is_stock'] = $isStock ? 1 : 0;
+        $item['rental_id_count'] = 0;
         
         return $item;
     }
@@ -337,6 +357,13 @@ class OdooService
                 'message' => 'No valid items found after transformation. Check field mapping.',
                 'mapping' => $mapping
             ];
+        }
+        
+        // Add timestamps
+        $now = now()->toDateTimeString();
+        foreach ($items as &$item) {
+            $item['created_at'] = $now;
+            $item['updated_at'] = $now;
         }
         
         // Clear existing and insert new
