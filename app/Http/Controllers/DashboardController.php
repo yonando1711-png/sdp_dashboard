@@ -228,6 +228,7 @@ class DashboardController extends Controller
                   ->whereNotNull('actual_end_rental')
                   ->whereDate('actual_end_rental', '<=', $today);
         } elseif ($category == 'vendor_rent') {
+            $inventory->scopeRented($query);
             $query->where('is_vendor_rent', true);
         } elseif ($category == 'in_stock') {
              if ($sub) {
