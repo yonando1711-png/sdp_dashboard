@@ -441,10 +441,23 @@
 
     <!-- Historical Trend Chart -->
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-800 p-6 mb-8">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-6">
             <div>
                 <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">Historical Trends</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Inventory movement over the last 30 days</p>
+            </div>
+            
+            <!-- Trend Filter Dropdown -->
+            <div class="relative">
+                <select id="trendFilter" onchange="updateTrendChart(this.value)" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                    <option value="overview">Overview</option>
+                    <option value="rental_types">Rental Types</option>
+                    <option value="locations">Key Locations</option>
+                    <option value="rented_detail">Rented Breakdown</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
             </div>
         </div>
         <div id="trendChart" class="h-80 w-full"></div>
@@ -485,29 +498,32 @@
     const historyData = @json($history ?? []);
     
     // Prepare Series
+    // Prepare Base Data
     const dates = historyData.map(h => h.date);
-    const inStockSeries = historyData.map(h => h.in_stock);
-    const rentedSeries = historyData.map(h => h.rented);
-    const inServiceSeries = historyData.map(h => h.in_service);
     
-    // 1. Trend Chart
-    if (historyData.length > 0) {
-        const trendOptions = {
+    // 1. Trend Chart Instance
+    let trendChart = null;
+    
+    // Helper to safely extract nested data from summary_json
+    const getNestedVal = (obj, path) => {
+        return path.split('.').reduce((acc, part) => acc && acc[part], obj) || 0;
+    };
+
+    function initTrendChart() {
+        if (historyData.length === 0) return;
+
+        const options = {
             chart: {
                 type: 'area',
                 height: 320,
                 fontFamily: 'Outfit, sans-serif',
                 toolbar: { show: false },
-                animations: { enabled: true }
+                animations: { enabled: true, dynamicAnimation: { speed: 350 } }
             },
             stroke: { curve: 'smooth', width: 2 },
             fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
             dataLabels: { enabled: false },
-            series: [
-                { name: 'In Stock', data: inStockSeries },
-                { name: 'Rented', data: rentedSeries },
-                { name: 'In Service', data: inServiceSeries }
-            ],
+            series: [], // Populated by updateTrendChart
             xaxis: {
                 categories: dates,
                 type: 'datetime',
@@ -516,14 +532,83 @@
                 axisTicks: { show: false }
             },
             yaxis: { show: true },
-            colors: ['#10b981', '#f59e0b', '#ef4444'], // Green, Amber, Red
             grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
             legend: { position: 'top', horizontalAlign: 'right' }
         };
         
-        const trendChart = new ApexCharts(document.querySelector("#trendChart"), trendOptions);
+        trendChart = new ApexCharts(document.querySelector("#trendChart"), options);
         trendChart.render();
+        
+        // Initial load
+        updateTrendChart('overview');
     }
+
+    // Dynamic Update Function
+    window.updateTrendChart = function(filter) {
+        if (!trendChart) return;
+
+        let newSeries = [];
+        let newColors = [];
+
+        if (filter === 'overview') {
+            newSeries = [
+                { name: 'In Stock', data: historyData.map(h => h.in_stock) },
+                { name: 'Rented', data: historyData.map(h => h.rented) },
+                { name: 'In Service', data: historyData.map(h => h.in_service) }
+            ];
+            newColors = ['#10b981', '#f59e0b', '#ef4444'];
+        } 
+        else if (filter === 'rental_types') {
+            // Subscription vs Regular
+            newSeries = [
+                { name: 'Subscription', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Subscription')) },
+                { name: 'Regular', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Regular')) }
+            ];
+            newColors = ['#8b5cf6', '#3b82f6']; // Purple, Blue
+        }
+        else if (filter === 'locations') {
+            // Key Cities
+            const cities = ['Jakarta', 'Surabaya', 'Semarang', 'Bandung'];
+            const colors = ['#6366f1', '#f43f5e', '#14b8a6', '#f59e0b']; // Indigo, Rose, Teal, Amber
+            
+            cities.forEach((city, index) => {
+                newSeries.push({
+                    name: city,
+                    data: historyData.map(h => {
+                        // Look for city in location details
+                        let val = 0;
+                        const locs = getNestedVal(h.summary_json || {}, 'in_stock.details.locations') || {};
+                        for (let k in locs) {
+                            if (k.toLowerCase().includes(city.toLowerCase())) val += locs[k];
+                        }
+                        return val;
+                    })
+                });
+                newColors.push(colors[index]);
+            });
+        }
+        else if (filter === 'rented_detail') {
+            // Original vs Vendor vs Replacement
+            newSeries = [
+                { name: 'Original', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Original in Customer')) },
+                { name: 'Vendor Rent', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Vendor Rent')) },
+                { name: 'Replacement', data: historyData.map(h => {
+                    const r1 = getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Replacement - Service');
+                    const r2 = getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Replacement - RBO');
+                    return r1 + r2;
+                }) }
+            ];
+            newColors = ['#10b981', '#06b6d4', '#f97316']; // Green, Cyan, Orange
+        }
+
+        trendChart.updateOptions({
+            series: newSeries,
+            colors: newColors
+        });
+    };
+
+    // Initialize after page load
+    initTrendChart();
 
     // 2. Drilldown Chart
     const mainData = {
