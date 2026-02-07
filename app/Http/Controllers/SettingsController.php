@@ -12,11 +12,12 @@ class SettingsController extends Controller
      */
     public function index()
     {
-        // Get all chart target settings
+        // Get all chart target settings (percentage-based)
         $targets = [
-            'target_in_stock' => (int) Setting::get('target_in_stock', 500),
-            'target_rented' => (int) Setting::get('target_rented', 2500),
-            'target_in_service' => (int) Setting::get('target_in_service', 100),
+            'target_in_stock_pct' => (float) Setting::get('target_in_stock_pct', 10),
+            'target_active_rental_pct' => (float) Setting::get('target_active_rental_pct', 82),
+            'target_in_service_pct' => (float) Setting::get('target_in_service_pct', 8),
+            'dashboard_layout' => Setting::get('dashboard_layout', 'kpi_progress'),
             'target_subscription' => (int) Setting::get('target_subscription', 1500),
             'target_regular' => (int) Setting::get('target_regular', 1000),
         ];
@@ -35,20 +36,22 @@ class SettingsController extends Controller
     public function updateTargets(Request $request)
     {
         $request->validate([
-            'target_in_stock' => 'required|integer|min:0',
-            'target_rented' => 'required|integer|min:0',
-            'target_in_service' => 'required|integer|min:0',
+            'target_in_stock_pct' => 'required|numeric|min:0|max:100',
+            'target_active_rental_pct' => 'required|numeric|min:0|max:100',
+            'target_in_service_pct' => 'required|numeric|min:0|max:100',
+            'dashboard_layout' => 'required|in:kpi_progress,simple_stats',
             'target_subscription' => 'required|integer|min:0',
             'target_regular' => 'required|integer|min:0',
         ]);
 
-        Setting::set('target_in_stock', $request->target_in_stock);
-        Setting::set('target_rented', $request->target_rented);
-        Setting::set('target_in_service', $request->target_in_service);
+        Setting::set('target_in_stock_pct', $request->target_in_stock_pct);
+        Setting::set('target_active_rental_pct', $request->target_active_rental_pct);
+        Setting::set('target_in_service_pct', $request->target_in_service_pct);
+        Setting::set('dashboard_layout', $request->dashboard_layout);
         Setting::set('target_subscription', $request->target_subscription);
         Setting::set('target_regular', $request->target_regular);
 
-        return redirect()->route('settings')->with('success', 'Chart targets updated successfully!');
+        return redirect()->route('settings')->with('success', 'KPI targets updated successfully!');
     }
 
     /**
@@ -81,9 +84,11 @@ class SettingsController extends Controller
     public function getTargets()
     {
         return response()->json([
-            'in_stock' => (int) Setting::get('target_in_stock', 500),
-            'rented' => (int) Setting::get('target_rented', 2500),
-            'in_service' => (int) Setting::get('target_in_service', 100),
+            // Percentage-based targets
+            'in_stock_pct' => (float) Setting::get('target_in_stock_pct', 10),
+            'active_rental_pct' => (float) Setting::get('target_active_rental_pct', 82),
+            'in_service_pct' => (float) Setting::get('target_in_service_pct', 8),
+            // Fixed targets
             'subscription' => (int) Setting::get('target_subscription', 1500),
             'regular' => (int) Setting::get('target_regular', 1000),
         ]);

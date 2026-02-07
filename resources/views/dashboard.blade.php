@@ -97,6 +97,132 @@
         </div>
     </div>
 
+    @if(($dashboardLayout ?? 'kpi_progress') === 'kpi_progress')
+    <!-- KPI Progress Cards -->
+    @php
+        $total = $summary['sdp_stock'] ?? 0;
+        $inStockVal = $summary['in_stock']['total'] ?? 0;
+        $activeRentalVal = $activeRentalData['total'] ?? 0;
+        $inServiceVal = ($summary['stock_external_service']['total'] ?? 0) + ($summary['stock_internal_service']['total'] ?? 0) + ($summary['stock_insurance']['total'] ?? 0);
+        
+        // Get target percentages from settings
+        $targetInStockPct = (float) \App\Models\Setting::get('target_in_stock_pct', 10);
+        $targetActiveRentalPct = (float) \App\Models\Setting::get('target_active_rental_pct', 82);
+        $targetInServicePct = (float) \App\Models\Setting::get('target_in_service_pct', 8);
+        
+        // Calculate current percentages
+        $currentInStockPct = $total > 0 ? round(($inStockVal / $total) * 100, 1) : 0;
+        $currentActiveRentalPct = $total > 0 ? round(($activeRentalVal / $total) * 100, 1) : 0;
+        $currentInServicePct = $total > 0 ? round(($inServiceVal / $total) * 100, 1) : 0;
+        
+        // Determine status (meet/exceed = good if >= target, stay under = good if <= target)
+        $inStockStatus = $currentInStockPct >= $targetInStockPct ? 'success' : 'warning';
+        $activeRentalStatus = $currentActiveRentalPct >= $targetActiveRentalPct ? 'success' : 'warning';
+        $inServiceStatus = $currentInServicePct <= $targetInServicePct ? 'success' : 'danger';
+    @endphp
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <!-- In Stock KPI -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="p-1.5 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg">
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    </div>
+                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">In Stock</span>
+                </div>
+                @if($inStockStatus === 'success')
+                <span class="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    On Track
+                </span>
+                @else
+                <span class="flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"></path></svg>
+                    Below Target
+                </span>
+                @endif
+            </div>
+            <div class="flex items-end gap-2 mb-2">
+                <span class="text-3xl font-black text-slate-800 dark:text-slate-100">{{ $currentInStockPct }}%</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400 mb-1">/ {{ $targetInStockPct }}% target</span>
+            </div>
+            <div class="relative h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 {{ $inStockStatus === 'success' ? 'bg-emerald-500' : 'bg-amber-500' }}" 
+                     style="width: {{ min($currentInStockPct, 100) }}%"></div>
+                <div class="absolute inset-y-0 bg-slate-400 dark:bg-slate-600 w-0.5" style="left: {{ $targetInStockPct }}%"></div>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">{{ number_format($inStockVal) }} of {{ number_format($total) }} units</p>
+        </div>
+
+        <!-- Active Rental KPI -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                        <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Active Rental</span>
+                </div>
+                @if($activeRentalStatus === 'success')
+                <span class="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    On Track
+                </span>
+                @else
+                <span class="flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"></path></svg>
+                    Below Target
+                </span>
+                @endif
+            </div>
+            <div class="flex items-end gap-2 mb-2">
+                <span class="text-3xl font-black text-slate-800 dark:text-slate-100">{{ $currentActiveRentalPct }}%</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400 mb-1">/ {{ $targetActiveRentalPct }}% target</span>
+            </div>
+            <div class="relative h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 {{ $activeRentalStatus === 'success' ? 'bg-emerald-500' : 'bg-amber-500' }}" 
+                     style="width: {{ min($currentActiveRentalPct, 100) }}%"></div>
+                <div class="absolute inset-y-0 bg-slate-400 dark:bg-slate-600 w-0.5" style="left: {{ $targetActiveRentalPct }}%"></div>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">{{ number_format($activeRentalVal) }} of {{ number_format($total) }} units</p>
+        </div>
+
+        <!-- In Service KPI -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="p-1.5 bg-red-100 dark:bg-red-900/50 rounded-lg">
+                        <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">In Service</span>
+                </div>
+                @if($inServiceStatus === 'success')
+                <span class="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Under Target
+                </span>
+                @else
+                <span class="flex items-center gap-1 text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded-full">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"></path></svg>
+                    Over Target
+                </span>
+                @endif
+            </div>
+            <div class="flex items-end gap-2 mb-2">
+                <span class="text-3xl font-black text-slate-800 dark:text-slate-100">{{ $currentInServicePct }}%</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400 mb-1">/ {{ $targetInServicePct }}% max</span>
+            </div>
+            <div class="relative h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 {{ $inServiceStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500' }}" 
+                     style="width: {{ min($currentInServicePct, 100) }}%"></div>
+                <div class="absolute inset-y-0 bg-slate-400 dark:bg-slate-600 w-0.5" style="left: {{ $targetInServicePct }}%"></div>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">{{ number_format($inServiceVal) }} of {{ number_format($total) }} units (lower is better)</p>
+        </div>
+    </div>
+
+    @else
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8 animate-enter delay-100">
         <!-- In Stock -->
@@ -163,6 +289,7 @@
         </div>
         @endif
     </div>
+    @endif
 
 
     <!-- Main Content Grid -->
@@ -469,6 +596,7 @@
                 <div class="relative">
                     <select id="trendFilter" onchange="updateTrendChart(this.value)" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
                         <option value="overview">Overview</option>
+                        <option value="percentage_stacked">% of Total (Stacked)</option>
                         <option value="rental_types">Rental Types</option>
                         <option value="locations">Key Locations</option>
                         <option value="rented_detail">Rented Breakdown</option>

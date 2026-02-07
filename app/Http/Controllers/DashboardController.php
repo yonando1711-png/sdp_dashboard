@@ -126,7 +126,9 @@ class DashboardController extends Controller
             'overdue' => $overdueRentals
         ];
 
-        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus', 'activeRentalData'));
+        $dashboardLayout = \App\Models\Setting::get('dashboard_layout', 'kpi_progress');
+
+        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus', 'activeRentalData', 'dashboardLayout'));
     }
     
     public function summary()
