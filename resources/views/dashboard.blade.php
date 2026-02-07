@@ -578,6 +578,7 @@
     </div>
 
     <!-- Historical Trend Chart -->
+    @if($showHistory ?? true)
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm dark:shadow-none border border-slate-100 dark:border-slate-800 p-6 mb-8">
         <div class="flex items-center justify-between mb-6">
             <div>
@@ -587,10 +588,10 @@
             
             <div class="flex items-center gap-4">
                 <!-- Target Toggle -->
-                <label class="flex items-center gap-2 cursor-pointer">
+                <div class="flex items-center gap-2">
                     <input type="checkbox" id="showTarget" onchange="toggleTargetLine()" class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-700">
-                    <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Show Target</span>
-                </label>
+                    <label for="showTarget" class="text-sm font-medium text-slate-600 dark:text-slate-400 cursor-pointer select-none">Show Target</label>
+                </div>
                 
                 <!-- Trend Filter Dropdown -->
                 <div class="relative">
@@ -610,6 +611,7 @@
         </div>
         <div id="trendChart" class="h-80 w-full"></div>
     </div>
+    @endif
 
 
 
@@ -683,6 +685,10 @@
 
     function initTrendChart() {
         if (historyData.length === 0) return;
+        
+        const chartEl = document.querySelector("#trendChart");
+        if (!chartEl) return;
+
 
         const options = {
             chart: {

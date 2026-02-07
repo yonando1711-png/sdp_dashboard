@@ -20,6 +20,7 @@ class SettingsController extends Controller
             'dashboard_layout' => Setting::get('dashboard_layout', 'kpi_progress'),
             'target_subscription' => (int) Setting::get('target_subscription', 1500),
             'target_regular' => (int) Setting::get('target_regular', 1000),
+            'dashboard_show_history' => Setting::get('dashboard_show_history', 'true') === 'true',
         ];
 
         // Get Odoo settings
@@ -50,6 +51,7 @@ class SettingsController extends Controller
         Setting::set('dashboard_layout', $request->dashboard_layout);
         Setting::set('target_subscription', $request->target_subscription);
         Setting::set('target_regular', $request->target_regular);
+        Setting::set('dashboard_show_history', $request->has('dashboard_show_history') ? 'true' : 'false');
 
         return redirect()->route('settings')->with('success', 'KPI targets updated successfully!');
     }

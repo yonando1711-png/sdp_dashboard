@@ -69,6 +69,21 @@
                             </div>
                         </label>
                     </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Visibility -->
+                <div class="mb-8 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">Show Historical Trends</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Toggle visibility of the historical trend chart on dashboard</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="dashboard_show_history" value="1" class="sr-only peer" {{ ($targets['dashboard_show_history'] ?? true) ? 'checked' : '' }}>
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Info Banner -->

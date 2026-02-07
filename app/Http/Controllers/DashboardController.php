@@ -127,8 +127,9 @@ class DashboardController extends Controller
         ];
 
         $dashboardLayout = \App\Models\Setting::get('dashboard_layout', 'kpi_progress');
+        $showHistory = \App\Models\Setting::get('dashboard_show_history', 'true') === 'true';
 
-        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus', 'activeRentalData', 'dashboardLayout'));
+        return view('dashboard', compact('summary', 'metadata', 'history', 'reserveRentalData', 'stockByRentalStatus', 'activeRentalData', 'dashboardLayout', 'showHistory'));
     }
     
     public function summary()
