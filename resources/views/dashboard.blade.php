@@ -458,16 +458,24 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">Inventory movement over the last 30 days</p>
             </div>
             
-            <!-- Trend Filter Dropdown -->
-            <div class="relative">
-                <select id="trendFilter" onchange="updateTrendChart(this.value)" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
-                    <option value="overview">Overview</option>
-                    <option value="rental_types">Rental Types</option>
-                    <option value="locations">Key Locations</option>
-                    <option value="rented_detail">Rented Breakdown</option>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            <div class="flex items-center gap-4">
+                <!-- Target Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="showTarget" onchange="toggleTargetLine()" class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-700">
+                    <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Show Target</span>
+                </label>
+                
+                <!-- Trend Filter Dropdown -->
+                <div class="relative">
+                    <select id="trendFilter" onchange="updateTrendChart(this.value)" class="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                        <option value="overview">Overview</option>
+                        <option value="rental_types">Rental Types</option>
+                        <option value="locations">Key Locations</option>
+                        <option value="rented_detail">Rented Breakdown</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
                 </div>
             </div>
         </div>
@@ -514,6 +522,15 @@
     
     // 1. Trend Chart Instance
     let trendChart = null;
+    let showTarget = false;
+    let currentFilter = 'overview';
+    
+    // Target values (can be configured)
+    const targetValues = {
+        in_stock: 500,      // Target for In Stock
+        rented: 2500,       // Target for Rented 
+        in_service: 100     // Target for In Service
+    };
     
     // Helper to safely extract nested data from summary_json
     const getNestedVal = (obj, path) => {
@@ -525,14 +542,21 @@
 
         const options = {
             chart: {
-                type: 'area',
+                type: 'bar',
                 height: 320,
                 fontFamily: 'Outfit, sans-serif',
                 toolbar: { show: false },
-                animations: { enabled: true, dynamicAnimation: { speed: 350 } }
+                animations: { enabled: true, dynamicAnimation: { speed: 350 } },
+                stacked: false
             },
-            stroke: { curve: 'smooth', width: 2 },
-            fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
+            stroke: { width: [0, 0, 0, 3], curve: 'smooth' },
+            plotOptions: {
+                bar: {
+                    columnWidth: '70%',
+                    borderRadius: 4,
+                    dataLabels: { position: 'top' }
+                }
+            },
             dataLabels: { enabled: false },
             series: [], // Populated by updateTrendChart
             xaxis: {
@@ -540,11 +564,25 @@
                 type: 'datetime',
                 tooltip: { enabled: false },
                 axisBorder: { show: false },
-                axisTicks: { show: false }
+                axisTicks: { show: false },
+                labels: {
+                    datetimeFormatter: {
+                        year: 'yyyy',
+                        month: 'MMM',
+                        day: 'dd MMM',
+                        hour: 'HH:mm'
+                    }
+                }
             },
-            yaxis: { show: true },
+            yaxis: [
+                { show: true, title: { text: 'Count' } }
+            ],
             grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
-            legend: { position: 'top', horizontalAlign: 'right' }
+            legend: { position: 'top', horizontalAlign: 'right' },
+            tooltip: {
+                shared: true,
+                intersect: false
+            }
         };
         
         trendChart = new ApexCharts(document.querySelector("#trendChart"), options);
@@ -553,29 +591,57 @@
         // Initial load
         updateTrendChart('overview');
     }
+    
+    // Toggle target line
+    window.toggleTargetLine = function() {
+        showTarget = document.getElementById('showTarget').checked;
+        updateTrendChart(currentFilter);
+    };
 
     // Dynamic Update Function
     window.updateTrendChart = function(filter) {
         if (!trendChart) return;
+        currentFilter = filter;
 
         let newSeries = [];
         let newColors = [];
+        let yAxisConfig = [{ show: true, title: { text: 'Count' } }];
 
         if (filter === 'overview') {
             newSeries = [
-                { name: 'In Stock', data: historyData.map(h => h.in_stock) },
-                { name: 'Rented', data: historyData.map(h => h.rented) },
-                { name: 'In Service', data: historyData.map(h => h.in_service) }
+                { name: 'In Stock', type: 'bar', data: historyData.map(h => h.in_stock) },
+                { name: 'Rented', type: 'bar', data: historyData.map(h => h.rented) },
+                { name: 'In Service', type: 'bar', data: historyData.map(h => h.in_service) }
             ];
             newColors = ['#10b981', '#f59e0b', '#ef4444'];
+            
+            // Add target line if enabled
+            if (showTarget) {
+                newSeries.push({
+                    name: 'Rented Target',
+                    type: 'line',
+                    data: historyData.map(() => targetValues.rented)
+                });
+                newColors.push('#6366f1');
+            }
         } 
         else if (filter === 'rental_types') {
             // Subscription vs Regular
             newSeries = [
-                { name: 'Subscription', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Subscription')) },
-                { name: 'Regular', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Regular')) }
+                { name: 'Subscription', type: 'bar', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Subscription')) },
+                { name: 'Regular', type: 'bar', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rental_type_summary.Regular')) }
             ];
             newColors = ['#8b5cf6', '#3b82f6']; // Purple, Blue
+            
+            if (showTarget) {
+                const subTarget = 1500;
+                const regTarget = 1000;
+                newSeries.push(
+                    { name: 'Sub Target', type: 'line', data: historyData.map(() => subTarget) },
+                    { name: 'Reg Target', type: 'line', data: historyData.map(() => regTarget) }
+                );
+                newColors.push('#c084fc', '#60a5fa');
+            }
         }
         else if (filter === 'locations') {
             // Key Cities
@@ -585,6 +651,7 @@
             cities.forEach((city, index) => {
                 newSeries.push({
                     name: city,
+                    type: 'bar',
                     data: historyData.map(h => {
                         // Look for city in location details
                         let val = 0;
@@ -601,9 +668,9 @@
         else if (filter === 'rented_detail') {
             // Original vs Vendor vs Replacement
             newSeries = [
-                { name: 'Original', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Original in Customer')) },
-                { name: 'Vendor Rent', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Vendor Rent')) },
-                { name: 'Replacement', data: historyData.map(h => {
+                { name: 'Original', type: 'bar', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Original in Customer')) },
+                { name: 'Vendor Rent', type: 'bar', data: historyData.map(h => getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Vendor Rent')) },
+                { name: 'Replacement', type: 'bar', data: historyData.map(h => {
                     const r1 = getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Replacement - Service');
                     const r2 = getNestedVal(h.summary_json || {}, 'rented_in_customer.details.Replacement - RBO');
                     return r1 + r2;
@@ -614,7 +681,15 @@
 
         trendChart.updateOptions({
             series: newSeries,
-            colors: newColors
+            colors: newColors,
+            chart: {
+                type: showTarget && (filter === 'overview' || filter === 'rental_types') ? 'line' : 'bar'
+            },
+            stroke: {
+                width: newSeries.map(s => s.type === 'line' ? 3 : 0),
+                curve: 'smooth',
+                dashArray: newSeries.map(s => s.type === 'line' ? 5 : 0)
+            }
         });
     };
 
