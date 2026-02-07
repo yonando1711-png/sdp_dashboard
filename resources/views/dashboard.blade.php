@@ -660,7 +660,10 @@
         rented: 2500,
         in_service: 100,
         subscription: 1500,
-        regular: 1000
+        regular: 1000,
+        in_stock_pct: 10,
+        active_rental_pct: 82,
+        in_service_pct: 8
     };
     
     // Load target values from settings API
@@ -818,6 +821,18 @@
             ];
             newColors = ['#10b981', '#f59e0b', '#ef4444'];
             yAxisConfig = [{ show: true, title: { text: 'Percentage (%)' }, max: 100 }];
+            
+            if (showTarget) {
+                const stockTgt = targetValues.in_stock_pct || 10;
+                const rentalTgt = stockTgt + (targetValues.active_rental_pct || 82);
+                
+                newSeries.push(
+                    { name: 'Stock Limit', type: 'line', data: historyData.map(() => stockTgt) },
+                    { name: 'Rental Target', type: 'line', data: historyData.map(() => rentalTgt) }
+                );
+                // Use distinctive colors for target lines (e.g. dark grey)
+                newColors.push('#334155', '#334155');
+            }
         }
         else if (filter === 'locations') {
             // Key Cities
