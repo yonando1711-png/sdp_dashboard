@@ -18,7 +18,9 @@ services:
       - APP_DEBUG=true
       - APP_URL=https://sdp-dashboard.hartonomotor-group.com
       - SESSION_DRIVER=file
+      - SESSION_DRIVER=file
       - CACHE_STORE=file
+      - TZ=Asia/Jakarta
 
   # Scheduler for automatic Odoo sync
   scheduler:
@@ -43,7 +45,9 @@ services:
       - APP_DEBUG=false
       - APP_URL=https://sdp-dashboard.hartonomotor-group.com
       - SESSION_DRIVER=file
+      - SESSION_DRIVER=file
       - CACHE_STORE=file
+      - TZ=Asia/Jakarta
     depends_on:
       - app
 
