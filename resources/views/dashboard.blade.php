@@ -525,12 +525,24 @@
     let showTarget = false;
     let currentFilter = 'overview';
     
-    // Target values (can be configured)
-    const targetValues = {
-        in_stock: 500,      // Target for In Stock
-        rented: 2500,       // Target for Rented 
-        in_service: 100     // Target for In Service
+    // Target values (loaded from API)
+    let targetValues = {
+        in_stock: 500,
+        rented: 2500,
+        in_service: 100,
+        subscription: 1500,
+        regular: 1000
     };
+    
+    // Load target values from settings API
+    fetch('/api/settings/targets')
+        .then(res => res.json())
+        .then(data => {
+            targetValues = data;
+        })
+        .catch(() => {
+            // Use defaults if fetch fails
+        });
     
     // Helper to safely extract nested data from summary_json
     const getNestedVal = (obj, path) => {
@@ -634,11 +646,9 @@
             newColors = ['#8b5cf6', '#3b82f6']; // Purple, Blue
             
             if (showTarget) {
-                const subTarget = 1500;
-                const regTarget = 1000;
                 newSeries.push(
-                    { name: 'Sub Target', type: 'line', data: historyData.map(() => subTarget) },
-                    { name: 'Reg Target', type: 'line', data: historyData.map(() => regTarget) }
+                    { name: 'Sub Target', type: 'line', data: historyData.map(() => targetValues.subscription) },
+                    { name: 'Reg Target', type: 'line', data: historyData.map(() => targetValues.regular) }
                 );
                 newColors.push('#c084fc', '#60a5fa');
             }

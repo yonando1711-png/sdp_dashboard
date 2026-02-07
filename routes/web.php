@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\SettingsController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -29,3 +30,8 @@ Route::get('/total-stock', [DashboardController::class, 'totalStock'])->name('to
 Route::post('/total-stock/filter', [DashboardController::class, 'filterTotalStock'])->name('total.stock.filter');
 Route::post('/total-stock/export', [DashboardController::class, 'exportTotalStock'])->name('total.stock.export');
 
+// Settings Routes
+Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+Route::post('/settings/targets', [SettingsController::class, 'updateTargets'])->name('settings.targets');
+Route::post('/settings/odoo', [SettingsController::class, 'updateOdoo'])->name('settings.odoo');
+Route::get('/api/settings/targets', [SettingsController::class, 'getTargets'])->name('api.settings.targets');
