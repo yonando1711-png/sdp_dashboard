@@ -46,11 +46,15 @@ class TotalStockExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
     {
         return [
             'Lot Number',
+            'Internal Reference',
             'Product',
             'Location',
             'Qty',
             'Rental Status',
             'Rental Type',
+            'Ownership',
+            'Customer',
+            'Warehouse',
             'Start Date',
             'End Date',
             'Role',
@@ -70,11 +74,15 @@ class TotalStockExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
 
         return [
             $item->lot_number,
+            $item->internal_reference ?: 'No Ref',
             $item->product,
             $item->location,
             $item->on_hand_quantity,
             $status,
             $item->rental_type,
+            $item->is_vendor_rent ? 'Vendor' : 'Owned',
+            $item->current_customer ?: '-',
+            $item->warehouse ?: '-',
             $item->actual_start_rental ? $item->actual_start_rental->format('Y-m-d') : '',
             $item->actual_end_rental ? $item->actual_end_rental->format('Y-m-d') : '',
             $item->vehicle_role,
