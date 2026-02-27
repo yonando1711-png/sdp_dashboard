@@ -686,9 +686,9 @@
             <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
                 <button @click="prevPage()" :disabled="page <= 1" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors shadow-sm">Previous</button>
                 <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest" x-text="'Page ' + page"></span>
+                    <span class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Page <span x-text="page"></span> of <span x-text="totalPages"></span></span>
                 </div>
-                <button @click="nextPage()" :disabled="items.length < perPage" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all shadow-sm">Next</button>
+                <button @click="nextPage()" :disabled="page >= totalPages" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all shadow-sm">Next</button>
             </div>
         </div>
     </div>
@@ -837,6 +837,10 @@
             
             get tableWidth() {
                 return Object.values(this.columns).reduce((sum, col) => col.visible ? sum + (col.width || 100) : sum, 0);
+            },
+            
+            get totalPages() {
+                return Math.max(1, Math.ceil(this.totalItems / this.perPage));
             },
             
             resizingCol: null,
