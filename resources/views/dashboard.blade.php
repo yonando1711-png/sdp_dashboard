@@ -88,10 +88,19 @@
                 <!-- Divider -->
                 <div class="hidden sm:block w-px h-16 bg-white/20 mx-6"></div>
 
-                <!-- Vendor Rent - Right -->
-                <a href="{{ route('details', ['category' => 'vendor_rent']) }}" class="flex-1 text-right group hover:scale-105 transition-transform cursor-pointer">
+                <!-- Vendor Rent -->
+                <a href="{{ route('details', ['category' => 'vendor_rent']) }}" class="flex-1 text-center group hover:scale-105 transition-transform cursor-pointer">
                     <p class="text-3xl font-bold text-cyan-300 group-hover:text-cyan-200 transition-colors">{{ number_format($summary['vendor_rent']) }}</p>
                     <p class="text-indigo-200 text-xs font-semibold uppercase tracking-wider mt-1">Vendor Rent</p>
+                </a>
+
+                <!-- Divider -->
+                <div class="hidden sm:block w-px h-16 bg-white/20 mx-6"></div>
+
+                <!-- Active Rental - Right -->
+                <a href="{{ route('details', ['category' => 'active_rentals']) }}" class="flex-1 text-right group hover:scale-105 transition-transform cursor-pointer">
+                    <p class="text-3xl font-bold text-amber-300 group-hover:text-amber-200 transition-colors">{{ number_format($activeRentalData['total'] ?? 0) }}</p>
+                    <p class="text-indigo-200 text-xs font-semibold uppercase tracking-wider mt-1">Active Rental</p>
                 </a>
             </div>
         </div>
