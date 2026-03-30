@@ -366,6 +366,63 @@ class OdooService
     }
 
     /**
+     * Fetch traceability report for a specific lot number.
+     * Queries stock.move.line to get all stock moves for the lot.
+     *
+     * @param string $lotNumber
+     * @return array ['success' => bool, 'data' => [...]]
+     */
+    public function fetchTraceabilityReport(string $lotNumber): array
+    {
+        try {
+            // 1. Find the lot ID
+            $lotIds = $this->execute('stock.lot', 'search', [
+                [['name', '=', $lotNumber]]
+            ]);
+
+            if (empty($lotIds)) {
+                return ['success' => false, 'message' => "Lot {$lotNumber} not found", 'data' => []];
+            }
+
+            $lotId = $lotIds[0];
+
+            // 2. Search all stock.move.line for this lot (completed moves)
+            $moveLineIds = $this->execute('stock.move.line', 'search', [
+                [['lot_id', '=', $lotId], ['state', '=', 'done']]
+            ], ['order' => 'date desc']);
+
+            if (empty($moveLineIds)) {
+                return ['success' => true, 'data' => []];
+            }
+
+            $fields = [
+                'reference', 'product_id', 'date', 'lot_id',
+                'location_id', 'location_dest_id', 'quantity',
+                'product_uom_id',
+            ];
+
+            $moveLines = $this->execute('stock.move.line', 'read', [$moveLineIds, $fields]);
+
+            $data = [];
+            foreach ($moveLines as $line) {
+                $data[] = [
+                    'reference' => $line['reference'] ?? '',
+                    'product' => is_array($line['product_id']) ? $line['product_id'][1] : ($line['product_id'] ?? ''),
+                    'date' => $line['date'] ?? '',
+                    'lot_serial' => is_array($line['lot_id']) ? $line['lot_id'][1] : ($line['lot_id'] ?? ''),
+                    'from' => is_array($line['location_id']) ? $line['location_id'][1] : ($line['location_id'] ?? ''),
+                    'to' => is_array($line['location_dest_id']) ? $line['location_dest_id'][1] : ($line['location_dest_id'] ?? ''),
+                    'quantity' => ($line['quantity'] ?? 0) . ' ' . (is_array($line['product_uom_id']) ? $line['product_uom_id'][1] : 'Units'),
+                ];
+            }
+
+            return ['success' => true, 'data' => $data];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
+        }
+    }
+
+    /**
      * Resolve lot numbers to Odoo stock.lot IDs.
      *
      * @param array $lotNumbers

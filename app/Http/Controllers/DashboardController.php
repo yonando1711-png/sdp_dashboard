@@ -506,4 +506,23 @@ class DashboardController extends Controller
             ]);
         }
     }
+
+    /**
+     * Fetch traceability report for a lot number from Odoo (live API call).
+     */
+    public function traceabilityReport(string $lotNumber)
+    {
+        try {
+            $odoo = new \App\Services\OdooService();
+            $result = $odoo->fetchTraceabilityReport($lotNumber);
+            
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch traceability report: ' . $e->getMessage(),
+                'data' => [],
+            ]);
+        }
+    }
 }

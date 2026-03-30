@@ -38,3 +38,6 @@ Route::get('/api/settings/targets', [SettingsController::class, 'getTargets'])->
 
 // Repair History API
 Route::get('/api/repair-history/{lotNumber}', [DashboardController::class, 'repairHistory'])->name('api.repair.history');
+
+// Traceability Report API
+Route::get('/api/traceability/{lotNumber}', [DashboardController::class, 'traceabilityReport'])->name('api.traceability');

@@ -555,6 +555,10 @@
                                 History
                                 <div @mousedown="startResize($event, 'repair_history')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
                             </th>
+                            <th x-show="columns.traceability.visible" :style="'width: ' + columns.traceability.width + 'px'" class="relative p-4 border-b border-slate-100 dark:border-slate-800 text-center select-none group">
+                                Traceability
+                                <div @mousedown="startResize($event, 'traceability')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50 dark:divide-slate-800">
@@ -618,6 +622,11 @@
                                 <td x-show="columns.repair_history.visible" class="p-4 text-center">
                                     <button @click="openRepairHistory(item.lot_number)" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors border border-orange-200 dark:border-orange-800">
                                         🔧 History
+                                    </button>
+                                </td>
+                                <td x-show="columns.traceability.visible" class="p-4 text-center">
+                                    <button @click="openTraceability(item.lot_number)" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors border border-teal-200 dark:border-teal-800">
+                                        📋 Trace
                                     </button>
                                 </td>
                             </tr>
@@ -778,6 +787,79 @@
         </div>
     </div>
 
+    <!-- Traceability Report Modal -->
+    <div x-show="traceabilityModal.open" x-cloak class="fixed inset-0 z-[9999] flex items-center justify-center p-4" @keydown.escape.window="traceabilityModal.open = false">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="traceabilityModal.open = false"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-5xl max-h-[85vh] flex flex-col">
+            <!-- Header -->
+            <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        📋 Traceability Report
+                    </h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                        Lot: <span class="font-mono font-medium text-teal-600 dark:text-teal-400" x-text="traceabilityModal.lotNumber"></span>
+                    </p>
+                </div>
+                <button @click="traceabilityModal.open = false" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="flex-1 overflow-auto p-5 custom-scrollbar">
+                <!-- Loading -->
+                <div x-show="traceabilityModal.loading" class="flex items-center justify-center py-12">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+                    <span class="ml-3 text-slate-500 dark:text-slate-400">Fetching from Odoo...</span>
+                </div>
+                <!-- Error -->
+                <div x-show="traceabilityModal.error" class="text-center py-8">
+                    <div class="text-red-500 dark:text-red-400 text-sm" x-text="traceabilityModal.error"></div>
+                </div>
+                <!-- Empty -->
+                <div x-show="!traceabilityModal.loading && !traceabilityModal.error && traceabilityModal.data.length === 0" class="text-center py-8">
+                    <div class="text-slate-400 dark:text-slate-500">No traceability records found for this lot.</div>
+                </div>
+                <!-- Data Table -->
+                <div x-show="!traceabilityModal.loading && !traceabilityModal.error && traceabilityModal.data.length > 0">
+                    <div class="mb-3 text-xs text-slate-400 dark:text-slate-500">
+                        <span x-text="traceabilityModal.data.length"></span> move(s) found
+                    </div>
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800 text-xs uppercase text-slate-500 dark:text-slate-400">
+                            <tr>
+                                <th class="p-3 rounded-tl-lg">Reference</th>
+                                <th class="p-3">Product</th>
+                                <th class="p-3">Date</th>
+                                <th class="p-3">Lot/Serial #</th>
+                                <th class="p-3">From</th>
+                                <th class="p-3">To</th>
+                                <th class="p-3 rounded-tr-lg text-right">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <template x-for="(m, i) in traceabilityModal.data" :key="i">
+                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                    <td class="p-3 font-mono text-xs">
+                                        <a :href="m.reference" class="font-medium text-teal-600 dark:text-teal-400 hover:underline" x-text="m.reference"></a>
+                                    </td>
+                                    <td class="p-3 text-xs text-slate-700 dark:text-slate-300" x-text="m.product"></td>
+                                    <td class="p-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap" x-text="m.date ? m.date.substring(0, 19) : '-'"></td>
+                                    <td class="p-3">
+                                        <span class="font-mono text-xs font-medium text-indigo-600 dark:text-indigo-400" x-text="m.lot_serial"></span>
+                                    </td>
+                                    <td class="p-3 text-xs text-slate-600 dark:text-slate-400" x-text="m.from || '-'"></td>
+                                    <td class="p-3 text-xs text-slate-600 dark:text-slate-400" x-text="m.to || '-'"></td>
+                                    <td class="p-3 text-xs text-right font-medium text-slate-700 dark:text-slate-300" x-text="m.quantity"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     </div>
 </div>
 @endsection
@@ -829,11 +911,21 @@
                 repair_vendor: { label: 'Vendor', visible: false, width: 150 },
                 repair_odometer: { label: 'Odometer', visible: false, width: 100 },
                 repair_est_end: { label: 'Est. End', visible: false, width: 100 },
-                repair_history: { label: 'History', visible: true, width: 80 }
+                repair_history: { label: 'History', visible: true, width: 80 },
+                traceability: { label: 'Traceability', visible: true, width: 90 }
             },
             
             // Repair History Modal State
             repairHistoryModal: {
+                open: false,
+                lotNumber: '',
+                loading: false,
+                error: null,
+                data: []
+            },
+            
+            // Traceability Report Modal State
+            traceabilityModal: {
                 open: false,
                 lotNumber: '',
                 loading: false,
@@ -1016,6 +1108,29 @@
                     this.repairHistoryModal.error = 'Network error: ' + e.message;
                 } finally {
                     this.repairHistoryModal.loading = false;
+                }
+            },
+
+            async openTraceability(lotNumber) {
+                this.traceabilityModal.open = true;
+                this.traceabilityModal.lotNumber = lotNumber;
+                this.traceabilityModal.loading = true;
+                this.traceabilityModal.error = null;
+                this.traceabilityModal.data = [];
+                
+                try {
+                    const response = await fetch(`/api/traceability/${encodeURIComponent(lotNumber)}`);
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.traceabilityModal.data = result.data;
+                    } else {
+                        this.traceabilityModal.error = result.message || 'Failed to fetch traceability report';
+                    }
+                } catch (e) {
+                    this.traceabilityModal.error = 'Network error: ' + e.message;
+                } finally {
+                    this.traceabilityModal.loading = false;
                 }
             },
 
