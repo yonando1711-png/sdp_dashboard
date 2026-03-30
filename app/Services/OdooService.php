@@ -369,9 +369,10 @@ class OdooService
      * Fetch traceability report for a specific lot number.
      * Queries stock.move.line to get all stock moves for the lot,
      * matching the Odoo native traceability report columns.
+     * Also detects rental order lot replacements and includes related lot moves.
      *
      * @param string $lotNumber
-     * @return array ['success' => bool, 'data' => [...]]
+     * @return array ['success' => bool, 'data' => [...], 'related_groups' => [...]]
      */
     public function fetchTraceabilityReport(string $lotNumber): array
     {
@@ -382,10 +383,21 @@ class OdooService
             ]);
 
             if (empty($lotIds)) {
-                return ['success' => false, 'message' => "Lot {$lotNumber} not found", 'data' => []];
+                return ['success' => false, 'message' => "Lot {$lotNumber} not found", 'data' => [], 'related_groups' => []];
             }
 
             $lotId = $lotIds[0];
+
+            // State labels mapping
+            $stateLabels = [
+                'draft' => 'Draft',
+                'waiting' => 'Waiting',
+                'confirmed' => 'Waiting',
+                'partially_available' => 'Partially Available',
+                'assigned' => 'Ready',
+                'done' => 'Done',
+                'cancel' => 'Cancelled',
+            ];
 
             // 2. Search all stock.move.line for this lot (done + assigned/ready)
             $moveLineIds = $this->execute('stock.move.line', 'search', [
@@ -393,7 +405,7 @@ class OdooService
             ], ['order' => 'date desc']);
 
             if (empty($moveLineIds)) {
-                return ['success' => true, 'data' => []];
+                return ['success' => true, 'data' => [], 'related_groups' => []];
             }
 
             // 3. Read move line fields
@@ -405,7 +417,7 @@ class OdooService
 
             $moveLines = $this->execute('stock.move.line', 'read', [$moveLineIds, $fields]);
 
-            // 4. Collect unique move IDs to fetch scheduled dates & reserved lots
+            // 4. Collect unique move IDs to fetch scheduled dates
             $moveIds = [];
             foreach ($moveLines as $line) {
                 if (!empty($line['move_id'])) {
@@ -426,7 +438,6 @@ class OdooService
                         $moveData[$move['id']] = $move;
                     }
                 } catch (\Exception $e) {
-                    // Some fields may not exist in all Odoo versions, fallback gracefully
                     try {
                         $moves = $this->execute('stock.move', 'read', [
                             $moveIds, ['date_deadline', 'date']
@@ -435,36 +446,24 @@ class OdooService
                             $moveData[$move['id']] = $move;
                         }
                     } catch (\Exception $e2) {
-                        // ignore - we'll just skip scheduled date
+                        // ignore
                     }
                 }
             }
 
-            // 6. Build result data matching Odoo traceability report layout
-            $stateLabels = [
-                'draft' => 'Draft',
-                'waiting' => 'Waiting',
-                'confirmed' => 'Waiting',
-                'partially_available' => 'Partially Available',
-                'assigned' => 'Ready',
-                'done' => 'Done',
-                'cancel' => 'Cancelled',
-            ];
-
+            // 6. Build primary lot data
             $data = [];
+            $rentalOrders = []; // Collect rental order source documents
             foreach ($moveLines as $line) {
                 $moveId = is_array($line['move_id'] ?? null) ? $line['move_id'][0] : ($line['move_id'] ?? null);
                 $move = $moveData[$moveId] ?? [];
-
-                // Scheduled date from stock.move
                 $scheduledDate = $move['date_deadline'] ?? $move['date'] ?? '';
-
-                // SO Reserved Lot - try restrict_lot_id or lot_ids from move
                 $reservedLot = '';
                 if (!empty($move['restrict_lot_id'])) {
                     $reservedLot = is_array($move['restrict_lot_id']) ? $move['restrict_lot_id'][1] : '';
                 }
 
+                $origin = $line['origin'] ?? '';
                 $data[] = [
                     'reference' => $line['reference'] ?? '',
                     'from' => is_array($line['location_id']) ? $line['location_id'][1] : ($line['location_id'] ?? ''),
@@ -473,16 +472,175 @@ class OdooService
                     'scheduled_date' => $scheduledDate,
                     'lots' => is_array($line['lot_id']) ? $line['lot_id'][1] : ($line['lot_id'] ?? ''),
                     'effective_date' => $line['date'] ?? '',
-                    'source_document' => $line['origin'] ?? '',
+                    'source_document' => $origin,
                     'so_reserved_lot' => $reservedLot ?: (is_array($line['lot_id']) ? $line['lot_id'][1] : ''),
                     'state' => $line['state'] ?? '',
                     'state_label' => $stateLabels[$line['state'] ?? ''] ?? ucfirst($line['state'] ?? ''),
                 ];
+
+                // Collect rental orders (R/xxxx/xxxxx pattern)
+                if ($origin && preg_match('/^R\/\d{4}\/\d+$/', $origin)) {
+                    $rentalOrders[$origin] = true;
+                }
             }
 
-            return ['success' => true, 'data' => $data];
+            // 7. Find related lots via stock.picking (replacement detection)
+            //    Pickings with the same rental order origin may contain different lots (replacements).
+            $relatedGroups = [];
+            if (!empty($rentalOrders)) {
+                foreach (array_keys($rentalOrders) as $rentalOrder) {
+                    try {
+                        // Find stock.picking records with this rental order as origin
+                        $pickingIds = $this->execute('stock.picking', 'search', [
+                            [['origin', '=', $rentalOrder]]
+                        ]);
+
+                        if (empty($pickingIds)) {
+                            continue;
+                        }
+
+                        // Read pickings to get their move_line_ids
+                        $pickings = $this->execute('stock.picking', 'read', [
+                            $pickingIds, ['move_line_ids']
+                        ]);
+
+                        // Collect all move line IDs from the pickings
+                        $allPickMoveLineIds = [];
+                        foreach ($pickings as $p) {
+                            if (!empty($p['move_line_ids']) && is_array($p['move_line_ids'])) {
+                                $allPickMoveLineIds = array_merge($allPickMoveLineIds, $p['move_line_ids']);
+                            }
+                        }
+
+                        if (empty($allPickMoveLineIds)) {
+                            continue;
+                        }
+
+                        // Read those move lines to find which lots are involved
+                        $pickMoveLines = $this->execute('stock.move.line', 'read', [
+                            $allPickMoveLineIds, ['lot_id']
+                        ]);
+
+                        // Find unique lot IDs that are NOT the primary lot
+                        $relatedLotIds = [];
+                        foreach ($pickMoveLines as $pml) {
+                            if (!empty($pml['lot_id'])) {
+                                $lid = is_array($pml['lot_id']) ? $pml['lot_id'][0] : $pml['lot_id'];
+                                if ($lid != $lotId) {
+                                    $relatedLotIds[$lid] = true;
+                                }
+                            }
+                        }
+
+                        if (empty($relatedLotIds)) {
+                            continue;
+                        }
+
+                        // Fetch ALL moves for each related lot
+                        foreach (array_keys($relatedLotIds) as $relLotId) {
+                            $relMoveLineIds = $this->execute('stock.move.line', 'search', [
+                                [
+                                    ['lot_id', '=', $relLotId],
+                                    ['state', 'in', ['done', 'assigned', 'confirmed', 'partially_available']],
+                                ]
+                            ], ['order' => 'date desc']);
+
+                            if (empty($relMoveLineIds)) {
+                                continue;
+                            }
+
+                            $relatedMoveLines = $this->execute('stock.move.line', 'read', [$relMoveLineIds, $fields]);
+
+                            // Get lot name
+                            $relLotName = '';
+                            if (!empty($relatedMoveLines[0]['lot_id'])) {
+                                $relLotName = is_array($relatedMoveLines[0]['lot_id']) ? $relatedMoveLines[0]['lot_id'][1] : '';
+                            }
+                            if (!$relLotName) continue;
+
+                            // Collect move IDs for scheduled dates
+                            $relMoveIds = [];
+                            foreach ($relatedMoveLines as $rl) {
+                                if (!empty($rl['move_id'])) {
+                                    $rmId = is_array($rl['move_id']) ? $rl['move_id'][0] : $rl['move_id'];
+                                    $relMoveIds[$rmId] = true;
+                                }
+                            }
+                            $relMoveData = [];
+                            if (!empty($relMoveIds)) {
+                                try {
+                                    $relMoves = $this->execute('stock.move', 'read', [
+                                        array_keys($relMoveIds), ['date_deadline', 'date', 'restrict_lot_id']
+                                    ]);
+                                    foreach ($relMoves as $rm) {
+                                        $relMoveData[$rm['id']] = $rm;
+                                    }
+                                } catch (\Exception $e) {
+                                    try {
+                                        $relMoves = $this->execute('stock.move', 'read', [
+                                            array_keys($relMoveIds), ['date_deadline', 'date']
+                                        ]);
+                                        foreach ($relMoves as $rm) {
+                                            $relMoveData[$rm['id']] = $rm;
+                                        }
+                                    } catch (\Exception $e2) {}
+                                }
+                            }
+
+                            // Build moves array
+                            $relMovesData = [];
+                            foreach ($relatedMoveLines as $rl) {
+                                $rmId = is_array($rl['move_id'] ?? null) ? $rl['move_id'][0] : ($rl['move_id'] ?? null);
+                                $rmData = $relMoveData[$rmId] ?? [];
+                                $schDate = $rmData['date_deadline'] ?? $rmData['date'] ?? '';
+                                $resLot = '';
+                                if (!empty($rmData['restrict_lot_id'])) {
+                                    $resLot = is_array($rmData['restrict_lot_id']) ? $rmData['restrict_lot_id'][1] : '';
+                                }
+
+                                $relMovesData[] = [
+                                    'reference' => $rl['reference'] ?? '',
+                                    'from' => is_array($rl['location_id']) ? $rl['location_id'][1] : ($rl['location_id'] ?? ''),
+                                    'to' => is_array($rl['location_dest_id']) ? $rl['location_dest_id'][1] : ($rl['location_dest_id'] ?? ''),
+                                    'contact' => is_array($rl['picking_partner_id'] ?? null) ? $rl['picking_partner_id'][1] : '',
+                                    'scheduled_date' => $schDate,
+                                    'lots' => $relLotName,
+                                    'effective_date' => $rl['date'] ?? '',
+                                    'source_document' => $rl['origin'] ?? '',
+                                    'so_reserved_lot' => $resLot ?: $relLotName,
+                                    'state' => $rl['state'] ?? '',
+                                    'state_label' => $stateLabels[$rl['state'] ?? ''] ?? ucfirst($rl['state'] ?? ''),
+                                ];
+                            }
+
+                            // Find the replacement date
+                            $replacementDate = '';
+                            foreach ($relMovesData as $rm) {
+                                if ($rm['effective_date'] && (!$replacementDate || $rm['effective_date'] < $replacementDate)) {
+                                    $replacementDate = $rm['effective_date'];
+                                }
+                            }
+                            $replaceDateFormatted = $replacementDate ? date('d/m/Y', strtotime($replacementDate)) : '';
+
+                            $relatedGroups[] = [
+                                'header' => "Rental Order : {$rentalOrder}  Original {$lotNumber}  replaced by {$relLotName} at {$replaceDateFormatted}",
+                                'rental_order' => $rentalOrder,
+                                'original_lot' => $lotNumber,
+                                'replacement_lot' => $relLotName,
+                                'replacement_date' => $replaceDateFormatted,
+                                'moves' => $relMovesData,
+                            ];
+                        }
+                    } catch (\Exception $e) {
+                        // Skip this rental order if there's an error
+                        continue;
+                    }
+                }
+            }
+
+            return ['success' => true, 'data' => $data, 'related_groups' => $relatedGroups];
         } catch (\Exception $e) {
-            return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => [], 'related_groups' => []];
         }
     }
 
