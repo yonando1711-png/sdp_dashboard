@@ -389,6 +389,34 @@ class OdooService
 
             $lotId = $lotIds[0];
 
+            // Fetch odometer records to map by date
+            $odometerRecords = $this->execute('vehicle.odometer', 'search_read', [
+                [['lot_id', '=', $lotId]]
+            ], ['fields' => ['date', 'value']]);
+
+            $odometerDates = [];
+            foreach ($odometerRecords as $odo) {
+                if (!empty($odo['date'])) {
+                    $ts = strtotime($odo['date']);
+                    $odometerDates[$ts] = $odo['value'];
+                }
+            }
+
+            $findOdometer = function($moveDateStr) use ($odometerDates) {
+                if (!$moveDateStr) return null;
+                $moveTs = strtotime($moveDateStr);
+                $minDiff = 300; // 5 minutes threshold
+                $closestVal = null;
+                foreach ($odometerDates as $ts => $val) {
+                    $diff = abs($moveTs - $ts);
+                    if ($diff <= $minDiff) {
+                        $minDiff = $diff;
+                        $closestVal = $val;
+                    }
+                }
+                return $closestVal;
+            };
+
             // State labels mapping
             $stateLabels = [
                 'draft' => 'Draft',
@@ -413,7 +441,7 @@ class OdooService
             $fields = [
                 'reference', 'location_id', 'location_dest_id',
                 'picking_partner_id', 'date', 'lot_id',
-                'origin', 'state', 'move_id',
+                'origin', 'state', 'move_id', 'latest_km',
             ];
 
             $moveLines = $this->execute('stock.move.line', 'read', [$moveLineIds, $fields]);
@@ -475,6 +503,7 @@ class OdooService
                     'effective_date' => $line['date'] ?? '',
                     'source_document' => $origin,
                     'so_reserved_lot' => $reservedLot ?: (is_array($line['lot_id']) ? $line['lot_id'][1] : ''),
+                    'odometer' => $findOdometer($line['date'] ?? '') ?? ($line['latest_km'] ?: null),
                     'state' => $line['state'] ?? '',
                     'state_label' => $stateLabels[$line['state'] ?? ''] ?? ucfirst($line['state'] ?? ''),
                 ];
@@ -539,6 +568,33 @@ class OdooService
 
                         // Fetch ALL moves for each related lot
                         foreach (array_keys($relatedLotIds) as $relLotId) {
+                            $relOdometerRecords = $this->execute('vehicle.odometer', 'search_read', [
+                                [['lot_id', '=', $relLotId]]
+                            ], ['fields' => ['date', 'value']]);
+
+                            $relOdometerDates = [];
+                            foreach ($relOdometerRecords as $odo) {
+                                if (!empty($odo['date'])) {
+                                    $ts = strtotime($odo['date']);
+                                    $relOdometerDates[$ts] = $odo['value'];
+                                }
+                            }
+                            
+                            $findRelOdometer = function($moveDateStr) use ($relOdometerDates) {
+                                if (!$moveDateStr) return null;
+                                $moveTs = strtotime($moveDateStr);
+                                $minDiff = 300;
+                                $closestVal = null;
+                                foreach ($relOdometerDates as $ts => $val) {
+                                    $diff = abs($moveTs - $ts);
+                                    if ($diff <= $minDiff) {
+                                        $minDiff = $diff;
+                                        $closestVal = $val;
+                                    }
+                                }
+                                return $closestVal;
+                            };
+
                             $relMoveLineIds = $this->execute('stock.move.line', 'search', [
                                 [
                                     ['lot_id', '=', $relLotId],
@@ -616,6 +672,7 @@ class OdooService
                                     'effective_date' => $rl['date'] ?? '',
                                     'source_document' => $rl['origin'] ?? '',
                                     'so_reserved_lot' => $resLot ?: $relLotName,
+                                    'odometer' => $findRelOdometer($rl['date'] ?? '') ?? ($rl['latest_km'] ?: null),
                                     'state' => $rl['state'] ?? '',
                                     'state_label' => $stateLabels[$rl['state'] ?? ''] ?? ucfirst($rl['state'] ?? ''),
                                 ];

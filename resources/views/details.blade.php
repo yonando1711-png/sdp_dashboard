@@ -523,6 +523,7 @@
                                 <th class="p-3">Effective Date</th>
                                 <th class="p-3">Source Document</th>
                                 <th class="p-3">SO Reserved Lot</th>
+                                <th class="p-3 text-center">Odometer</th>
                                 <th class="p-3 rounded-tr-lg text-center">Status</th>
                             </tr>
                         </thead>
@@ -544,6 +545,9 @@
                                         <span class="font-mono font-medium text-slate-700 dark:text-slate-300" x-text="m.source_document || '-'"></span>
                                     </td>
                                     <td class="p-3 text-xs font-mono text-slate-600 dark:text-slate-400" x-text="m.so_reserved_lot || '-'"></td>
+                                    <td class="p-3 text-center text-xs text-slate-600 dark:text-slate-400">
+                                        <span x-text="m.odometer && m.odometer !== '-' ? Number(m.odometer).toLocaleString() + ' km' : '-'"></span>
+                                    </td>
                                     <td class="p-3 text-center">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="{
                                             'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400': m.state === 'done',
@@ -583,6 +587,7 @@
                                     <th class="p-3">Effective Date</th>
                                     <th class="p-3">Source Document</th>
                                     <th class="p-3">SO Reserved Lot</th>
+                                    <th class="p-3 text-center">Odometer</th>
                                     <th class="p-3 rounded-tr-lg text-center">Status</th>
                                 </tr>
                             </thead>
@@ -604,6 +609,9 @@
                                             <span class="font-mono font-medium text-slate-700 dark:text-slate-300" x-text="m.source_document || '-'"></span>
                                         </td>
                                         <td class="p-3 text-xs font-mono text-slate-600 dark:text-slate-400" x-text="m.so_reserved_lot || '-'"></td>
+                                        <td class="p-3 text-center text-xs text-slate-600 dark:text-slate-400">
+                                            <span x-text="m.odometer && m.odometer !== '-' ? Number(m.odometer).toLocaleString() + ' km' : '-'"></span>
+                                        </td>
                                         <td class="p-3 text-center">
                                             <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="{
                                                 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400': m.state === 'done',
