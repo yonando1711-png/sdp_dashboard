@@ -60,6 +60,7 @@ class TotalStockExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
             'Role',
             'Linked Vehicle',
             'In Stock',
+            'Contract',
         ];
     }
 
@@ -88,6 +89,7 @@ class TotalStockExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
             $item->vehicle_role,
             $item->linked_vehicle,
             $item->in_stock ? 'Yes' : 'No',
+            $item->contract_ref ?: '-',
         ];
     }
 }

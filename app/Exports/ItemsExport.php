@@ -58,6 +58,7 @@ class ItemsExport implements FromQuery, WithHeadings, WithMapping
             'Repair Vendor',
             'Repair Odometer',
             'Repair Estimation End',
+            'Contract',
         ];
     }
 
@@ -107,6 +108,7 @@ class ItemsExport implements FromQuery, WithHeadings, WithMapping
             $item->repair_vendor,
             $item->repair_odometer,
             $item->repair_estimation_end ? $item->repair_estimation_end->format('Y-m-d') : '',
+            $item->contract_ref,
         ];
     }
 }

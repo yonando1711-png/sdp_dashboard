@@ -182,6 +182,7 @@ class SummaryGenerator
             'internal_reference' => $colMap['Internal Reference'] ?? -1, // No Rangka
             'year' => $colMap['Year'] ?? -1,
             'purchase_date' => $colMap['Purchase Date'] ?? -1,
+            'contract_ref' => $colMap['Contract'] ?? -1,
         ];
         
         // Pre-compute rental_id occurrence counts
@@ -506,6 +507,7 @@ class SummaryGenerator
                 'current_customer' => $row[$idxParams['current_customer']] ?? null,
                 'warehouse' => $row[$idxParams['warehouse']] ?? null,
                 'vendor_unit' => null, // Will be enriched later
+                'contract_ref' => $getValue('contract_ref'),
             ];
         }
         
@@ -614,6 +616,7 @@ class SummaryGenerator
                     'current_customer' => $item['current_customer'],
                     'warehouse' => $item['warehouse'],
                     'vendor_unit' => $item['vendor_unit'] ?? null,
+                    'contract_ref' => $item['contract_ref'] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

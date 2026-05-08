@@ -140,6 +140,7 @@ class OdooService
             'vehicle_year',                                // 12: Year
             'ref',                                         // 13: Internal Reference (No Rangka / Chassis)
             'purchase_date',                               // 14: Purchase Date
+            'rental_id/rental_contract_id/reference',      // 15: Contract Ref
         ];
 
         // Header row matching Excel format for SummaryGenerator
@@ -160,6 +161,7 @@ class OdooService
             'Rental ID/Order Lines/Reserved Lot', // Derived from original_reserved
             'Year',
             'Purchase Date',
+            'Contract',
         ];
 
         // Get all IDs matching domain (same as Excel export filter)
@@ -230,6 +232,7 @@ class OdooService
                 $reservedLot,        // Reserved Lot (directly from Odoo field)
                 $row[12] ?? '',      // Year
                 $row[14] ?? null,    // Purchase Date
+                $row[15] ?? '',      // Contract Ref
             ];
             
             $data[] = $processedRow;
