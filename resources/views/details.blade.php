@@ -230,6 +230,10 @@
                         <div @click="sortBy('rental_id')" class="flex items-center justify-center gap-1">Rental Status <span x-show="sortCol === 'rental_id'" x-text="sortAsc ? '↑' : '↓'"></span></div>
                          <div @mousedown="startResize($event, 'status')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
                     </th>
+                    <th x-show="columns.contract_ref.visible" :style="'width: ' + columns.contract_ref.width + 'px'" class="relative p-4 border-b border-slate-100 dark:border-slate-800 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none group">
+                        <div @click="sortBy('contract_ref')" class="flex items-center justify-center gap-1">Contract <span x-show="sortCol === 'contract_ref'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                        <div @mousedown="startResize($event, 'contract_ref')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
+                    </th>
                     <!-- New Columns -->
                     <th x-show="columns.start_date.visible" :style="'width: ' + columns.start_date.width + 'px'" class="relative p-4 border-b border-slate-100 dark:border-slate-800 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none group">
                         <div @click="sortBy('actual_start_rental')" class="flex items-center justify-center gap-1">Start <span x-show="sortCol === 'actual_start_rental'" x-text="sortAsc ? '↑' : '↓'"></span></div>
@@ -324,6 +328,7 @@
                                 <span class="px-2 py-1 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">-</span>
                             </template>
                         </td>
+                        <td x-show="columns.contract_ref.visible" class="p-4 text-center text-xs text-slate-600 dark:text-slate-400 font-mono break-words" x-text="item.contract_ref || '-'"></td>
                         <!-- New Columns Data -->
                         <td x-show="columns.start_date.visible" class="p-4 text-center text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(item.actual_start_rental)"></td>
                         <td x-show="columns.end_date.visible" class="p-4 text-center text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(item.actual_end_rental)"></td>
@@ -667,6 +672,7 @@
                 current_customer: { label: 'Customer', visible: true, width: 150 },
                 warehouse: { label: 'Warehouse', visible: true, width: 120 },
                 status: { label: 'Rental Status', visible: true, width: 140 },
+                contract_ref: { label: 'Contract', visible: true, width: 140 },
                 start_date: { label: 'Start', visible: false, width: 100 },
                 end_date: { label: 'End', visible: false, width: 100 },
                 vehicle_role: { label: 'Role', visible: false, width: 80 },
