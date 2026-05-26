@@ -431,9 +431,9 @@ class OdooService
                 'cancel' => 'Cancelled',
             ];
 
-            // 2. Search all stock.move.line for this lot (done + assigned/ready)
+            // 2. Search all stock.move.line for this lot (only done status)
             $moveLineIds = $this->execute('stock.move.line', 'search', [
-                [['lot_id', '=', $lotId], ['state', 'in', ['done', 'assigned', 'confirmed', 'partially_available']]]
+                [['lot_id', '=', $lotId], ['state', '=', 'done']]
             ], ['order' => 'date desc']);
 
             if (empty($moveLineIds)) {
@@ -601,7 +601,7 @@ class OdooService
                             $relMoveLineIds = $this->execute('stock.move.line', 'search', [
                                 [
                                     ['lot_id', '=', $relLotId],
-                                    ['state', 'in', ['done', 'assigned', 'confirmed', 'partially_available']],
+                                    ['state', '=', 'done'],
                                 ]
                             ], ['order' => 'date desc']);
 
