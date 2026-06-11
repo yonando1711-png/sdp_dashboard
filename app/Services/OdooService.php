@@ -20,6 +20,7 @@ class OdooService
         'product' => ['product_id', 'x_product', 'product_name', 'x_product_name', 'display_name'],
         'location' => ['location_id', 'x_location', 'location_name', 'x_location_name'],
         'internal_reference' => ['default_code', 'x_internal_ref', 'internal_reference', 'x_code'],
+        'engine_number' => ['engine_number', 'lot_engine_number', 'x_engine_number'],
         'rental_id' => ['x_rental_id', 'rental_id', 'x_so_id', 'sale_order_id', 'x_contract_id'],
         'rental_type' => ['x_rental_type', 'rental_type', 'x_type', 'x_contract_type'],
         'actual_start_rental' => ['x_start_date', 'x_rental_start', 'start_date', 'x_actual_start'],
@@ -141,6 +142,7 @@ class OdooService
             'ref',                                         // 13: Internal Reference (No Rangka / Chassis)
             'purchase_date',                               // 14: Purchase Date
             'rental_id/rental_contract_id/reference',      // 15: Contract Ref
+            'engine_number',                               // 16: Engine Number (No Mesin)
         ];
 
         // Header row matching Excel format for SummaryGenerator
@@ -162,6 +164,7 @@ class OdooService
             'Year',
             'Purchase Date',
             'Contract',
+            'Engine Number',
         ];
 
         // Get all IDs matching domain (same as Excel export filter)
@@ -233,6 +236,7 @@ class OdooService
                 $row[12] ?? '',      // Year
                 $row[14] ?? null,    // Purchase Date
                 $row[15] ?? '',      // Contract Ref
+                $row[16] ?? '',      // Engine Number
             ];
             
             $data[] = $processedRow;
@@ -987,6 +991,7 @@ class OdooService
                 'product' => $this->extractValue($record, $mapping, 'product'),
                 'lot_number' => $this->extractValue($record, $mapping, 'lot_number'),
                 'internal_reference' => $this->extractValue($record, $mapping, 'internal_reference'),
+                'engine_number' => $this->extractValue($record, $mapping, 'engine_number'),
                 'location' => $this->extractValue($record, $mapping, 'location'),
                 'on_hand_quantity' => (float)($this->extractValue($record, $mapping, 'on_hand_quantity') ?? 1),
                 'rental_id' => $this->extractValue($record, $mapping, 'rental_id'),
