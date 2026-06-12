@@ -571,7 +571,8 @@
                                 <td x-show="columns.lot_number.visible" class="sticky-col p-4 font-mono text-sm font-medium text-indigo-600 dark:text-indigo-400 break-words" x-text="item.lot_number"></td>
                                 <td x-show="columns.product.visible" class="p-4 break-words">
                                     <div class="font-medium text-slate-800 dark:text-slate-200 text-sm" x-text="item.product"></div>
-                                    <div class="text-xs text-slate-400 dark:text-slate-500" x-text="item.internal_reference || 'No Ref'"></div>
+                                    <div class="text-xs text-slate-400 dark:text-slate-500 font-mono" x-text="item.internal_reference || 'No Ref'"></div>
+                                    <div class="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5" x-show="item.engine_number" x-text="'No.Mesin: ' + item.engine_number"></div>
                                 </td>
                                 <td x-show="columns.location.visible" class="p-4 break-words">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200" x-text="item.location"></span>
@@ -659,7 +660,8 @@
 
                         <div class="mb-4">
                             <div class="text-sm font-bold text-slate-800 dark:text-slate-200" x-text="item.product"></div>
-                            <div class="text-[10px] text-slate-400 dark:text-slate-500" x-text="item.internal_reference"></div>
+                            <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono" x-text="item.internal_reference"></div>
+                            <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5" x-show="item.engine_number" x-text="'No.Mesin: ' + item.engine_number"></div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3 pb-3 border-b border-slate-50 dark:border-slate-800 mb-3">
