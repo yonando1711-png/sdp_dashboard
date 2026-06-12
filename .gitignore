@@ -24,3 +24,7 @@ Thumbs.db
 
 /storage/app/*.sqlite
 *.sqlite-journal
+
+# AI Session scratch and project rules
+project-rules.md
+session_log_*.md
