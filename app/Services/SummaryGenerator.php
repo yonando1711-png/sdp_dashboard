@@ -183,6 +183,7 @@ class SummaryGenerator
             'year' => $colMap['Year'] ?? -1,
             'purchase_date' => $colMap['Purchase Date'] ?? -1,
             'contract_ref' => $colMap['Contract'] ?? -1,
+            'engine_number' => $colMap['Engine Number'] ?? -1,
         ];
         
         // Pre-compute rental_id occurrence counts
@@ -508,6 +509,7 @@ class SummaryGenerator
                 'warehouse' => $row[$idxParams['warehouse']] ?? null,
                 'vendor_unit' => null, // Will be enriched later
                 'contract_ref' => $getValue('contract_ref'),
+                'engine_number' => $getValue('engine_number'),
             ];
         }
         
@@ -617,6 +619,7 @@ class SummaryGenerator
                     'warehouse' => $item['warehouse'],
                     'vendor_unit' => $item['vendor_unit'] ?? null,
                     'contract_ref' => $item['contract_ref'] ?? null,
+                    'engine_number' => $item['engine_number'] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

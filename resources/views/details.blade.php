@@ -301,6 +301,7 @@
                         <td x-show="columns.product.visible" class="p-4 break-words">
                             <div class="font-medium text-slate-800 dark:text-slate-200" x-text="item.product"></div>
                             <div class="text-xs text-slate-500 dark:text-slate-400 font-mono" x-show="item.internal_reference && item.internal_reference !== 'No Ref'" x-text="item.internal_reference"></div>
+                            <div class="text-xs text-slate-400 dark:text-slate-500 font-mono" x-show="item.engine_number" x-text="'No.Mesin: ' + item.engine_number"></div>
                         </td>
                         <td x-show="columns.year.visible" class="p-4 text-center text-sm font-medium text-slate-600 dark:text-slate-400" x-text="item.year || '-'"></td>
                         <td x-show="columns.vendor_unit.visible" class="p-4 break-words text-xs text-slate-600 dark:text-slate-400" x-text="item.vendor_unit || '-'"></td>
