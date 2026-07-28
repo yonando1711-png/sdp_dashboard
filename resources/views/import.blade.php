@@ -266,6 +266,12 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 History
             </button>
+            <button @click="activeTab = 'crm'"
+                    :class="activeTab === 'crm' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'"
+                    class="flex items-center gap-2 px-6 py-4 font-medium transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                CRM Settings
+            </button>
         </div>
 
         <div class="p-6">
@@ -609,6 +615,30 @@
                                 </template>
                             </div>
                         </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CRM Settings Tab -->
+            <div x-show="activeTab === 'crm'" x-transition style="display: none;">
+                <div class="max-w-xl">
+                    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">CRM Module Settings</h3>
+                    <p class="text-slate-500 dark:text-slate-400 mb-6">Manage the access password for the CRM page.</p>
+
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/50 flex flex-col gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-slate-200">Security Access</h4>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Update the master password used to unlock CRM.</p>
+                            </div>
+                        </div>
+                        <a href="{{ route('crm.settings') }}" class="mt-2 w-max px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
+                            Manage CRM Password
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </a>
                     </div>
                 </div>
             </div>
