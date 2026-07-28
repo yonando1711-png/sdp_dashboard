@@ -10,9 +10,9 @@
             <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100">CRM Settings</h1>
             <p class="text-slate-500 dark:text-slate-400 mt-1">Manage access and preferences for the CRM module.</p>
         </div>
-        <a href="{{ route('settings') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm font-medium">
+        <a href="{{ route('import') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm font-medium">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            Back to General Settings
+            Back to Import Data
         </a>
     </div>
 

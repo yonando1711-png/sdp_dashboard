@@ -30,12 +30,12 @@ class ImportController extends Controller
         ]);
 
         $file = $request->file('file');
-        
+
         try {
             $result = $generator->generate($file);
             $originalFilename = $file->getClientOriginalName();
             $generator->saveToDatabase($result['items'], $result['summary'], 'excel', $originalFilename);
-            
+
             return redirect()->back()->with('success', 'Excel data imported successfully! ' . count($result['items']) . ' items processed.');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Import failed: ' . $e->getMessage());
@@ -69,7 +69,7 @@ class ImportController extends Controller
     {
         $odoo = new OdooService();
         $result = $odoo->testConnection();
-        
+
         return response()->json($result);
     }
 
@@ -80,29 +80,29 @@ class ImportController extends Controller
     {
         try {
             $odoo = new OdooService();
-            
+
             // Use export_data API (Option A) for Excel parity
             $result = $odoo->fetchViaExport();
-            
+
             if (!$result['success']) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Odoo fetch failed: ' . ($result['message'] ?? 'Unknown error')
                 ]);
             }
-            
+
             // Pass Excel-like data directly to SummaryGenerator
             // This reuses the same parsing logic as Excel import
             $processedData = $generator->generate($result['data']);
-            
+
             // Save to database (same as Excel import)
             $generator->saveToDatabase($processedData['items'], $processedData['summary'], 'odoo_manual');
-            
+
             // --- Enrichment ---
             $this->enrichWithRepairData($odoo);
             $this->enrichWithVendorUnits($odoo);
             $this->enrichWithCrmData($odoo);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => "Synced {$result['count']} items from Odoo",
@@ -257,8 +257,8 @@ class ImportController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $validated['enabled'] 
-                ? "Auto-sync enabled ({$validated['interval']})" 
+            'message' => $validated['enabled']
+                ? "Auto-sync enabled ({$validated['interval']})"
                 : 'Auto-sync disabled',
         ]);
     }
