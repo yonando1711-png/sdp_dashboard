@@ -48,6 +48,14 @@ class SyncOdooScheduled extends Command
             $importController = new \App\Http\Controllers\ImportController();
             $importController->enrichWithRepairData($odooService);
 
+            // Enrich items with vendor unit data
+            $this->info('Enriching items with vendor unit data...');
+            $importController->enrichWithVendorUnits($odooService);
+
+            // Enrich items with CRM PIC data (names, emails, rental dates)
+            $this->info('Enriching items with CRM data...');
+            $importController->enrichWithCrmData($odooService);
+
             // Update last sync time
             Setting::setValue('odoo_last_sync', now()->toISOString());
 

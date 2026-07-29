@@ -28,3 +28,6 @@ Thumbs.db
 # AI Session scratch and project rules
 project-rules.md
 session_log_*.md
+
+# Local debug/scratch scripts
+/scratch/
