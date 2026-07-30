@@ -9,6 +9,7 @@ class Item extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
+        'is_order_only' => 'boolean',
         'on_hand_quantity' => 'float',
         'is_vendor_rent' => 'boolean',
         'is_on_hand' => 'boolean',
@@ -27,6 +28,13 @@ class Item extends Model
         'repair_odometer' => 'integer',
         'purchase_date' => 'date',
     ];
+
+    protected static function booted()
+    {
+        static::addGlobalScope('exclude_order_only', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            $builder->where('items.is_order_only', false);
+        });
+    }
 
     // Scopes for common queries
     public function scopeActiveRental($query)

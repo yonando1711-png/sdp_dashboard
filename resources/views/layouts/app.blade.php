@@ -149,6 +149,14 @@
                     <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300" 
                           :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">CRM</span>
                 </a>
+                
+                <a href="{{ route('lor.index') }}" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group {{ request()->routeIs('lor.index') ? 'active' : '' }}"
+                   title="LoR (List of Rented)">
+                    <!-- LoR Icon -->
+                    <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                    <span class="ml-3 font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
+                          :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">LoR (List of Rented)</span>
+                </a>
 
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-6 px-2 whitespace-nowrap overflow-hidden transition-all duration-300"
                      :class="sidebarCollapsed ? 'text-center' : 'px-4'">
