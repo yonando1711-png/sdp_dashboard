@@ -128,19 +128,31 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             $itemHists = $this->nopolHistories->get($rental->rental_id, collect());
             if ($itemHists->count() > 0) {
                 $plateChanges = [];
-                $lastNopol = $rental->lot_number;
-                $lastMoveCount = $rental->product_movement_count;
+                $sortedHistories = $itemHists->sortBy('created_at')->values();
                 
-                foreach ($itemHists as $h) {
-                    if ($h->lot_number != $lastNopol) {
-                        if ($h->product_movement_count == $lastMoveCount) {
-                            $date = \Carbon\Carbon::parse($h->created_at)->format('d M Y');
-                            $plateChanges[] = "{$lastNopol} -> {$h->lot_number} ({$date})";
+                $states = [];
+                foreach ($sortedHistories as $h) {
+                    $states[] = $h;
+                }
+                $states[] = $rental;
+                
+                for ($i = 0; $i < count($states) - 1; $i++) {
+                    $prev = $states[$i];
+                    $next = $states[$i + 1];
+                    
+                    if ($prev->lot_number != $next->lot_number) {
+                        $prevMove = $prev->product_movement_count ?? 0;
+                        $nextMove = $next->product_movement_count ?? 0;
+                        
+                        if ($prevMove == $nextMove) {
+                            $changeDate = $prev->created_at ?? ($next->created_at ?? null);
+                            $dateStr = $changeDate ? \Carbon\Carbon::parse($changeDate)->format('d M Y') : '-';
+                            $plateChanges[] = "{$prev->lot_number} -> {$next->lot_number} ({$dateStr})";
                         }
                     }
-                    $lastNopol = $h->lot_number;
-                    $lastMoveCount = $h->product_movement_count;
                 }
+                
+                $plateChanges = array_reverse($plateChanges);
                 $historyStr = implode("\n", $plateChanges);
             }
             $row[] = $historyStr;

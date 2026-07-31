@@ -241,7 +241,21 @@ class LorController extends Controller
 
         $export = new \App\Exports\LorExport($currentRentals, $priceHistories, $includeNopol, $nopolHistories, $taxMode);
 
-        $customerSuffix = $search ? '_' . preg_replace('/[^A-Za-z0-9]/', '', $search) : '';
+        $customerSuffix = '';
+        if ($currentRentals->count() > 0) {
+            $uniqueCustomers = $currentRentals->pluck('current_customer')->filter()->unique();
+            if ($uniqueCustomers->count() === 1) {
+                $rawCust = $uniqueCustomers->first();
+                if (preg_match('/\[(.*?)\]/', $rawCust, $m)) {
+                    $customerSuffix = '_' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $m[1]));
+                } else {
+                    $cleanName = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', trim($rawCust)));
+                    $customerSuffix = '_' . trim($cleanName, '_');
+                }
+            } elseif ($search) {
+                $customerSuffix = '_' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search));
+            }
+        }
         $filename = 'list_of_rented' . $customerSuffix . '_' . date('Y-m-d');
 
         if ($format === 'pdf') {
