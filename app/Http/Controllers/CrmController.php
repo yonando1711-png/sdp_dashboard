@@ -13,6 +13,10 @@ class CrmController extends Controller
      */
     public function index(Request $request)
     {
+        if (!auth()->user()->hasMenuPermission('crm')) {
+            abort(403, 'Unauthorized access to CRM.');
+        }
+
         // Check if user is authenticated for CRM
         if (!session('crm_authenticated')) {
             return view('crm.index', ['authenticated' => false]);

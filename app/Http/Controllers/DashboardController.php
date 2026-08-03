@@ -23,6 +23,129 @@ class DashboardController extends Controller
              return view('dashboard', ['summary' => null, 'metadata' => null, 'history' => [], 'reserveRentalData' => [], 'stockByRentalStatus' => []]);
         }
         
+        // Dynamic summary override for branch filtering
+        $activeBranch = session('active_hq_branch');
+        $user = auth()->user();
+        $isBranchScoped = ($user && !$user->isItAdmin() && !$user->isNationwide()) || ($activeBranch && $activeBranch !== 'ALL');
+        
+        if ($isBranchScoped) {
+            $baseQuery = Item::forUserBranch();
+            $today = now()->format('Y-m-d');
+            
+            $sdpStock = (clone $baseQuery)->where('is_vendor_rent', false)->count();
+            $vendorRent = (clone $baseQuery)->where('is_vendor_rent', true)->count();
+            
+            $inStockTotal = (clone $baseQuery)->where('in_stock', true)->count();
+            $rentedTotal = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)->where('is_sold', false)->count();
+            
+            $extServiceTotal = (clone $baseQuery)->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->count();
+            $intServiceTotal = (clone $baseQuery)->where('location', Location::SERVICE_INTERNAL)->count();
+            $insServiceTotal = (clone $baseQuery)->where('location', 'like', Location::INSURANCE . '%')->count();
+            
+            $summary['sdp_stock'] = $sdpStock;
+            $summary['vendor_rent'] = $vendorRent;
+            $summary['total_active_stock'] = $sdpStock + $vendorRent;
+            
+            // In Stock Breakdown
+            $pureStock = (clone $baseQuery)->where('in_stock', true)->where(function($q) {
+                $q->whereNull('rental_id')->orWhere('rental_id', '');
+            })->count();
+
+            $reserve = (clone $baseQuery)->where('in_stock', true)->whereNotNull('rental_id')->where('rental_id', '!=', '')->where('actual_start_rental', '>', $today)->count();
+
+            $origRepl = (clone $baseQuery)->where('in_stock', true)->whereNotNull('rental_id')->where('rental_id', '!=', '')->where(function($q) use ($today) {
+                $q->whereNull('actual_start_rental')->orWhere('actual_start_rental', '<=', $today);
+            })->where('rental_id_count', '>', 1)->count();
+
+            $origNoRepl = (clone $baseQuery)->where('in_stock', true)->whereNotNull('rental_id')->where('rental_id', '!=', '')->where(function($q) use ($today) {
+                $q->whereNull('actual_start_rental')->orWhere('actual_start_rental', '<=', $today);
+            })->where(function($q) {
+                $q->whereNull('rental_id_count')->orWhere('rental_id_count', '<=', 1);
+            })->count();
+
+            $locations = (clone $baseQuery)->where('in_stock', true)->selectRaw('location, count(*) as cnt')->groupBy('location')->pluck('cnt', 'location')->toArray();
+
+            $summary['in_stock'] = [
+                'total' => $inStockTotal,
+                'rental_status' => [
+                    'pure_stock' => $pureStock,
+                    'reserve' => $reserve,
+                    'original_with_replace' => $origRepl,
+                    'original_without_replace' => $origNoRepl,
+                ],
+                'details' => [
+                    'locations' => $locations
+                ]
+            ];
+
+            // Rented In Customer Breakdown
+            $rentedVendor = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)->where('is_vendor_rent', true)->count();
+            $rentedOrigCustomer = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)->where('is_vendor_rent', false)->whereColumn('lot_number', 'reserved_lot')->count();
+            $rentedReplService = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)->where('is_vendor_rent', false)->whereColumn('lot_number', '!=', 'reserved_lot')->where('vehicle_role', 'Replacement Service')->count();
+            $rentedReplRbo = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)->where('is_vendor_rent', false)->whereColumn('lot_number', '!=', 'reserved_lot')->where('vehicle_role', 'Replacement RBO')->count();
+            $rentedCheckPos = (clone $baseQuery)->where('location', Location::RENTAL_CUSTOMER)
+                ->where('is_vendor_rent', false)
+                ->where(function($q) {
+                    $q->whereNull('rental_id')
+                      ->orWhere('rental_id', '');
+                })->count();
+
+            $summary['rented_in_customer'] = [
+                'total' => $rentedTotal,
+                'details' => [
+                    'Vendor Rent' => $rentedVendor,
+                    'Original in Customer' => $rentedOrigCustomer,
+                    'Replacement - Service' => $rentedReplService,
+                    'Replacement - RBO' => $rentedReplRbo,
+                    'Check Rent position' => $rentedCheckPos,
+                ]
+            ];
+
+            // Service Breakdown
+            $summary['stock_external_service'] = [
+                'total' => $extServiceTotal,
+                'details' => [
+                    'Original with Replace' => (clone $baseQuery)->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', '>', 1)->count(),
+                    'Original without Replace' => (clone $baseQuery)->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', 1)->count(),
+                    'Rented Replacement' => (clone $baseQuery)->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->whereColumn('lot_number', '!=', 'reserved_lot')->count(),
+                    'Stock in External Service' => (clone $baseQuery)->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->whereNull('rental_id')->count(),
+                ]
+            ];
+
+            $summary['stock_internal_service'] = [
+                'total' => $intServiceTotal,
+                'details' => [
+                    'Original with Replace' => (clone $baseQuery)->where('location', Location::SERVICE_INTERNAL)->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', '>', 1)->count(),
+                    'Original without Replace' => (clone $baseQuery)->where('location', Location::SERVICE_INTERNAL)->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', 1)->count(),
+                    'Rented Replacement' => (clone $baseQuery)->where('location', Location::SERVICE_INTERNAL)->whereColumn('lot_number', '!=', 'reserved_lot')->count(),
+                    'Stock in Internal Service' => (clone $baseQuery)->where('location', Location::SERVICE_INTERNAL)->whereNull('rental_id')->count(),
+                ]
+            ];
+
+            $summary['stock_insurance'] = [
+                'total' => $insServiceTotal,
+                'details' => [
+                    'Original with Replace' => (clone $baseQuery)->where('location', 'like', Location::INSURANCE . '%')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', '>', 1)->count(),
+                    'Original without Replace' => (clone $baseQuery)->where('location', 'like', Location::INSURANCE . '%')->whereColumn('lot_number', 'reserved_lot')->where('rental_id_count', 1)->count(),
+                    'Rented Replacement' => (clone $baseQuery)->where('location', 'like', Location::INSURANCE . '%')->whereColumn('lot_number', '!=', 'reserved_lot')->count(),
+                    'Stock in Insurance' => (clone $baseQuery)->where('location', 'like', Location::INSURANCE . '%')->whereNull('rental_id')->count(),
+                ]
+            ];
+        }
+        
+        // Calculate Rental Pairs Count dynamically (scoped by branch query!)
+        $pairItems = Item::forUserBranch()->where('is_sold', false)->whereNotNull('rental_id')->where('rental_id', '!=', '')->get(['rental_id']);
+        $summary['rental_pairs_count'] = $pairItems->groupBy('rental_id')->filter(fn($grp) => $grp->count() > 1)->count();
+
+        // Calculate Check Rent Position dynamically (scoped by branch query!)
+        $rentedCheckPosDynamic = Item::forUserBranch()->where('location', Location::RENTAL_CUSTOMER)
+            ->where('is_vendor_rent', false)
+            ->where(function($q) {
+                $q->whereNull('rental_id')
+                  ->orWhere('rental_id', '');
+            })->count();
+        $summary['rented_in_customer']['details']['Check Rent position'] = $rentedCheckPosDynamic;
+
         // Metadata mock for compatibility (or fetch from DB updated_at)
         $metadata = ['imported_at' => $latest->updated_at->format('Y-m-d H:i:s')];
         
@@ -42,22 +165,23 @@ class DashboardController extends Controller
         
         // Reserve Rental: Has rental_id but start date > today
         $reserveRentalData = [
-            'count' => Item::whereNotNull('rental_id')->where('actual_start_rental', '>', $today)->count(),
-            'items' => Item::whereNotNull('rental_id')->where('actual_start_rental', '>', $today)->take(20)->get()->toArray(),
+            'count' => Item::forUserBranch()->whereNotNull('rental_id')->where('actual_start_rental', '>', $today)->count(),
+            'items' => Item::forUserBranch()->whereNotNull('rental_id')->where('actual_start_rental', '>', $today)->take(20)->get()->toArray(),
         ];
         
-        // Stock breakdown
-        // Pure Stock: InStock=1, RentalID=null
-        $pureStock = Item::where('in_stock', true)->whereNull('rental_id')->count();
+        // Pure Stock: InStock=1, RentalID=null or empty
+        $pureStock = Item::forUserBranch()->where('in_stock', true)->where(function($q) {
+            $q->whereNull('rental_id')->orWhere('rental_id', '');
+        })->count();
         
         // Original Stock: InStock=1, RentalID!=null, Start <= Today (Active)
-        $originalStock = Item::where('in_stock', true)
+        $originalStock = Item::forUserBranch()->where('in_stock', true)
                              ->whereNotNull('rental_id')
                              ->where('actual_start_rental', '<=', $today)
                              ->count();
                              
         // Reserve Stock: InStock=1, RentalID!=null, Start > Today (Future)
-        $reserveStock = Item::where('in_stock', true)
+        $reserveStock = Item::forUserBranch()->where('in_stock', true)
                             ->whereNotNull('rental_id')
                             ->where('actual_start_rental', '>', $today)
                             ->count();
@@ -71,7 +195,7 @@ class DashboardController extends Controller
         // --- Active Rental Logic ---
         // Exclude RESERVE (future start date) from all Active Rental calculations
         // 1. Rented In Customer - need to recalculate excluding reserve
-        $activeCustomer = Item::where('location', Location::RENTAL_CUSTOMER)
+        $activeCustomer = Item::forUserBranch()->where('location', Location::RENTAL_CUSTOMER)
                               ->where('is_sold', false)
                               ->where(function($q) use ($today) {
                                   $q->whereNull('actual_start_rental')
@@ -80,7 +204,7 @@ class DashboardController extends Controller
                               ->count();
         
         // 2. In Stock Active (Original w/o Replace, Count=1, NOT Reserve)
-        $inStockActive = Item::where('in_stock', true)
+        $inStockActive = Item::forUserBranch()->where('in_stock', true)
                              ->whereColumn('lot_number', 'reserved_lot')
                              ->whereNotNull('rental_id')
                              ->where('rental_id_count', 1)
@@ -102,12 +226,12 @@ class DashboardController extends Controller
                });
         };
 
-        $inServiceActiveExt = Item::where('location', 'like', Location::SERVICE_EXTERNAL . '%')->tap($serviceActiveQuery)->count();
-        $inServiceActiveInt = Item::where('location', Location::SERVICE_INTERNAL)->tap($serviceActiveQuery)->count();
-        $inServiceActiveIns = Item::where('location', 'like', Location::INSURANCE . '%')->tap($serviceActiveQuery)->count();
+        $inServiceActiveExt = Item::forUserBranch()->where('location', 'like', Location::SERVICE_EXTERNAL . '%')->tap($serviceActiveQuery)->count();
+        $inServiceActiveInt = Item::forUserBranch()->where('location', Location::SERVICE_INTERNAL)->tap($serviceActiveQuery)->count();
+        $inServiceActiveIns = Item::forUserBranch()->where('location', 'like', Location::INSURANCE . '%')->tap($serviceActiveQuery)->count();
         
         // 4. Overdue Rentals - Still at customer but actual_end_rental is today or past (includes today's end)
-        $overdueRentals = Item::where('location', Location::RENTAL_CUSTOMER)
+        $overdueRentals = Item::forUserBranch()->where('location', Location::RENTAL_CUSTOMER)
                               ->where('is_sold', false)
                               ->whereNotNull('actual_end_rental')
                               ->whereDate('actual_end_rental', '<=', $today)
@@ -212,7 +336,7 @@ class DashboardController extends Controller
     }
     
     private function buildFilterQuery(InventoryService $inventory, $category, $sub, $searchQuery = null) {
-        $query = Item::query();
+        $query = Item::forUserBranch();
         $today = now()->format('Y-m-d');
         
         if ($category !== 'search') {
@@ -316,7 +440,14 @@ class DashboardController extends Controller
              elseif ($sub == 'Replacement') $query->whereNotNull('rental_id')->where('rental_id', '!=', '')->whereColumn('lot_number', '!=', 'reserved_lot')->where('is_vendor_rent', false);
              elseif ($sub == 'Replacement - Service') $query->whereNotNull('rental_id')->where('rental_id', '!=', '')->whereColumn('lot_number', '!=', 'reserved_lot')->where('is_vendor_rent', false)->where('product_movement_count', '>', 1);
              elseif ($sub == 'Replacement - RBO') $query->whereNotNull('rental_id')->where('rental_id', '!=', '')->whereColumn('lot_number', '!=', 'reserved_lot')->where('is_vendor_rent', false)->where('product_movement_count', '=', 1);
-             elseif ($sub == 'Check Rent position') $query->where(function($q) { $q->whereNull('rental_id')->orWhere('rental_id', ''); })->where('is_vendor_rent', false);
+             elseif ($sub == 'Check Rent position') {
+                  $query->where('location', Location::RENTAL_CUSTOMER)
+                        ->where('is_vendor_rent', false)
+                        ->where(function($q) {
+                            $q->whereNull('rental_id')
+                              ->orWhere('rental_id', '');
+                        });
+              }
         } elseif ($category == 'external_service' || $category == 'service_external') {
              $inventory->scopeExternalService($query);
               if ($sub) {
@@ -375,8 +506,8 @@ class DashboardController extends Controller
 
     public function rentalPairs()
     {
-        // Get all items not sold
-        $items = Item::where('is_sold', false)->whereNotNull('rental_id')->where('rental_id', '!=', '')->get();
+        // Get all items not sold for the active branch scope
+        $items = Item::forUserBranch()->where('is_sold', false)->whereNotNull('rental_id')->where('rental_id', '!=', '')->get();
         // Group by rental_id
         $grouped = $items->groupBy('rental_id');
         
@@ -442,7 +573,7 @@ class DashboardController extends Controller
 
     public function filterTotalStock(Request $request, InventoryService $inventory)
     {
-        $query = Item::query()->where('is_sold', false)->where('on_hand_quantity', '>', 0);
+        $query = Item::forUserBranch()->where('is_sold', false)->where('on_hand_quantity', '>', 0);
         $filters = $request->input('filters', []);
 
         if (!empty($filters)) {
@@ -564,7 +695,7 @@ class DashboardController extends Controller
     {
         $today = now()->format('Y-m-d');
 
-        $items = Item::where('is_sold', false)
+        $items = Item::forUserBranch()->where('is_sold', false)
             ->where(function($q) use ($today) {
                 // 1. Customer Location
                 $q->where(function($sub) use ($today) {
@@ -650,8 +781,10 @@ class DashboardController extends Controller
             return response()->json([]);
         }
 
-        $suggestions = Item::where('lot_number', 'like', "%$q%")
-            ->orWhere('product', 'like', "%$q%")
+        $suggestions = Item::forUserBranch()->where(function($query) use ($q) {
+                $query->where('lot_number', 'like', "%$q%")
+                      ->orWhere('product', 'like', "%$q%");
+            })
             ->select('lot_number', 'product')
             ->distinct()
             ->limit(10)

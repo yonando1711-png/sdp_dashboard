@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasBranchScope;
 
 class Item extends Model
 {
+    use HasBranchScope;
     protected $guarded = ['id'];
 
     protected $casts = [
@@ -41,7 +43,7 @@ class Item extends Model
     {
         return $query->where('is_active_rental', true);
     }
-    
+
     public function scopeInStock($query)
     {
         return $query->where('in_stock', true);
@@ -56,7 +58,7 @@ class Item extends Model
     {
         return $query->where('is_sold', true);
     }
-    
+
     /**
      * Prepare a date for array / JSON serialization.
      */

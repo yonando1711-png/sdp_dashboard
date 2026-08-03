@@ -14,6 +14,10 @@ class LorController extends Controller
      */
     public function index(Request $request)
     {
+        if (!auth()->user()->hasMenuPermission('lor')) {
+            abort(403, 'Unauthorized access to LoR.');
+        }
+
         if (!session('lor_authenticated')) {
             return view('lor.index', ['authenticated' => false]);
         }
@@ -22,6 +26,7 @@ class LorController extends Controller
 
         // Query active rentals from items table
         $query = Item::withoutGlobalScope('exclude_order_only')
+                     ->forUserBranch()
                      ->whereNotNull('rental_id')
                      ->where('rental_id', '!=', '');
                      
@@ -201,6 +206,7 @@ class LorController extends Controller
         $taxMode = $request->input('tax_mode', 'original');
 
         $query = Item::withoutGlobalScope('exclude_order_only')
+                     ->forUserBranch()
                      ->whereNotNull('rental_id')
                      ->where('rental_id', '!=', '');
                      
