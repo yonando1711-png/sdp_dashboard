@@ -89,7 +89,7 @@
                 <th style="width: 11%;">Type</th>
                 <th style="width: 6%;">Police-No</th>
                 <th style="width: 4%;">Year</th>
-                <th style="width: 5%;">City</th>
+                <th style="width: 7%;">CITY/Lokasi Pemakaian</th>
                 <th style="width: 10%;">Customer</th>
                 <th style="width: 7%;">PO</th>
                 <th style="width: 6%;">Status</th>

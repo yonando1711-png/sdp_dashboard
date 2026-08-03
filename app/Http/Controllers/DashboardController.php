@@ -14,6 +14,32 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        $user = auth()->user();
+        if ($user && !$user->hasMenuPermission('dashboard')) {
+            if ($user->hasMenuPermission('crm')) {
+                return redirect()->route('crm.index');
+            }
+            if ($user->hasMenuPermission('lor')) {
+                return redirect()->route('lor.index');
+            }
+            if ($user->hasMenuPermission('rental-pairs')) {
+                return redirect()->route('rental.pairs');
+            }
+            if ($user->hasMenuPermission('total-stock')) {
+                return redirect()->route('total.stock');
+            }
+            if ($user->hasMenuPermission('in-stock')) {
+                return redirect()->route('details', ['category' => 'in_stock']);
+            }
+            if ($user->hasMenuPermission('active-rentals')) {
+                return redirect()->route('details', ['category' => 'active_rentals']);
+            }
+            if ($user->hasMenuPermission('in-service')) {
+                return redirect()->route('details', ['category' => 'in_service']);
+            }
+            abort(403, 'Access Denied: You do not have permission to view any dashboard pages.');
+        }
+
         // Get latest summary from History
         $latest = History::orderBy('snapshot_date', 'desc')->first();
         

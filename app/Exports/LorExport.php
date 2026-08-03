@@ -51,7 +51,7 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             'Type',
             'Police-No',
             'Tahun Kendaraan',
-            'City',
+            'CITY/Lokasi Pemakaian',
             'Customer',
             'PO',
             'Status',

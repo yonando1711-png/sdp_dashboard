@@ -272,7 +272,7 @@
                             <th class="px-4 py-4 font-semibold">Type</th>
                             <th class="px-4 py-4 font-semibold">Police-No</th>
                             <th class="px-4 py-4 font-semibold">Tahun Kendaraan</th>
-                            <th class="px-4 py-4 font-semibold">City</th>
+                            <th class="px-4 py-4 font-semibold">CITY/Lokasi Pemakaian</th>
                             <th class="px-4 py-4 font-semibold">Customer</th>
                             <th class="px-4 py-4 font-semibold">PO</th>
                             <th class="px-4 py-4 font-semibold">Status</th>

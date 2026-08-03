@@ -51,7 +51,7 @@ class UserController extends Controller
             'password' => Hash::make($validated['password']),
             'branch' => strtoupper(trim($validated['branch'])),
             'role' => $validated['role'],
-            'menu_permissions' => $validated['menu_permissions'] ?? ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'],
+            'menu_permissions' => $request->has('menu_permissions') ? (array)$request->input('menu_permissions') : ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'],
         ]);
 
         return redirect()->route('users.index')->with('success', 'User account created successfully!');
@@ -77,7 +77,7 @@ class UserController extends Controller
         $user->email = $validated['email'];
         $user->branch = strtoupper(trim($validated['branch']));
         $user->role = $validated['role'];
-        $user->menu_permissions = $validated['menu_permissions'] ?? ['dashboard', 'total-stock', 'rental-pairs'];
+        $user->menu_permissions = $request->has('menu_permissions') ? (array)$request->input('menu_permissions') : [];
 
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);

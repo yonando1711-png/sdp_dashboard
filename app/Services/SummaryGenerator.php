@@ -187,6 +187,7 @@ class SummaryGenerator
             'po' => $colMap['Customer Reference'] ?? -1,
             'price' => $colMap['Duration Price'] ?? -1,
             'status' => $colMap['Rental Status'] ?? -1,
+            'city' => $colMap['Lokasi Pemakaian'] ?? $colMap['City'] ?? $colMap['CITY'] ?? $colMap['Lokasi'] ?? -1,
         ];
         
         // Pre-compute rental_id occurrence counts
@@ -517,7 +518,7 @@ class SummaryGenerator
                 'price' => $getValue('price'),
                 'status' => $getValue('status'),
                 'is_order_only' => false,
-                'city' => null,
+                'city' => $getValue('city'),
                 'driver' => null,
             ];
         }
@@ -588,7 +589,7 @@ class SummaryGenerator
                             'price' => $order['amount_total'] ?? 0,
                             'status' => $mappedStatus,
                             'is_order_only' => true,
-                            'city' => null,
+                            'city' => $prevItem ? $prevItem->city : null,
                             'driver' => null,
                         ];
                     }

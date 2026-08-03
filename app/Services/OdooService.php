@@ -43,6 +43,36 @@ class OdooService
     }
 
     /**
+     * Dynamically detect custom Odoo field technical names on stock.lot by label string
+     */
+    public function getLotCustomFields(): array
+    {
+        $detected = [
+            'city_field' => null,
+        ];
+        
+        try {
+            $fields = $this->execute('stock.lot', 'fields_get', [], ['attributes' => ['string', 'type']]);
+            if (is_array($fields)) {
+                foreach ($fields as $fieldName => $fieldInfo) {
+                    $label = strtolower(trim($fieldInfo['string'] ?? ''));
+                    // Check for Lokasi Pemakaian / City
+                    if (!$detected['city_field']) {
+                        if (in_array($label, ['lokasi pemakaian', 'lokasi', 'city', 'kota', 'lokasi pemakaian unit']) || str_contains($label, 'lokasi pemakaian')) {
+                            $detected['city_field'] = $fieldName;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Could not detect Odoo stock.lot custom fields via fields_get: ' . $e->getMessage());
+        }
+
+        return $detected;
+    }
+
+    /**
      * Test connection to Odoo
      */
     public function testConnection(): array
@@ -186,10 +216,18 @@ class OdooService
         }
 
         // Export data
+        $customFields = $this->getLotCustomFields();
+        $cityField = $customFields['city_field'] ?? 'x_studio_lokasi_pemakaian';
+
         $exportFields = array_merge($exportFields, [
             'rental_id/client_order_ref',
             'rental_id/order_line/duration_price',
-            'rental_id/rental_status'
+            'rental_id/rental_status',
+            $cityField,
+        ]);
+
+        $headerRow = array_merge($headerRow, [
+            'Lokasi Pemakaian',
         ]);
 
         $result = $this->execute('stock.lot', 'export_data', [$ids, $exportFields]);
@@ -237,6 +275,7 @@ class OdooService
                 $row[10] ?? '',      // Customer Name (Same as index 10)
                 $row[18] ?? '',      // Duration Price
                 $row[19] ?? '',      // Rental Status
+                $row[20] ?? '',      // Lokasi Pemakaian (City)
             ];
             
             $data[] = $processedRow;

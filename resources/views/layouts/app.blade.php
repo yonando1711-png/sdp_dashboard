@@ -143,12 +143,15 @@
 
             <!-- Scrollable Nav -->
             <nav class="p-4 space-y-1 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                @if(auth()->check() && (auth()->user()->hasMenuPermission('dashboard') || auth()->user()->hasMenuPermission('rental-pairs') || auth()->user()->hasMenuPermission('total-stock') || auth()->user()->hasMenuPermission('crm') || auth()->user()->hasMenuPermission('lor')))
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2 whitespace-nowrap overflow-hidden transition-all duration-300"
                     :class="sidebarCollapsed ? 'text-center' : 'px-4'">
                     <span x-show="!sidebarCollapsed">Overview</span>
                     <span x-show="sidebarCollapsed" class="block w-full border-b border-slate-200"></span>
                 </div>
+                @endif
 
+                @if(auth()->check() && auth()->user()->hasMenuPermission('dashboard'))
                 <a href="{{ route('dashboard') }}"
                     class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all group {{ request()->routeIs('dashboard') ? 'active' : '' }}"
                     title="Dashboard">
@@ -161,6 +164,7 @@
                     <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300"
                         :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Dashboard</span>
                 </a>
+                @endif
 
                 @if(auth()->check() && auth()->user()->hasMenuPermission('rental-pairs'))
                 <a href="{{ route('rental.pairs') }}"

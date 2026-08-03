@@ -53,7 +53,7 @@ class User extends Authenticatable
      */
     public function isItAdmin(): bool
     {
-        return $this->role === 'it_admin' || $this->branch === 'ALL';
+        return $this->role === 'it_admin';
     }
 
     /**
@@ -61,7 +61,7 @@ class User extends Authenticatable
      */
     public function isNationwide(): bool
     {
-        return $this->isItAdmin() || strtoupper((string)$this->branch) === 'JKT' || strtoupper((string)$this->branch) === 'JAKARTA';
+        return $this->isItAdmin() || strtoupper((string)$this->branch) === 'ALL' || strtoupper((string)$this->branch) === 'JKT' || strtoupper((string)$this->branch) === 'JAKARTA';
     }
 
     /**
@@ -76,13 +76,13 @@ class User extends Authenticatable
         // Standardize key hyphens/underscores
         $key = str_replace('_', '-', strtolower($menu));
 
-        // Non-Jakarta branches can NEVER access LoR or CRM
+        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR or CRM
         if (!$this->isNationwide() && in_array($key, ['lor', 'crm'])) {
             return false;
         }
 
         // If custom menu_permissions array exists for this account, strictly enforce it!
-        if (is_array($this->menu_permissions) && !empty($this->menu_permissions)) {
+        if (is_array($this->menu_permissions)) {
             return in_array($menu, $this->menu_permissions) 
                 || in_array($key, $this->menu_permissions)
                 || ($key === 'inventory' && (in_array('in-stock', $this->menu_permissions) || in_array('active-rentals', $this->menu_permissions) || in_array('in-service', $this->menu_permissions)))
@@ -91,7 +91,7 @@ class User extends Authenticatable
                 || ($key === 'in-service' && (in_array('in_service', $this->menu_permissions) || in_array('in-service', $this->menu_permissions)));
         }
 
-        // Default fallbacks when menu_permissions is empty
+        // Default fallbacks when menu_permissions is null
         if ($this->isNationwide()) {
             return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm']);
         }

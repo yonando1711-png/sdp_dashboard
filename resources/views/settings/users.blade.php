@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="space-y-6" x-data="{ showModal: false, editMode: false, form: { id: null, name: '', email: '', password: '', branch: 'SURABAYA', role: 'branch_user', menu_permissions: ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'] } }">
+<div class="space-y-6" x-data="{ showModal: false, editMode: false, form: { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'] } }">
 
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/80 p-6 rounded-3xl border border-slate-800/80 backdrop-blur-xl shadow-xl">
@@ -17,7 +17,7 @@
             </div>
         </div>
 
-        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'SURABAYA', role: 'branch_user', menu_permissions: ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
             <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -239,14 +239,14 @@
                             <span class="font-semibold">In Service (Inventory)</span>
                         </label>
                         <label class="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-900 cursor-pointer transition-colors text-slate-300">
-                            <input type="checkbox" name="menu_permissions[]" value="lor" x-model="form.menu_permissions" :disabled="form.branch !== 'JKT' && form.branch !== 'ALL' && form.role !== 'it_admin'" class="w-4 h-4 rounded border-slate-700 text-indigo-500 focus:ring-indigo-500">
+                            <input type="checkbox" name="menu_permissions[]" value="lor" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-700 text-indigo-500 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-semibold">LoR</span>
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">JKT/IT</span>
                             </div>
                         </label>
                         <label class="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-900 cursor-pointer transition-colors text-slate-300">
-                            <input type="checkbox" name="menu_permissions[]" value="crm" x-model="form.menu_permissions" :disabled="form.branch !== 'JKT' && form.branch !== 'ALL' && form.role !== 'it_admin'" class="w-4 h-4 rounded border-slate-700 text-indigo-500 focus:ring-indigo-500">
+                            <input type="checkbox" name="menu_permissions[]" value="crm" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-700 text-indigo-500 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-semibold">CRM</span>
                                 <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">JKT/IT</span>
