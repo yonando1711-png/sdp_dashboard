@@ -43,6 +43,36 @@ class OdooService
     }
 
     /**
+     * Dynamically detect custom Odoo field technical names on stock.lot by label string
+     */
+    public function getLotCustomFields(): array
+    {
+        $detected = [
+            'city_field' => null,
+        ];
+        
+        try {
+            $fields = $this->execute('stock.lot', 'fields_get', [], ['attributes' => ['string', 'type']]);
+            if (is_array($fields)) {
+                foreach ($fields as $fieldName => $fieldInfo) {
+                    $label = strtolower(trim($fieldInfo['string'] ?? ''));
+                    // Check for Lokasi Pemakaian / City
+                    if (!$detected['city_field']) {
+                        if (in_array($label, ['lokasi pemakaian', 'lokasi', 'city', 'kota', 'lokasi pemakaian unit']) || str_contains($label, 'lokasi pemakaian')) {
+                            $detected['city_field'] = $fieldName;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Could not detect Odoo stock.lot custom fields via fields_get: ' . $e->getMessage());
+        }
+
+        return $detected;
+    }
+
+    /**
      * Test connection to Odoo
      */
     public function testConnection(): array
@@ -165,6 +195,11 @@ class OdooService
             'Purchase Date',
             'Contract',
             'Engine Number',
+            'Customer Reference', // NEW (PO)
+            'Contract Ref',       // NEW
+            'Customer Name',      // NEW
+            'Duration Price',     // NEW
+            'Rental Status',      // NEW
         ];
 
         // Get all IDs matching domain (same as Excel export filter)
@@ -181,6 +216,20 @@ class OdooService
         }
 
         // Export data
+        $customFields = $this->getLotCustomFields();
+        $cityField = $customFields['city_field'] ?? 'x_studio_lokasi_pemakaian';
+
+        $exportFields = array_merge($exportFields, [
+            'rental_id/client_order_ref',
+            'rental_id/order_line/duration_price',
+            'rental_id/rental_status',
+            $cityField,
+        ]);
+
+        $headerRow = array_merge($headerRow, [
+            'Lokasi Pemakaian',
+        ]);
+
         $result = $this->execute('stock.lot', 'export_data', [$ids, $exportFields]);
 
         if (!isset($result['datas'])) {
@@ -190,27 +239,11 @@ class OdooService
         // Build Excel-like 2D array with headers
         $data = [$headerRow];
         foreach ($result['datas'] as $row) {
-            // Export fields order:
-            // 0: product_id/display_name -> Product
-            // 1: name -> Lot/Serial Number
-            // 2: location_id/display_name -> Location
-            // 3: product_qty -> On Hand Quantity
-            // 4: is_vendor_rent -> Is Vendor Rent
-            // 5: rental_id/display_name -> Rental ID
-            // 6: rental_id/warehouse_id/display_name -> Rental ID/Warehouse
-            // 7: rental_id/actual_start_rental -> Start Date
-            // 8: rental_id/actual_end_rental -> End Date
-            // 9: x_studio_partnercust -> Partner/Cust.
-            // 10: rental_id/partner_id/display_name -> Rental ID/Customer
-            // 11: reserved_lot_ids/name -> Reserved Lot (actual lot number)
-            // 12: vehicle_year -> Year
-
             $lotNumber = $row[1] ?? '';
             $location = $row[2] ?? '';
             $reservedLot = trim($row[11] ?? '');  // Now directly from Odoo field!
             
             // Derive in_stock: if location contains 'STOCK', 'TRANSIT', or 'OPERATION'
-            // Matches Excel import logic where these are all counted as In Stock
             $inStock = (
                 stripos($location, 'STOCK') !== false ||
                 stripos($location, 'TRANSIT') !== false ||
@@ -235,8 +268,14 @@ class OdooService
                 $reservedLot,        // Reserved Lot (directly from Odoo field)
                 $row[12] ?? '',      // Year
                 $row[14] ?? null,    // Purchase Date
-                $row[15] ?? '',      // Contract Ref
+                $row[15] ?? '',      // Contract
                 $row[16] ?? '',      // Engine Number
+                $row[17] ?? '',      // Customer Reference (PO)
+                $row[15] ?? '',      // Contract Ref (Same as index 15)
+                $row[10] ?? '',      // Customer Name (Same as index 10)
+                $row[18] ?? '',      // Duration Price
+                $row[19] ?? '',      // Rental Status
+                $row[20] ?? '',      // Lokasi Pemakaian (City)
             ];
             
             $data[] = $processedRow;
@@ -1514,6 +1553,252 @@ class OdooService
 
         } catch (\Exception $e) {
             \Log::warning('Failed to fetch bulk CRM data: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function fetchBulkInvoicePeriodSummary(array $rentalIds): array
+    {
+        if (empty($rentalIds)) {
+            return [];
+        }
+
+        try {
+            // 1. Get the sale orders
+            $orders = $this->execute('sale.order', 'search_read', [
+                [['name', 'in', $rentalIds]]
+            ]);
+
+            if (empty($orders)) {
+                return [];
+            }
+
+            $periodIds = [];
+            $orderToPeriodsMap = []; // order_name => array of period_ids
+            foreach ($orders as $order) {
+                if (!empty($order['invoice_period_ids'])) {
+                    $periodIds = array_merge($periodIds, $order['invoice_period_ids']);
+                    $orderToPeriodsMap[$order['name']] = $order['invoice_period_ids'];
+                }
+            }
+            
+            $periodIds = array_unique($periodIds);
+            if (empty($periodIds)) {
+                return [];
+            }
+
+            // 2. Fetch all invoice periods
+            $periods = $this->execute('rental.period.invoice', 'search_read', [
+                [['id', 'in', $periodIds]]
+            ], ['order' => 'start_rental_period_date asc']);
+            
+            $periodsMap = [];
+            foreach ($periods as $p) {
+                $periodsMap[$p['id']] = $p;
+            }
+
+            // 3. Resolve tax names
+            $taxIds = [];
+            foreach ($periods as $p) {
+                if (!empty($p['tax_ids'])) {
+                    foreach ($p['tax_ids'] as $tid) {
+                        $taxIds[$tid] = true;
+                    }
+                }
+            }
+            
+            $taxMap = [];
+            if (!empty($taxIds)) {
+                $taxes = $this->execute('account.tax', 'search_read', [
+                    [['id', 'in', array_keys($taxIds)]]
+                ]);
+                foreach ($taxes as $tax) {
+                    $taxMap[$tax['id']] = $tax['name'];
+                }
+            }
+
+            // 4. Process and Group by rentalId
+            $result = [];
+            foreach ($orderToPeriodsMap as $rentalId => $pIds) {
+                $orderPeriods = [];
+                foreach ($pIds as $pid) {
+                    if (isset($periodsMap[$pid])) {
+                        $orderPeriods[] = $periodsMap[$pid];
+                    }
+                }
+                
+                // Sort by start date
+                usort($orderPeriods, function($a, $b) {
+                    return strcmp($a['start_rental_period_date'] ?? '', $b['start_rental_period_date'] ?? '');
+                });
+
+                $summary = [];
+                $currentGroup = null;
+
+                foreach ($orderPeriods as $p) {
+                    $price = (float)($p['price_unit'] ?? 0);
+                    if ($price <= 0) continue; 
+                    
+                    $startDate = $p['start_rental_period_date'] ?? null;
+                    $endDate = $p['end_rental_period_date'] ?? null;
+                    
+                    $taxNames = [];
+                    if (!empty($p['tax_ids'])) {
+                        foreach ($p['tax_ids'] as $tid) {
+                            if (isset($taxMap[$tid])) $taxNames[] = $taxMap[$tid];
+                        }
+                    }
+                    $taxStr = empty($taxNames) ? '-' : implode(', ', $taxNames);
+
+                    if (!$startDate) continue;
+
+                    if ($currentGroup === null) {
+                        $currentGroup = [
+                            'price' => $price,
+                            'start_date' => $startDate,
+                            'end_date' => $endDate,
+                            'tax' => $taxStr,
+                            'product' => $p['product_id'][1] ?? '',
+                        ];
+                    } elseif ($price === $currentGroup['price']) {
+                        if ($endDate && $endDate > $currentGroup['end_date']) {
+                            $currentGroup['end_date'] = $endDate;
+                        }
+                    } else {
+                        $summary[] = $currentGroup;
+                        $currentGroup = [
+                            'price' => $price,
+                            'start_date' => $startDate,
+                            'end_date' => $endDate,
+                            'tax' => $taxStr,
+                            'product' => $p['product_id'][1] ?? '',
+                        ];
+                    }
+                }
+
+                if ($currentGroup !== null) {
+                    $summary[] = $currentGroup;
+                }
+
+                $result[$rentalId] = $summary;
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch bulk invoice period summary: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function fetchInvoicePeriodSummary(string $rentalId, ?string $lotNumber = null): array
+    {
+        try {
+            // 1. Get the sale order
+            $orders = $this->execute('sale.order', 'search_read', [
+                [['name', '=', $rentalId]]
+            ], ['limit' => 1]);
+
+            if (empty($orders) || empty($orders[0]['invoice_period_ids'])) {
+                return [];
+            }
+
+            $order = $orders[0];
+            $periodIds = $order['invoice_period_ids'];
+
+            // 2. Fetch all invoice periods for this order
+            $periods = $this->execute('rental.period.invoice', 'search_read', [
+                [['id', 'in', $periodIds]]
+            ], ['order' => 'start_rental_period_date asc']);
+
+            if (empty($periods)) {
+                return [];
+            }
+
+            // 4. Resolve tax names
+            $taxIds = [];
+            foreach ($periods as $p) {
+                if (!empty($p['tax_ids'])) {
+                    foreach ($p['tax_ids'] as $tid) {
+                        $taxIds[$tid] = true;
+                    }
+                }
+            }
+            
+            $taxMap = [];
+            if (!empty($taxIds)) {
+                $taxes = $this->execute('account.tax', 'search_read', [
+                    [['id', 'in', array_keys($taxIds)]]
+                ]);
+                foreach ($taxes as $tax) {
+                    $taxMap[$tax['id']] = $tax['name'];
+                }
+            }
+
+            // 5. Group by price
+            $summary = [];
+            $currentGroup = null;
+
+            foreach ($periods as $p) {
+                $price = (float)($p['price_unit'] ?? 0);
+                if ($price <= 0) continue; // Skip zero-price invoice periods per user request
+                
+                $startDate = $p['start_rental_period_date'] ?? null;
+                $endDate = $p['end_rental_period_date'] ?? null;
+                
+                $taxNames = [];
+                if (!empty($p['tax_ids'])) {
+                    foreach ($p['tax_ids'] as $tid) {
+                        if (isset($taxMap[$tid])) $taxNames[] = $taxMap[$tid];
+                    }
+                }
+                $taxStr = empty($taxNames) ? '-' : implode(', ', $taxNames);
+
+                if (!$startDate) continue;
+
+                if ($currentGroup === null) {
+                    $currentGroup = [
+                        'price' => $price,
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'tax' => $taxStr,
+                        'product' => $p['product_id'][1] ?? '',
+                    ];
+                } elseif ($price === $currentGroup['price']) {
+                    // Extend the end date
+                    if ($endDate && $endDate > $currentGroup['end_date']) {
+                        $currentGroup['end_date'] = $endDate;
+                    }
+                } else {
+                    // Price changed, push current and start new
+                    $summary[] = $currentGroup;
+                    $currentGroup = [
+                        'price' => $price,
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'tax' => $taxStr,
+                        'product' => $p['product_id'][1] ?? '',
+                    ];
+                }
+            }
+
+            if ($currentGroup) {
+                $summary[] = $currentGroup;
+            }
+
+            // 6. Format dates for display
+            foreach ($summary as &$group) {
+                if ($group['start_date']) {
+                    $group['start_date'] = \Carbon\Carbon::parse($group['start_date'])->format('d M Y');
+                }
+                if ($group['end_date']) {
+                    $group['end_date'] = \Carbon\Carbon::parse($group['end_date'])->format('d M Y');
+                }
+            }
+
+            return $summary;
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch invoice periods: ' . $e->getMessage());
             return [];
         }
     }

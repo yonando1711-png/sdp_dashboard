@@ -24,7 +24,7 @@ class TotalStockExport implements FromQuery, WithHeadings, WithMapping, ShouldAu
 
     public function query()
     {
-        $query = Item::query()->where('is_sold', false)->where('on_hand_quantity', '>', 0);
+        $query = Item::forUserBranch()->where('is_sold', false)->where('on_hand_quantity', '>', 0);
         
         $inventory = app(InventoryService::class);
         

@@ -176,14 +176,18 @@ class SummaryGenerator
             'actual_end_rental' => $colMap['Rental ID/Actual End Rental'] ?? -1,
             'km_last' => $colMap['Last Odometer (KM)'] ?? -1,
             'is_on_hand' => $colMap['Is On Hand?'] ?? -1,
-            'last_customer' => $colMap['Partner/Cust.'] ?? -1, // NEW
-            'current_customer' => $colMap['Rental ID/Customer'] ?? -1, // NEW
-            'warehouse' => $colMap['Rental ID/Warehouse'] ?? -1, // NEW
+            'last_customer' => $colMap['Partner/Cust.'] ?? -1,
+            'current_customer' => $colMap['Customer Name'] ?? $colMap['Rental ID/Customer'] ?? -1,
+            'warehouse' => $colMap['Rental ID/Warehouse'] ?? -1,
             'internal_reference' => $colMap['Internal Reference'] ?? -1, // No Rangka
             'year' => $colMap['Year'] ?? -1,
             'purchase_date' => $colMap['Purchase Date'] ?? -1,
-            'contract_ref' => $colMap['Contract'] ?? -1,
+            'contract_ref' => $colMap['Contract Ref'] ?? $colMap['Contract'] ?? -1,
             'engine_number' => $colMap['Engine Number'] ?? -1,
+            'po' => $colMap['Customer Reference'] ?? -1,
+            'price' => $colMap['Duration Price'] ?? -1,
+            'status' => $colMap['Rental Status'] ?? -1,
+            'city' => $colMap['Lokasi Pemakaian'] ?? $colMap['City'] ?? $colMap['CITY'] ?? $colMap['Lokasi'] ?? -1,
         ];
         
         // Pre-compute rental_id occurrence counts
@@ -510,7 +514,89 @@ class SummaryGenerator
                 'vendor_unit' => null, // Will be enriched later
                 'contract_ref' => $getValue('contract_ref'),
                 'engine_number' => $getValue('engine_number'),
+                'po' => $getValue('po'),
+                'price' => $getValue('price'),
+                'status' => $getValue('status'),
+                'is_order_only' => false,
+                'city' => $getValue('city'),
+                'driver' => null,
             ];
+        }
+
+        // Fetch all sale orders to include missing/returned/cancelled orders
+        try {
+            $existingRentalIds = collect($items)->pluck('rental_id')->filter()->unique()->toArray();
+            $odoo = app(\App\Services\OdooService::class);
+            $domain = [['is_rental_order', '=', true]];
+            $saleOrderIds = $odoo->execute('sale.order', 'search', [$domain]);
+            if (!empty($saleOrderIds)) {
+                $saleOrders = $odoo->execute('sale.order', 'read', [$saleOrderIds, [
+                    'name', 'partner_id', 'client_order_ref', 'rental_status', 'state', 'rental_start_date', 'rental_return_date', 'amount_total'
+                ]]);
+                
+                $statusMap = [
+                    'draft' => 'Quotation',
+                    'sent' => 'Quotation Sent',
+                    'pickup' => 'Reserved',
+                    'return' => 'Pickedup',
+                    'returned' => 'Returned',
+                    'cancel' => 'Cancelled',
+                ];
+
+                foreach ($saleOrders as $order) {
+                    $rentalId = $order['name'];
+                    if (!in_array($rentalId, $existingRentalIds)) {
+                        $mappedStatus = $statusMap[$order['rental_status'] ?? ''] ?? ($order['state'] === 'cancel' ? 'Cancelled' : ($order['rental_status'] ?? ''));
+                        
+                        // Attempt to find previous lot_number to preserve history
+                        $prevItem = \App\Models\Item::withoutGlobalScope('exclude_order_only')
+                            ->where('rental_id', $rentalId)
+                            ->whereNotNull('lot_number')
+                            ->where('lot_number', '!=', '')
+                            ->first();
+                            
+                        $items[] = [
+                            'product' => $prevItem ? $prevItem->product : '',
+                            'lot_number' => $prevItem ? $prevItem->lot_number : '',
+                            'internal_reference' => $prevItem ? $prevItem->internal_reference : '',
+                            'year' => $prevItem ? $prevItem->year : '',
+                            'purchase_date' => $prevItem ? $prevItem->purchase_date : null,
+                            'location' => '',
+                            'on_hand_quantity' => 0,
+                            'is_vendor_rent' => false,
+                            'is_on_hand' => false,
+                            'in_stock' => '0',
+                            'rental_id' => $rentalId,
+                            'reserved_lot' => '',
+                            'km_last' => 0,
+                            'is_sold' => false,
+                            'rental_type' => '',
+                            'actual_start_rental' => !empty($order['rental_start_date']) ? \Carbon\Carbon::parse($order['rental_start_date'])->format('Y-m-d') : null,
+                            'actual_end_rental' => !empty($order['rental_return_date']) ? \Carbon\Carbon::parse($order['rental_return_date'])->format('Y-m-d') : null,
+                            'is_active_rental' => false,
+                            'category_flags' => [],
+                            'vehicle_role' => '',
+                            'linked_vehicle' => null,
+                            'rental_id_count' => 1,
+                            'product_movement_count' => 0,
+                            'last_customer' => null,
+                            'current_customer' => is_array($order['partner_id']) ? $order['partner_id'][1] : '',
+                            'warehouse' => null,
+                            'vendor_unit' => null,
+                            'contract_ref' => '',
+                            'engine_number' => '',
+                            'po' => $order['client_order_ref'] ?? '',
+                            'price' => $order['amount_total'] ?? 0,
+                            'status' => $mappedStatus,
+                            'is_order_only' => true,
+                            'city' => $prevItem ? $prevItem->city : null,
+                            'driver' => null,
+                        ];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Could not fetch sale orders for missing rentals: ' . $e->getMessage());
         }
         
         // Second pass: Find linked vehicles (vehicles sharing the same rental_id)
@@ -578,6 +664,82 @@ class SummaryGenerator
         ]);
 
         try {
+            // 0.5 LoR Snapshot Diffing Logic
+            $existingItems = \App\Models\Item::whereNotNull('rental_id')->where('rental_id', '!=', '')
+                ->where(function($q) {
+                    $q->where('rental_id_count', '<=', 1)
+                      ->orWhere('in_stock', false);
+                })
+                ->get()->keyBy(function($item) {
+                    return $item->rental_id;
+            });
+
+            $historyInserts = [];
+            $now = now();
+
+            foreach ($items as $item) {
+                if (empty($item['rental_id']) || empty($item['lot_number'])) continue;
+                
+                $key = $item['rental_id'];
+                if (isset($existingItems[$key])) {
+                    // Only compare if the incoming item is also the active one for this rental
+                    if ($item['rental_id_count'] > 1 && $item['in_stock']) continue;
+
+                    $old = $existingItems[$key];
+                    
+                    $fieldsToCompare = [
+                        'lot_number', 'contract_ref', 'product', 'year', 'city', 'current_customer', 
+                        'po', 'actual_start_rental', 'actual_end_rental', 'price', 'driver', 'status'
+                    ];
+                    
+                    $changed = false;
+                    foreach ($fieldsToCompare as $field) {
+                        $oldVal = $old->$field;
+                        if (in_array($field, ['actual_start_rental', 'actual_end_rental']) && $oldVal) {
+                            $oldVal = \Carbon\Carbon::parse($oldVal)->toDateString();
+                        }
+                        $newVal = $item[$field] ?? null;
+                        if (in_array($field, ['actual_start_rental', 'actual_end_rental']) && $newVal) {
+                             $newVal = $this->excelDateToCarbon($newVal);
+                        }
+                        
+                        if ((string)$oldVal !== (string)$newVal) {
+                            $changed = true;
+                            break;
+                        }
+                    }
+                    
+                    if ($changed) {
+                        $historyInserts[] = [
+                            'rental_id' => $old->rental_id,
+                            'import_log_id' => $importLog->id,
+                            'contract_ref' => $old->contract_ref,
+                            'product' => $old->product,
+                            'lot_number' => $old->lot_number,
+                            'year' => $old->year,
+                            'city' => $old->city,
+                            'current_customer' => $old->current_customer,
+                            'po' => $old->po,
+                            'actual_start_rental' => $old->actual_start_rental,
+                            'actual_end_rental' => $old->actual_end_rental,
+                            'price' => $old->price,
+                            'status' => $old->status,
+                            'driver' => $old->driver,
+                            'product_movement_count' => $old->product_movement_count,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+            }
+            
+            if (!empty($historyInserts)) {
+                $chunkedHistories = array_chunk($historyInserts, 500);
+                foreach ($chunkedHistories as $chunk) {
+                    \App\Models\LorHistory::insert($chunk);
+                }
+            }
+
             // 1. Save Items
             \App\Models\Item::truncate();
         
@@ -620,6 +782,12 @@ class SummaryGenerator
                     'vendor_unit' => $item['vendor_unit'] ?? null,
                     'contract_ref' => $item['contract_ref'] ?? null,
                     'engine_number' => $item['engine_number'] ?? null,
+                    'po' => $item['po'] ?? null,
+                    'price' => $item['price'] ?? null,
+                    'status' => $item['status'] ?? null,
+                    'city' => $item['city'] ?? null,
+                    'driver' => $item['driver'] ?? null,
+                    'is_order_only' => $item['is_order_only'] ?? false,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasBranchScope;
 
 class Item extends Model
 {
+    use HasBranchScope;
     protected $guarded = ['id'];
 
     protected $casts = [
+        'is_order_only' => 'boolean',
         'on_hand_quantity' => 'float',
         'is_vendor_rent' => 'boolean',
         'is_on_hand' => 'boolean',
@@ -28,12 +31,19 @@ class Item extends Model
         'purchase_date' => 'date',
     ];
 
+    protected static function booted()
+    {
+        static::addGlobalScope('exclude_order_only', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            $builder->where('items.is_order_only', false);
+        });
+    }
+
     // Scopes for common queries
     public function scopeActiveRental($query)
     {
         return $query->where('is_active_rental', true);
     }
-    
+
     public function scopeInStock($query)
     {
         return $query->where('in_stock', true);
@@ -48,7 +58,7 @@ class Item extends Model
     {
         return $query->where('is_sold', true);
     }
-    
+
     /**
      * Prepare a date for array / JSON serialization.
      */
