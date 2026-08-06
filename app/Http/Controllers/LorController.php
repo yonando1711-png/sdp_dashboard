@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
 use App\Models\Item;
 use App\Models\LorHistory;
@@ -162,10 +163,22 @@ class LorController extends Controller
      */
     public function authenticate(Request $request)
     {
-        $password = $request->input('password');
-        $storedPassword = Setting::get('lor_password', env('LOR_DEFAULT_PASSWORD', 'admin'));
+        $password = (string) $request->input('password');
+        $storedPassword = (string) Setting::get('lor_password', env('LOR_DEFAULT_PASSWORD', 'admin'));
 
-        if ($password === $storedPassword) {
+        $isBcrypt = str_starts_with($storedPassword, '$2y$') || str_starts_with($storedPassword, '$2a$') || str_starts_with($storedPassword, '$2b$');
+
+        if ($isBcrypt) {
+            $isMatch = Hash::check($password, $storedPassword);
+        } else {
+            $isMatch = ($password === $storedPassword);
+            if ($isMatch) {
+                // Auto-upgrade legacy plaintext to Bcrypt hash
+                Setting::set('lor_password', Hash::make($password));
+            }
+        }
+
+        if ($isMatch) {
             session(['lor_authenticated' => true]);
             return redirect()->route('lor.index')->with('success', 'LoR unlocked successfully.');
         }
@@ -182,7 +195,7 @@ class LorController extends Controller
             'password' => 'required|min:4'
         ]);
 
-        Setting::set('lor_password', $request->input('password'));
+        Setting::set('lor_password', Hash::make($request->input('password')));
 
         return redirect()->back()->with('success', 'LoR password updated successfully.');
     }

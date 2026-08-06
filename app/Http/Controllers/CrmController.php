@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
 use App\Services\OdooService;
 
@@ -53,10 +54,22 @@ class CrmController extends Controller
      */
     public function authenticate(Request $request)
     {
-        $password = $request->input('password');
-        $storedPassword = Setting::get('crm_password', env('CRM_DEFAULT_PASSWORD', 'admin'));
+        $password = (string) $request->input('password');
+        $storedPassword = (string) Setting::get('crm_password', env('CRM_DEFAULT_PASSWORD', 'admin'));
 
-        if ($password === $storedPassword) {
+        $isBcrypt = str_starts_with($storedPassword, '$2y$') || str_starts_with($storedPassword, '$2a$') || str_starts_with($storedPassword, '$2b$');
+
+        if ($isBcrypt) {
+            $isMatch = Hash::check($password, $storedPassword);
+        } else {
+            $isMatch = ($password === $storedPassword);
+            if ($isMatch) {
+                // Auto-upgrade legacy plaintext to Bcrypt hash
+                Setting::set('crm_password', Hash::make($password));
+            }
+        }
+
+        if ($isMatch) {
             session(['crm_authenticated' => true]);
             return redirect()->route('crm.index')->with('success', 'CRM unlocked successfully.');
         }
@@ -69,8 +82,8 @@ class CrmController extends Controller
      */
     public function settings()
     {
-        $currentPassword = Setting::get('crm_password', env('CRM_DEFAULT_PASSWORD', 'admin'));
-        return view('crm.settings', compact('currentPassword'));
+        $isPasswordSet = Setting::get('crm_password') !== null;
+        return view('crm.settings', compact('isPasswordSet'));
     }
 
     /**
@@ -82,7 +95,7 @@ class CrmController extends Controller
             'password' => 'required|min:4'
         ]);
 
-        Setting::set('crm_password', $request->input('password'));
+        Setting::set('crm_password', Hash::make($request->input('password')));
 
         return redirect()->back()->with('success', 'CRM password updated successfully.');
     }

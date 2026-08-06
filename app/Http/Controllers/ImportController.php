@@ -57,7 +57,7 @@ class ImportController extends Controller
         Setting::set('odoo_url', $request->input('odoo_url'));
         Setting::set('odoo_db', $request->input('odoo_db'));
         Setting::set('odoo_user', $request->input('odoo_user'));
-        Setting::set('odoo_password', $request->input('odoo_password'));
+        Setting::set('odoo_password', \Illuminate\Support\Facades\Crypt::encryptString($request->input('odoo_password')));
 
         return response()->json(['success' => true, 'message' => 'Configuration saved successfully.']);
     }
