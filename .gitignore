@@ -31,3 +31,8 @@ session_log_*.md
 
 # Local debug/scratch scripts
 /scratch/
+
+# Security: ignore data dumps and spreadsheets
+odoo_debug_output.json
+*.xlsx
+.~lock.*
