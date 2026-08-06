@@ -30,11 +30,22 @@ class Setting extends Model
      */
     public static function getOdooConfig(): array
     {
+        $rawPassword = static::get('odoo_password', '');
+        $password = '';
+        if (!empty($rawPassword)) {
+            try {
+                $password = \Illuminate\Support\Facades\Crypt::decryptString($rawPassword);
+            } catch (\Exception $e) {
+                // Legacy fallback if database password is not yet encrypted
+                $password = $rawPassword;
+            }
+        }
+
         return [
             'url' => static::get('odoo_url', ''),
             'db' => static::get('odoo_db', ''),
             'user' => static::get('odoo_user', ''),
-            'password' => static::get('odoo_password', ''),
+            'password' => $password,
         ];
     }
 

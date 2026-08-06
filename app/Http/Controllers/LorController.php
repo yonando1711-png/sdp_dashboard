@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
 use App\Models\Item;
 use App\Models\LorHistory;
@@ -18,8 +19,8 @@ class LorController extends Controller
             abort(403, 'Unauthorized access to LoR.');
         }
 
-        if (!session('lor_authenticated')) {
-            return view('lor.index', ['authenticated' => false]);
+        if (!$this->checkLorSession()) {
+            return view('lor.index', ['authenticated' => false, 'session_expired' => session('session_expired', false)]);
         }
 
         $search = $request->input('search');
@@ -162,11 +163,26 @@ class LorController extends Controller
      */
     public function authenticate(Request $request)
     {
-        $password = $request->input('password');
-        $storedPassword = Setting::get('lor_password', env('LOR_DEFAULT_PASSWORD', 'admin'));
+        $password = (string) $request->input('password');
+        $storedPassword = (string) Setting::get('lor_password', env('LOR_DEFAULT_PASSWORD', 'admin'));
 
-        if ($password === $storedPassword) {
-            session(['lor_authenticated' => true]);
+        $isBcrypt = str_starts_with($storedPassword, '$2y$') || str_starts_with($storedPassword, '$2a$') || str_starts_with($storedPassword, '$2b$');
+
+        if ($isBcrypt) {
+            $isMatch = Hash::check($password, $storedPassword);
+        } else {
+            $isMatch = ($password === $storedPassword);
+            if ($isMatch) {
+                // Auto-upgrade legacy plaintext to Bcrypt hash
+                Setting::set('lor_password', Hash::make($password));
+            }
+        }
+
+        if ($isMatch) {
+            session([
+                'lor_authenticated' => true,
+                'lor_authenticated_at' => now()->timestamp,
+            ]);
             return redirect()->route('lor.index')->with('success', 'LoR unlocked successfully.');
         }
 
@@ -182,7 +198,7 @@ class LorController extends Controller
             'password' => 'required|min:4'
         ]);
 
-        Setting::set('lor_password', $request->input('password'));
+        Setting::set('lor_password', Hash::make($request->input('password')));
 
         return redirect()->back()->with('success', 'LoR password updated successfully.');
     }
@@ -192,7 +208,7 @@ class LorController extends Controller
      */
     public function export(Request $request)
     {
-        if (!session('lor_authenticated')) {
+        if (!$this->checkLorSession()) {
             return redirect()->route('lor.index');
         }
 
@@ -300,6 +316,9 @@ class LorController extends Controller
      */
     public function getFullHistory()
     {
+        if (!$this->checkLorSession()) {
+            return response()->json(['error' => 'Unauthenticated or session expired'], 401);
+        }
         $histories = \App\Models\LorHistory::orderBy('created_at', 'asc')->get()->groupBy(function($h) {
             return $h->rental_id;
         });
@@ -416,6 +435,9 @@ class LorController extends Controller
      */
     public function getRentalDetails(Request $request)
     {
+        if (!$this->checkLorSession()) {
+            return response()->json(['error' => 'Unauthenticated or session expired'], 401);
+        }
         $rentalId = $request->query('rental_id');
         $lotNumber = $request->query('lot_number');
         
@@ -430,5 +452,27 @@ class LorController extends Controller
             'success' => true,
             'data' => $summary
         ]);
+    }
+
+    /**
+     * Check if current LoR secondary authentication is valid (under 15 minutes of inactivity).
+     */
+    private function checkLorSession(): bool
+    {
+        if (!session('lor_authenticated')) {
+            return false;
+        }
+
+        $lastAuth = session('lor_authenticated_at');
+        $timeoutSeconds = 15 * 60; // 15 minutes
+
+        if (!$lastAuth || (now()->timestamp - (int)$lastAuth) > $timeoutSeconds) {
+            session()->forget(['lor_authenticated', 'lor_authenticated_at']);
+            session()->flash('session_expired', true);
+            return false;
+        }
+
+        session(['lor_authenticated_at' => now()->timestamp]);
+        return true;
     }
 }

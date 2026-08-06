@@ -40,7 +40,7 @@
                 @csrf
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New CRM Password</label>
-                    <input type="text" name="password" value="{{ $currentPassword }}" required minlength="4"
+                    <input type="password" name="password" placeholder="Enter new CRM password (min. 4 characters)..." required minlength="4"
                            class="w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm">
                 </div>
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-6 rounded-xl transition-colors shadow-md">

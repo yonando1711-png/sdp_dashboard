@@ -74,7 +74,7 @@ class SettingsController extends Controller
         
         // Only update password if provided
         if ($request->filled('odoo_password')) {
-            Setting::set('odoo_password', $request->odoo_password);
+            Setting::set('odoo_password', \Illuminate\Support\Facades\Crypt::encryptString($request->odoo_password));
         }
 
         return redirect()->route('settings')->with('success', 'Odoo connection settings updated!');

@@ -24,6 +24,12 @@
         <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">CRM Protected Area</h2>
         <p class="text-slate-500 dark:text-slate-400 mb-8">Please enter your password to access the CRM tools.</p>
         
+        @if(!empty($session_expired) || session('session_expired'))
+            <div class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl text-sm text-center border border-amber-200 dark:border-amber-800">
+                ⏱️ Your CRM session timed out after 15 minutes of inactivity. Please re-enter your password.
+            </div>
+        @endif
+
         <form action="{{ route('crm.auth') }}" method="POST" class="space-y-4">
             @csrf
             <div>

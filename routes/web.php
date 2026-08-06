@@ -53,7 +53,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/lor', [LorController::class, 'index'])->name('lor.index');
         Route::get('/lor/export', [LorController::class, 'export'])->name('lor.export');
         Route::get('/lor/full-history', [LorController::class, 'getFullHistory'])->name('lor.full-history');
-        Route::post('/lor/auth', [LorController::class, 'authenticate'])->name('lor.auth');
+        Route::post('/lor/auth', [LorController::class, 'authenticate'])->middleware('throttle:10,1')->name('lor.auth');
         Route::post('/settings/lor', [LorController::class, 'updatePassword'])->name('lor.settings.update');
         Route::get('/lor/rental-details', [LorController::class, 'getRentalDetails'])->name('lor.rental-details');
     });
@@ -61,7 +61,7 @@ Route::middleware(['auth'])->group(function () {
     // CRM Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':crm'])->group(function () {
         Route::get('/crm', [CrmController::class, 'index'])->name('crm.index');
-        Route::post('/crm/auth', [CrmController::class, 'authenticate'])->name('crm.auth');
+        Route::post('/crm/auth', [CrmController::class, 'authenticate'])->middleware('throttle:10,1')->name('crm.auth');
         Route::get('/settings/crm', [CrmController::class, 'settings'])->name('crm.settings');
         Route::post('/settings/crm', [CrmController::class, 'updatePassword'])->name('crm.settings.update');
     });

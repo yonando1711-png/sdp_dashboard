@@ -780,7 +780,7 @@
 
                                     <div class="mb-5">
                                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New CRM Password</label>
-                                        <input type="text" name="password" value="{{ \App\Models\Setting::get('crm_password', env('CRM_DEFAULT_PASSWORD', 'admin')) }}" required minlength="4"
+                                        <input type="password" name="password" placeholder="Enter new CRM password (min. 4 characters)..." required minlength="4"
                                                class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-inner">
                                     </div>
                                     <div>
@@ -815,7 +815,7 @@
 
                                     <div class="mb-5">
                                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New LoR Password</label>
-                                        <input type="text" name="password" value="{{ \App\Models\Setting::get('lor_password', env('LOR_DEFAULT_PASSWORD', 'admin')) }}" required minlength="4"
+                                        <input type="password" name="password" placeholder="Enter new LoR password (min. 4 characters)..." required minlength="4"
                                                class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-inner">
                                     </div>
                                     <div>

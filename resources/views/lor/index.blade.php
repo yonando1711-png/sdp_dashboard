@@ -134,6 +134,11 @@
                 <div class="mb-4">
                     <input type="password" name="password" x-model="passwordInput" placeholder="Enter password" 
                            class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 border-slate-200 dark:border-slate-700 transition-all text-center text-lg tracking-widest" autofocus>
+                    @if(!empty($session_expired) || session('session_expired'))
+                        <div class="mb-3 p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl text-sm text-center border border-amber-200 dark:border-amber-800">
+                            ⏱️ Your LoR session timed out after 15 minutes of inactivity. Please re-enter your password.
+                        </div>
+                    @endif
                     @if(session('error'))
                         <p class="text-red-500 text-sm mt-2 text-center">{{ session('error') }}</p>
                     @endif
