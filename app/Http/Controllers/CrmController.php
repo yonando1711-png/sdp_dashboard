@@ -18,9 +18,9 @@ class CrmController extends Controller
             abort(403, 'Unauthorized access to CRM.');
         }
 
-        // Check if user is authenticated for CRM
-        if (!session('crm_authenticated')) {
-            return view('crm.index', ['authenticated' => false]);
+        // Check if user is authenticated for CRM and session is active
+        if (!$this->checkCrmSession()) {
+            return view('crm.index', ['authenticated' => false, 'session_expired' => session('session_expired', false)]);
         }
 
         // Get unique customers that have rentals
@@ -70,7 +70,10 @@ class CrmController extends Controller
         }
 
         if ($isMatch) {
-            session(['crm_authenticated' => true]);
+            session([
+                'crm_authenticated' => true,
+                'crm_authenticated_at' => now()->timestamp,
+            ]);
             return redirect()->route('crm.index')->with('success', 'CRM unlocked successfully.');
         }
 
@@ -98,5 +101,27 @@ class CrmController extends Controller
         Setting::set('crm_password', Hash::make($request->input('password')));
 
         return redirect()->back()->with('success', 'CRM password updated successfully.');
+    }
+
+    /**
+     * Check if current CRM secondary authentication is valid (under 15 minutes of inactivity).
+     */
+    private function checkCrmSession(): bool
+    {
+        if (!session('crm_authenticated')) {
+            return false;
+        }
+
+        $lastAuth = session('crm_authenticated_at');
+        $timeoutSeconds = 15 * 60; // 15 minutes
+
+        if (!$lastAuth || (now()->timestamp - (int)$lastAuth) > $timeoutSeconds) {
+            session()->forget(['crm_authenticated', 'crm_authenticated_at']);
+            session()->flash('session_expired', true);
+            return false;
+        }
+
+        session(['crm_authenticated_at' => now()->timestamp]);
+        return true;
     }
 }
