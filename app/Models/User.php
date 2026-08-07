@@ -61,7 +61,7 @@ class User extends Authenticatable
      */
     public function isNationwide(): bool
     {
-        return $this->isItAdmin() || strtoupper((string)$this->branch) === 'ALL' || strtoupper((string)$this->branch) === 'JKT' || strtoupper((string)$this->branch) === 'JAKARTA';
+        return $this->isItAdmin() || strtoupper((string) $this->branch) === 'ALL' || strtoupper((string) $this->branch) === 'JKT' || strtoupper((string) $this->branch) === 'JAKARTA';
     }
 
     /**
@@ -83,7 +83,7 @@ class User extends Authenticatable
 
         // If custom menu_permissions array exists for this account, strictly enforce it!
         if (is_array($this->menu_permissions)) {
-            return in_array($menu, $this->menu_permissions) 
+            return in_array($menu, $this->menu_permissions)
                 || in_array($key, $this->menu_permissions)
                 || ($key === 'inventory' && (in_array('in-stock', $this->menu_permissions) || in_array('active-rentals', $this->menu_permissions) || in_array('in-service', $this->menu_permissions)))
                 || ($key === 'active-rentals' && (in_array('active-rental', $this->menu_permissions) || in_array('active-rentals', $this->menu_permissions)))
@@ -104,8 +104,8 @@ class User extends Authenticatable
      */
     public function getBranchWarehouses(?string $branchCode = null): ?array
     {
-        $branch = strtoupper(trim((string)($branchCode ?? $this->branch)));
-        
+        $branch = strtoupper(trim((string) ($branchCode ?? $this->branch)));
+
         if ($branch === 'ALL') {
             return null; // Null means no filtering (all nationwide data)
         }
@@ -142,8 +142,8 @@ class User extends Authenticatable
      */
     public function getBranchLocationPrefixes(?string $branchCode = null): ?array
     {
-        $branch = strtoupper(trim((string)($branchCode ?? $this->branch)));
-        
+        $branch = strtoupper(trim((string) ($branchCode ?? $this->branch)));
+
         if ($branch === 'ALL') {
             return null;
         }
