@@ -58,6 +58,7 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             'Start Sewa',
             'End Sewa',
             $hargaHeader,
+            'Total Harga',
             'COP/Driver',
             'Price History Details'
         ];
@@ -81,14 +82,16 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             foreach ($priceDetails as $i => $block) {
                 $blockNum = $i + 1;
                 $rawPrice = $block['price'];
+                $rawTotal = $block['total_price'] ?? $rawPrice;
                 $taxStr = $block['tax'] ?? '-';
                 
                 $price = 'Rp ' . number_format($rawPrice, 0, ',', '.');
+                $totalPrice = 'Rp ' . number_format($rawTotal, 0, ',', '.');
                 $start = $block['start_date'] ? \Carbon\Carbon::parse($block['start_date'])->format('d M Y') : '-';
                 $end = $block['end_date'] ? \Carbon\Carbon::parse($block['end_date'])->format('d M Y') : '-';
-                $blocks[] = "[Block {$blockNum}] {$price} | {$start} to {$end} | {$taxStr}";
+                $blocks[] = "[Block {$blockNum}]\nMonthly: {$price} | Total: {$totalPrice}\nPeriod: {$start} to {$end}\nTax: {$taxStr}";
             }
-            $priceStr = implode("\n", $blocks);
+            $priceStr = implode("\n\n", $blocks);
         }
         
         // Also apply tax logic to the main Harga column if possible
@@ -106,6 +109,15 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             }
         }
 
+        $totalHargaRaw = $rental->total_price;
+        if ($totalHargaRaw) {
+            if ($this->taxMode === 'include') {
+                $totalHargaRaw = $totalHargaRaw * 1.11;
+            } elseif ($this->taxMode === 'exclude') {
+                $totalHargaRaw = $totalHargaRaw / 1.11;
+            }
+        }
+
         $row = [
             $rental->rental_id,
             $rental->contract_ref,
@@ -119,6 +131,7 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             $rental->actual_start_rental ? \Carbon\Carbon::parse($rental->actual_start_rental)->format('d-m-Y') : '-',
             $rental->actual_end_rental ? \Carbon\Carbon::parse($rental->actual_end_rental)->format('d-m-Y') : '-',
             $mainHargaRaw ? 'Rp ' . number_format($mainHargaRaw, 0, ',', '.') : '-',
+            $totalHargaRaw ? 'Rp ' . number_format($totalHargaRaw, 0, ',', '.') : '-',
             $rental->driver,
             $priceStr
         ];
@@ -163,18 +176,18 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
 
     public function styles(Worksheet $sheet)
     {
-        $lastCol = $this->includeNopol ? 'O' : 'N';
+        $lastCol = $this->includeNopol ? 'P' : 'O';
         $sheet->getStyle('A1:' . $lastCol . '1')->getFont()->setBold(true);
-        $sheet->getStyle('N')->getAlignment()->setWrapText(true);
+        $sheet->getStyle('O')->getAlignment()->setWrapText(true);
         if ($this->includeNopol) {
-            $sheet->getStyle('O')->getAlignment()->setWrapText(true);
-            $sheet->getColumnDimension('O')->setWidth(40);
+            $sheet->getStyle('P')->getAlignment()->setWrapText(true);
+            $sheet->getColumnDimension('P')->setWidth(40);
         }
         
-        foreach(range('A','M') as $col) {
+        foreach(range('A','N') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        $sheet->getColumnDimension('N')->setWidth(60);
+        $sheet->getColumnDimension('O')->setWidth(65);
         
         return [];
     }

@@ -39,4 +39,6 @@ sdp_dashboard_*.md
 # Security: ignore data dumps and spreadsheets
 odoo_debug_output.json
 *.xlsx
+*.docx
+*.pdf
 .~lock.*

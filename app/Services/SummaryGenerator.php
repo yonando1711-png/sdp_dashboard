@@ -185,7 +185,8 @@ class SummaryGenerator
             'contract_ref' => $colMap['Contract Ref'] ?? $colMap['Contract'] ?? -1,
             'engine_number' => $colMap['Engine Number'] ?? -1,
             'po' => $colMap['Customer Reference'] ?? -1,
-            'price' => $colMap['Duration Price'] ?? -1,
+            'price' => $colMap['Duration Price'] ?? $colMap['Unit Price'] ?? $colMap['Price Unit'] ?? -1,
+            'total_price' => $colMap['Total Price'] ?? -1,
             'status' => $colMap['Rental Status'] ?? -1,
             'city' => $colMap['Lokasi Pemakaian'] ?? $colMap['City'] ?? $colMap['CITY'] ?? $colMap['Lokasi'] ?? -1,
         ];
@@ -201,13 +202,16 @@ class SummaryGenerator
             }
         }
         
-        // Fetch Product Movement Counts
+        // Fetch Product Movement Counts & Invoice Period Totals
         $productMovementCounts = [];
+        $invoicePeriodTotals = [];
         try {
             $odoo = app(\App\Services\OdooService::class);
-            $productMovementCounts = $odoo->fetchProductMovementCounts(array_keys($uniqueRentalIdsForOdoo));
+            $rentalNames = array_keys($uniqueRentalIdsForOdoo);
+            $productMovementCounts = $odoo->fetchProductMovementCounts($rentalNames);
+            $invoicePeriodTotals = $odoo->fetchInvoicePeriodTotals($rentalNames);
         } catch (\Exception $e) {
-            \Log::warning('Could not fetch product movement counts: ' . $e->getMessage());
+            \Log::warning('Could not fetch odoo extra data: ' . $e->getMessage());
         }
         
         // Date Logic Setup
@@ -516,6 +520,7 @@ class SummaryGenerator
                 'engine_number' => $getValue('engine_number'),
                 'po' => $getValue('po'),
                 'price' => $getValue('price'),
+                'total_price' => $invoicePeriodTotals[$rentalId] ?? ($getValue('total_price') ?: null),
                 'status' => $getValue('status'),
                 'is_order_only' => false,
                 'city' => $getValue('city'),
@@ -531,7 +536,7 @@ class SummaryGenerator
             $saleOrderIds = $odoo->execute('sale.order', 'search', [$domain]);
             if (!empty($saleOrderIds)) {
                 $saleOrders = $odoo->execute('sale.order', 'read', [$saleOrderIds, [
-                    'name', 'partner_id', 'client_order_ref', 'rental_status', 'state', 'rental_start_date', 'rental_return_date', 'amount_total'
+                    'name', 'partner_id', 'client_order_ref', 'rental_status', 'state', 'rental_start_date', 'rental_return_date', 'amount_untaxed', 'amount_total'
                 ]]);
                 
                 $statusMap = [
@@ -586,7 +591,8 @@ class SummaryGenerator
                             'contract_ref' => '',
                             'engine_number' => '',
                             'po' => $order['client_order_ref'] ?? '',
-                            'price' => $order['amount_total'] ?? 0,
+                            'price' => null,
+                            'total_price' => $invoicePeriodTotals[$rentalId] ?? ($order['amount_untaxed'] ?? ($order['amount_total'] ?? 0)),
                             'status' => $mappedStatus,
                             'is_order_only' => true,
                             'city' => $prevItem ? $prevItem->city : null,
@@ -741,6 +747,19 @@ class SummaryGenerator
             }
 
             // 1. Save Items
+            // -- Preserve Surat Kuasa units (qty=0, is_on_hand=true, not vendor_rent) before wipe --
+            $incomingLotNumbers = collect($items)->pluck('lot_number')->filter()->flip()->toArray();
+
+            $suratKuasaBackup = \App\Models\Item::where('on_hand_quantity', 0)
+                ->where('is_on_hand', true)
+                ->where(function ($q) {
+                    $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
+                })
+                ->whereNotIn('lot_number', array_keys($incomingLotNumbers))
+                ->get()
+                ->toArray();
+            // -----------------------------------------------------------------------
+
             \App\Models\Item::truncate();
         
         $chunkedItems = array_chunk($items, 500);
@@ -784,6 +803,7 @@ class SummaryGenerator
                     'engine_number' => $item['engine_number'] ?? null,
                     'po' => $item['po'] ?? null,
                     'price' => $item['price'] ?? null,
+                    'total_price' => $item['total_price'] ?? null,
                     'status' => $item['status'] ?? null,
                     'city' => $item['city'] ?? null,
                     'driver' => $item['driver'] ?? null,
@@ -794,6 +814,25 @@ class SummaryGenerator
             }
             \App\Models\Item::insert($insertData);
         }
+
+        // -- Restore Surat Kuasa units that were not in the main sync dataset --
+        if (!empty($suratKuasaBackup)) {
+            $restoreData = [];
+            foreach ($suratKuasaBackup as $row) {
+                unset($row['id']); // Remove PK so insert gets a fresh ID
+                $row['created_at'] = $row['created_at'] ?? now();
+                $row['updated_at'] = now();
+                // Decode category_flags if it was cast to array by Eloquent
+                if (is_array($row['category_flags'])) {
+                    $row['category_flags'] = json_encode($row['category_flags']);
+                }
+                $restoreData[] = $row;
+            }
+            foreach (array_chunk($restoreData, 500) as $chunk) {
+                \App\Models\Item::insert($chunk);
+            }
+        }
+        // -----------------------------------------------------------------------
 
         // 2. Save History Snapshot
         $history = \App\Models\History::updateOrCreate(
