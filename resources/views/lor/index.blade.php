@@ -42,12 +42,25 @@
         this.detailsLoading = true;
         try {
             const url = '{{ route('lor.rental-details') }}?rental_id=' + encodeURIComponent(rentalId) + '&lot_number=' + encodeURIComponent(lotNumber);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                let msg = 'Server returned error ' + response.status;
+                try {
+                    const jsonErr = JSON.parse(text);
+                    msg = jsonErr.message || jsonErr.error || msg;
+                } catch(err) {}
+                alert('Failed to load details: ' + msg);
+                this.detailsModalOpen = false;
+                return;
+            }
             const result = await response.json();
             if (result.success) {
                 this.detailsData = result.data;
             } else {
-                alert('Failed to load details: ' + result.message);
+                alert('Failed to load details: ' + (result.message || 'Unknown error'));
                 this.detailsModalOpen = false;
             }
         } catch (e) {
@@ -284,6 +297,7 @@
                             <th class="px-4 py-4 font-semibold">Start Sewa</th>
                             <th class="px-4 py-4 font-semibold">End Sewa</th>
                             <th class="px-4 py-4 font-semibold">Harga</th>
+                            <th class="px-4 py-4 font-semibold">Total Harga</th>
                             <th class="px-4 py-4 font-semibold">COP/Driver</th>
                             <th class="px-4 py-4 font-semibold text-center">Action</th>
                         </tr>
@@ -331,7 +345,7 @@
                         
                         @if($isNewCustomerGroup)
                         <tr class="bg-indigo-100 dark:bg-indigo-900/60 border-y border-indigo-200 dark:border-indigo-700 shadow-sm">
-                            <td colspan="15" class="px-5 py-4 font-bold text-indigo-800 dark:text-indigo-200 sticky left-0 text-lg">
+                            <td colspan="16" class="px-5 py-4 font-bold text-indigo-800 dark:text-indigo-200 sticky left-0 text-lg">
                                 <div class="flex items-center gap-2 text-base">
                                     <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
                                     {{ $currentCustomerGroup ?: 'Unassigned / No Customer' }}
@@ -353,7 +367,7 @@
                             $groupTextColor = $groupTextColors[$currentStatusGroup] ?? 'text-slate-500 dark:text-slate-400';
                         @endphp
                         <tr class="bg-slate-100 dark:bg-slate-800 border-y border-slate-200 dark:border-slate-700 shadow-sm">
-                            <td colspan="15" class="px-5 py-2 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 text-sm pl-8">
+                            <td colspan="16" class="px-5 py-2 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 text-sm pl-8">
                                 <div class="flex items-center gap-2">
                                     <div class="w-2 h-2 rounded-full bg-current opacity-80 {{ $groupTextColor }}"></div>
                                     <span class="text-slate-500 dark:text-slate-400">Status:</span>
@@ -431,6 +445,7 @@
                             <td class="px-4 py-3">{{ $rental->actual_start_rental ? \Carbon\Carbon::parse($rental->actual_start_rental)->format('d M Y') : '-' }}</td>
                             <td class="px-4 py-3">{{ $rental->actual_end_rental ? \Carbon\Carbon::parse($rental->actual_end_rental)->format('d M Y') : '-' }}</td>
                             <td class="px-4 py-3">{{ $rental->price ? 'Rp ' . number_format($rental->price, 0, ',', '.') : '-' }}</td>
+                            <td class="px-4 py-3">{{ $rental->total_price ? 'Rp ' . number_format($rental->total_price, 0, ',', '.') : '-' }}</td>
                             <td class="px-4 py-3">{{ $rental->driver ?: '-' }}</td>
                             <td class="px-4 py-3 text-center">
                                 <button type="button" @click="openDetails('{{ addslashes($rental->rental_id) }}', '{{ addslashes($rental->lot_number) }}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm whitespace-nowrap">
@@ -720,11 +735,17 @@
                                     
                                     <!-- Group Details -->
                                     <div class="p-5">
-                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                             <div>
                                                 <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Price</div>
                                                 <div class="font-bold text-lg text-indigo-600 dark:text-indigo-400">
                                                     Rp <span x-text="new Intl.NumberFormat('id-ID').format(group.price)"></span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Harga</div>
+                                                <div class="font-bold text-lg text-emerald-600 dark:text-emerald-400">
+                                                    Rp <span x-text="new Intl.NumberFormat('id-ID').format(group.total_price || group.price)"></span>
                                                 </div>
                                             </div>
                                             <div>

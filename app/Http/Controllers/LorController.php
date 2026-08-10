@@ -445,13 +445,21 @@ class LorController extends Controller
             return response()->json(['success' => false, 'message' => 'Missing rental_id'], 400);
         }
 
-        $odooService = app(\App\Services\OdooService::class);
-        $summary = $odooService->fetchInvoicePeriodSummary(urldecode($rentalId), $lotNumber);
+        try {
+            $odooService = app(\App\Services\OdooService::class);
+            $summary = $odooService->fetchInvoicePeriodSummary(urldecode($rentalId), $lotNumber);
 
-        return response()->json([
-            'success' => true,
-            'data' => $summary
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $summary
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Failed to load rental details: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load details from Odoo: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

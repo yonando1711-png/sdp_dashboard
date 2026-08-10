@@ -95,7 +95,7 @@
                 <th style="width: 6%;">Status</th>
                 <th style="width: 6%;">Start</th>
                 <th style="width: 6%;">End</th>
-                <th style="width: 7%;">
+                <th style="width: 6.5%;">
                     @if($taxMode === 'include')
                         Harga (11% INCL)
                     @elseif($taxMode === 'exclude')
@@ -104,8 +104,9 @@
                         Harga
                     @endif
                 </th>
-                <th style="width: 6%;">Driver</th>
-                <th style="width: {{ $includeNopol ? '11%' : '14%' }};">Price History Details</th>
+                <th style="width: 6.5%;">Total Harga</th>
+                <th style="width: 5%;">Driver</th>
+                <th style="width: {{ $includeNopol ? '10%' : '13%' }};">Price History Details</th>
                 @if($includeNopol)
                     <th style="width: 3%;">Plate History</th>
                 @endif
@@ -123,6 +124,15 @@
                         }
                     }
 
+                    $totalHargaRaw = $rental->total_price;
+                    if ($totalHargaRaw) {
+                        if ($taxMode === 'include') {
+                            $totalHargaRaw = $totalHargaRaw * 1.11;
+                        } elseif ($taxMode === 'exclude') {
+                            $totalHargaRaw = $totalHargaRaw / 1.11;
+                        }
+                    }
+
                     $priceDetails = $priceHistories[$rental->rental_id] ?? [];
                     $priceStr = '';
                     if ($rental->status !== 'Returned' && !empty($priceDetails)) {
@@ -130,10 +140,11 @@
                         foreach ($priceDetails as $i => $block) {
                             $bNum = $i + 1;
                             $p = 'Rp ' . number_format($block['price'], 0, ',', '.');
+                            $tp = 'Rp ' . number_format($block['total_price'] ?? $block['price'], 0, ',', '.');
                             $s = $block['start_date'] ? \Carbon\Carbon::parse($block['start_date'])->format('d M Y') : '-';
                             $e = $block['end_date'] ? \Carbon\Carbon::parse($block['end_date'])->format('d M Y') : '-';
                             $t = $block['tax'] ?? '-';
-                            $blocks[] = "[#{$bNum}] {$p} ({$s} - {$e}) | {$t}";
+                            $blocks[] = "[#{$bNum}] Monthly: {$p} | Total: {$tp} ({$s} - {$e}) | {$t}";
                         }
                         $priceStr = implode("\n", $blocks);
                     }
@@ -155,6 +166,7 @@
                     <td>{{ $rental->actual_start_rental ? \Carbon\Carbon::parse($rental->actual_start_rental)->format('d-m-Y') : '-' }}</td>
                     <td>{{ $rental->actual_end_rental ? \Carbon\Carbon::parse($rental->actual_end_rental)->format('d-m-Y') : '-' }}</td>
                     <td style="font-weight: bold;">{{ $mainHargaRaw ? 'Rp ' . number_format($mainHargaRaw, 0, ',', '.') : '-' }}</td>
+                    <td style="font-weight: bold;">{{ $totalHargaRaw ? 'Rp ' . number_format($totalHargaRaw, 0, ',', '.') : '-' }}</td>
                     <td>{{ $rental->driver ?: '-' }}</td>
                     <td class="price-block">{{ $priceStr ?: '-' }}</td>
                     @if($includeNopol)

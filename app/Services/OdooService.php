@@ -222,11 +222,15 @@ class OdooService
         $exportFields = array_merge($exportFields, [
             'rental_id/client_order_ref',
             'rental_id/order_line/duration_price',
+            'rental_id/order_line/price_unit',
+            'rental_id/amount_untaxed',
             'rental_id/rental_status',
             $cityField,
         ]);
 
         $headerRow = array_merge($headerRow, [
+            'Unit Price',
+            'Total Price',
             'Lokasi Pemakaian',
         ]);
 
@@ -274,8 +278,10 @@ class OdooService
                 $row[15] ?? '',      // Contract Ref (Same as index 15)
                 $row[10] ?? '',      // Customer Name (Same as index 10)
                 $row[18] ?? '',      // Duration Price
-                $row[19] ?? '',      // Rental Status
-                $row[20] ?? '',      // Lokasi Pemakaian (City)
+                $row[21] ?? '',      // Rental Status
+                $row[19] ?? '',      // Unit Price
+                $row[20] ?? '',      // Total Price
+                $row[22] ?? '',      // Lokasi Pemakaian (City)
             ];
             
             $data[] = $processedRow;
@@ -790,6 +796,40 @@ class OdooService
         }
 
         return $counts;
+    }
+
+    /**
+     * Fetch total invoice period price for given rental order names from rental.period.invoice model.
+     * 
+     * @param array $rentalOrderNames
+     * @return array [rental_order_name => total_price]
+     */
+    public function fetchInvoicePeriodTotals(array $rentalOrderNames): array
+    {
+        if (empty($rentalOrderNames)) {
+            return [];
+        }
+
+        $totals = [];
+        try {
+            $domain = [['rental_order_id.name', 'in', array_values($rentalOrderNames)]];
+            
+            $periods = $this->execute('rental.period.invoice', 'search_read', [$domain], [
+                'fields' => ['rental_order_id', 'price_unit'],
+            ]);
+
+            foreach ($periods as $p) {
+                if (!empty($p['rental_order_id']) && is_array($p['rental_order_id'])) {
+                    $name = $p['rental_order_id'][1];
+                    $price = (float)($p['price_unit'] ?? 0);
+                    $totals[$name] = ($totals[$name] ?? 0) + $price;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Failed to fetch invoice period totals: ' . $e->getMessage());
+        }
+
+        return $totals;
     }
 
     /**
@@ -1564,10 +1604,10 @@ class OdooService
         }
 
         try {
-            // 1. Get the sale orders
+            // 1. Get the sale orders (Specify explicit fields to avoid Odoo _compute_duration singleton crash)
             $orders = $this->execute('sale.order', 'search_read', [
                 [['name', 'in', $rentalIds]]
-            ]);
+            ], ['fields' => ['name', 'invoice_period_ids']]);
 
             if (empty($orders)) {
                 return [];
@@ -1582,7 +1622,7 @@ class OdooService
                 }
             }
             
-            $periodIds = array_unique($periodIds);
+            $periodIds = array_values(array_unique($periodIds));
             if (empty($periodIds)) {
                 return [];
             }
@@ -1590,7 +1630,10 @@ class OdooService
             // 2. Fetch all invoice periods
             $periods = $this->execute('rental.period.invoice', 'search_read', [
                 [['id', 'in', $periodIds]]
-            ], ['order' => 'start_rental_period_date asc']);
+            ], [
+                'fields' => ['id', 'price_unit', 'start_rental_period_date', 'end_rental_period_date', 'tax_ids', 'product_id'],
+                'order' => 'start_rental_period_date asc'
+            ]);
             
             $periodsMap = [];
             foreach ($periods as $p) {
@@ -1611,7 +1654,7 @@ class OdooService
             if (!empty($taxIds)) {
                 $taxes = $this->execute('account.tax', 'search_read', [
                     [['id', 'in', array_keys($taxIds)]]
-                ]);
+                ], ['fields' => ['id', 'name']]);
                 foreach ($taxes as $tax) {
                     $taxMap[$tax['id']] = $tax['name'];
                 }
@@ -1655,12 +1698,14 @@ class OdooService
                     if ($currentGroup === null) {
                         $currentGroup = [
                             'price' => $price,
+                            'total_price' => $price,
                             'start_date' => $startDate,
                             'end_date' => $endDate,
                             'tax' => $taxStr,
                             'product' => $p['product_id'][1] ?? '',
                         ];
                     } elseif ($price === $currentGroup['price']) {
+                        $currentGroup['total_price'] += $price;
                         if ($endDate && $endDate > $currentGroup['end_date']) {
                             $currentGroup['end_date'] = $endDate;
                         }
@@ -1668,6 +1713,7 @@ class OdooService
                         $summary[] = $currentGroup;
                         $currentGroup = [
                             'price' => $price,
+                            'total_price' => $price,
                             'start_date' => $startDate,
                             'end_date' => $endDate,
                             'tax' => $taxStr,
@@ -1758,21 +1804,22 @@ class OdooService
                 if ($currentGroup === null) {
                     $currentGroup = [
                         'price' => $price,
+                        'total_price' => $price,
                         'start_date' => $startDate,
                         'end_date' => $endDate,
                         'tax' => $taxStr,
                         'product' => $p['product_id'][1] ?? '',
                     ];
                 } elseif ($price === $currentGroup['price']) {
-                    // Extend the end date
+                    $currentGroup['total_price'] += $price;
                     if ($endDate && $endDate > $currentGroup['end_date']) {
                         $currentGroup['end_date'] = $endDate;
                     }
                 } else {
-                    // Price changed, push current and start new
                     $summary[] = $currentGroup;
                     $currentGroup = [
                         'price' => $price,
+                        'total_price' => $price,
                         'start_date' => $startDate,
                         'end_date' => $endDate,
                         'tax' => $taxStr,
@@ -1800,6 +1847,70 @@ class OdooService
         } catch (\Exception $e) {
             \Log::error('Failed to fetch invoice periods: ' . $e->getMessage());
             return [];
+        }
+    }
+
+    /**
+     * Dedicated Odoo fetch specifically for Surat Kuasa units:
+     * Domain: product_qty = 0 AND is_on_hand = true
+     */
+    public function fetchSuratKuasaUnits(): array
+    {
+        try {
+            $domain = [
+                ['product_qty', '=', 0],
+                ['is_on_hand', '=', true],
+                ['is_vendor_rent', '!=', true]
+            ];
+
+            $ids = $this->execute('stock.lot', 'search', [$domain]);
+            if (empty($ids)) {
+                return ['success' => true, 'data' => [], 'count' => 0];
+            }
+
+            $exportFields = [
+                'name',
+                'ref',
+                'engine_number',
+                'product_id/display_name',
+                'vehicle_year',
+                'location_id/display_name',
+                'x_studio_partnercust',
+                'rental_id/partner_id/display_name',
+                'is_vendor_rent',
+            ];
+
+            $result = $this->execute('stock.lot', 'export_data', [$ids, $exportFields]);
+            if (!isset($result['datas'])) {
+                return ['success' => false, 'message' => 'Failed to export Surat Kuasa lot data', 'data' => []];
+            }
+
+            $records = [];
+            foreach ($result['datas'] as $row) {
+                $lotNumber = $row[0] ?? '';
+                if (empty($lotNumber)) continue;
+
+                $customer = !empty($row[6]) ? $row[6] : (!empty($row[7]) ? $row[7] : null);
+                $isVendorRent = !empty($row[8]) && ($row[8] === true || $row[8] === 'true' || $row[8] == 1);
+
+                $records[] = [
+                    'lot_number' => $lotNumber,
+                    'internal_reference' => !empty($row[1]) ? (string)$row[1] : null,
+                    'engine_number' => !empty($row[2]) ? (string)$row[2] : null,
+                    'product' => !empty($row[3]) ? (string)$row[3] : '',
+                    'year' => !empty($row[4]) ? (string)$row[4] : date('Y'),
+                    'location' => !empty($row[5]) ? (string)$row[5] : '',
+                    'current_customer' => $customer,
+                    'on_hand_quantity' => 0,
+                    'is_on_hand' => true,
+                    'is_order_only' => false,
+                    'is_vendor_rent' => $isVendorRent,
+                ];
+            }
+
+            return ['success' => true, 'data' => $records, 'count' => count($records)];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
         }
     }
 }
