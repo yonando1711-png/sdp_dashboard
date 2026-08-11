@@ -22,7 +22,7 @@
         },
 
         // Original import functionality
-        activeTab: (window.location.hash === '#crm') ? 'crm' : 'excel',
+        activeTab: (window.location.hash === '#crm') ? 'crm' : ((window.location.hash === '#lor') ? 'lor' : ((window.location.hash === '#surat-kuasa' || window.location.hash === '#suratkuasa') ? 'surat-kuasa' : 'excel')),
         odooConfig: {
             url: '{{ $odooConfig['url'] ?? '' }}',
             db: '{{ $odooConfig['db'] ?? '' }}',
@@ -306,6 +306,16 @@
                             </path>
                         </svg>
                         LoR Settings
+                    </button>
+                    <button @click="activeTab = 'surat-kuasa'"
+                        :class="activeTab === 'surat-kuasa' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'"
+                        class="flex items-center gap-2 px-6 py-4 font-medium transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                            </path>
+                        </svg>
+                        Surat Kuasa Settings
                     </button>
                 </div>
 
@@ -816,6 +826,41 @@
                                     <div class="mb-5">
                                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New LoR Password</label>
                                         <input type="password" name="password" placeholder="Enter new LoR password (min. 4 characters)..." required minlength="4"
+                                               class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-inner">
+                                    </div>
+                                    <div>
+                                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center gap-2">
+                                            Update Password
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Surat Kuasa Settings Tab -->
+                    <div x-show="activeTab === 'surat-kuasa'" x-transition style="display: none;">
+                        <div class="max-w-xl">
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Surat Kuasa Module Settings</h3>
+                            <p class="text-slate-500 dark:text-slate-400 mb-8">Manage the access password for the Surat Kuasa page.</p>
+
+                            <form action="{{ route('surat-kuasa.settings.update') }}#surat-kuasa" method="POST">
+                                @csrf
+                                <div class="bg-white dark:bg-slate-800/80 rounded-2xl p-8 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                                    <div class="flex items-center gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-700/50">
+                                        <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200">Security Access</h4>
+                                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Update the master password used to unlock Surat Kuasa.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-5">
+                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">New Surat Kuasa Password</label>
+                                        <input type="password" name="password" placeholder="Enter new Surat Kuasa password (min. 4 characters)..." required minlength="4"
                                                class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-inner">
                                     </div>
                                     <div>

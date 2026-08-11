@@ -28,7 +28,48 @@ class SettingsController extends Controller
         $odoo['schedule_enabled'] = Setting::get('odoo_schedule_enabled', 'false') === 'true';
         $odoo['schedule_interval'] = Setting::get('odoo_schedule_interval', '60');
 
-        return view('settings', compact('targets', 'odoo'));
+        // Get Surat Kuasa settings
+        $suratKuasa = [
+            'pemberi_1_nama' => Setting::get('surat_kuasa_pemberi_1_nama', 'Suzanna Caroline'),
+            'pemberi_1_jabatan' => Setting::get('surat_kuasa_pemberi_1_jabatan', 'General Manager'),
+            'pemberi_2_nama' => Setting::get('surat_kuasa_pemberi_2_nama', 'Aldian Prayoga Darwis'),
+            'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
+            'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
+            'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
+            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+            'default_recipient_email' => Setting::get('surat_kuasa_default_recipient_email', ''),
+            'password' => Setting::get('surat_kuasa_password') ? '********' : 'admin (Default)',
+        ];
+
+        return view('settings', compact('targets', 'odoo', 'suratKuasa'));
+    }
+
+    /**
+     * Update Surat Kuasa configuration settings
+     */
+    public function updateSuratKuasaSettings(Request $request)
+    {
+        $request->validate([
+            'pemberi_1_nama' => 'required|string|max:255',
+            'pemberi_1_jabatan' => 'required|string|max:255',
+            'pemberi_2_nama' => 'required|string|max:255',
+            'pemberi_2_jabatan' => 'required|string|max:255',
+            'pemberi_alamat' => 'required|string|max:500',
+            'pemilik_nama' => 'required|string|max:255',
+            'pemilik_alamat' => 'nullable|string|max:500',
+            'default_recipient_email' => 'nullable|string|max:500',
+        ]);
+
+        Setting::set('surat_kuasa_pemberi_1_nama', $request->pemberi_1_nama);
+        Setting::set('surat_kuasa_pemberi_1_jabatan', $request->pemberi_1_jabatan);
+        Setting::set('surat_kuasa_pemberi_2_nama', $request->pemberi_2_nama);
+        Setting::set('surat_kuasa_pemberi_2_jabatan', $request->pemberi_2_jabatan);
+        Setting::set('surat_kuasa_pemberi_alamat', $request->pemberi_alamat);
+        Setting::set('surat_kuasa_pemilik_nama', $request->pemilik_nama);
+        Setting::set('surat_kuasa_pemilik_alamat', $request->pemilik_alamat ?? '');
+        Setting::set('surat_kuasa_default_recipient_email', $request->default_recipient_email ?? '');
+
+        return redirect()->route('settings')->with('success', 'Surat Kuasa settings updated successfully!');
     }
 
     /**

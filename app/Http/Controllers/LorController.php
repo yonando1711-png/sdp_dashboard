@@ -159,6 +159,107 @@ class LorController extends Controller
     }
 
     /**
+     * Display the LoR (SMD) page tab
+     */
+    public function indexSmd(Request $request)
+    {
+        $user = auth()->user();
+
+        if (!$user->canAccessSmd()) {
+            abort(403, 'Unauthorized access to LoR (SMD).');
+        }
+
+        $search = $request->input('search');
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+        $statusFilter = $request->input('status');
+
+        $query = Item::withoutGlobalScope('exclude_order_only')
+                     ->forUserBranch()
+                     ->whereNotNull('rental_id')
+                     ->where('rental_id', '!=', '');
+
+        $query->where(function($q) {
+            $q->where('rental_id_count', '<=', 1)
+              ->orWhere('in_stock', false);
+        });
+
+        // Apply User Access Scoping (Strict AND logic when both Salesperson & Sales Team are specified)
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        if (!$user->isItAdmin() || (!empty($allowedSalespersons) || !empty($allowedSalesTeams))) {
+            if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                $query->whereIn('salesperson', $allowedSalespersons)
+                      ->whereIn('sales_team', $allowedSalesTeams);
+            } elseif (!empty($allowedSalespersons)) {
+                $query->whereIn('salesperson', $allowedSalespersons);
+            } elseif (!empty($allowedSalesTeams)) {
+                $query->whereIn('sales_team', $allowedSalesTeams);
+            }
+        }
+
+        // Apply Request Filters
+        if ($salespersonFilter) {
+            $query->where('salesperson', $salespersonFilter);
+        }
+
+        if ($salesTeamFilter) {
+            $query->where('sales_team', $salesTeamFilter);
+        }
+
+        if ($statusFilter) {
+            $query->where('status', $statusFilter);
+        }
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('rental_id', 'like', "%{$search}%")
+                  ->orWhere('lot_number', 'like', "%{$search}%")
+                  ->orWhere('current_customer', 'like', "%{$search}%")
+                  ->orWhere('contract_ref', 'like', "%{$search}%")
+                  ->orWhere('product', 'like', "%{$search}%")
+                  ->orWhere('salesperson', 'like', "%{$search}%")
+                  ->orWhere('sales_team', 'like', "%{$search}%");
+            });
+        }
+
+        $currentRentals = $query->orderBy('salesperson')->orderBy('sales_team')->orderBy('rental_id')->paginate(50)->withQueryString();
+
+        // Fetch unique filter dropdown options restricted strictly to user's allowed scope
+        $filterSpQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('salesperson')->where('salesperson', '!=', '');
+            
+        $filterTeamQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('sales_team')->where('sales_team', '!=', '');
+
+        if (!empty($allowedSalespersons)) {
+            $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+            $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+        }
+        if (!empty($allowedSalesTeams)) {
+            $filterSpQuery->whereIn('sales_team', $allowedSalesTeams);
+            $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+        }
+
+        $filterSalespersons = $filterSpQuery->distinct()->pluck('salesperson')->sort()->values();
+        $filterSalesTeams = $filterTeamQuery->distinct()->pluck('sales_team')->sort()->values();
+
+        return view('lor.smd', [
+            'authenticated' => true,
+            'currentRentals' => $currentRentals,
+            'filterSalespersons' => $filterSalespersons,
+            'filterSalesTeams' => $filterSalesTeams,
+            'salespersonFilter' => $salespersonFilter,
+            'salesTeamFilter' => $salesTeamFilter,
+            'statusFilter' => $statusFilter,
+            'search' => $search,
+        ]);
+    }
+
+    /**
      * Authenticate for LoR page
      */
     public function authenticate(Request $request)
@@ -208,6 +309,10 @@ class LorController extends Controller
      */
     public function export(Request $request)
     {
+        if ($request->input('source') === 'smd') {
+            abort(403, 'Exporting is strictly disabled for LoR (SMD).');
+        }
+
         if (!$this->checkLorSession()) {
             return redirect()->route('lor.index');
         }

@@ -50,7 +50,7 @@ class OdooService
         $detected = [
             'city_field' => null,
         ];
-        
+
         try {
             $fields = $this->execute('stock.lot', 'fields_get', [], ['attributes' => ['string', 'type']]);
             if (is_array($fields)) {
@@ -83,11 +83,11 @@ class OdooService
             }
 
             $uid = $this->authenticate();
-            
+
             if ($uid && is_numeric($uid)) {
                 return ['success' => true, 'message' => "Connection successful! User ID: {$uid}"];
             }
-            
+
             return ['success' => false, 'message' => 'Authentication failed. Check credentials.'];
         } catch (\Exception $e) {
             return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
@@ -137,11 +137,11 @@ class OdooService
         } catch (\Exception $e) {
             $msg = $e->getMessage();
             $hint = '';
-            
+
             if (str_contains($msg, 'Access') || str_contains($msg, 'denied')) {
                 $hint = ' (You may need "Access to export feature" permission)';
             }
-            
+
             return ['success' => false, 'message' => $msg . $hint];
         }
     }
@@ -226,12 +226,16 @@ class OdooService
             'rental_id/amount_untaxed',
             'rental_id/rental_status',
             $cityField,
+            'rental_id/user_id/display_name',
+            'rental_id/team_id/display_name',
         ]);
 
         $headerRow = array_merge($headerRow, [
             'Unit Price',
             'Total Price',
             'Lokasi Pemakaian',
+            'Salesperson',
+            'Sales Team',
         ]);
 
         $result = $this->execute('stock.lot', 'export_data', [$ids, $exportFields]);
@@ -246,7 +250,7 @@ class OdooService
             $lotNumber = $row[1] ?? '';
             $location = $row[2] ?? '';
             $reservedLot = trim($row[11] ?? '');  // Now directly from Odoo field!
-            
+
             // Derive in_stock: if location contains 'STOCK', 'TRANSIT', or 'OPERATION'
             $inStock = (
                 stripos($location, 'STOCK') !== false ||
@@ -282,8 +286,10 @@ class OdooService
                 $row[19] ?? '',      // Unit Price
                 $row[20] ?? '',      // Total Price
                 $row[22] ?? '',      // Lokasi Pemakaian (City)
+                $row[23] ?? '',      // Salesperson
+                $row[24] ?? '',      // Sales Team
             ];
-            
+
             $data[] = $processedRow;
         }
 
@@ -325,8 +331,14 @@ class OdooService
             }
 
             $fields = [
-                'name', 'state', 'schedule_date', 'service_type',
-                'vendor_id', 'km_pickup', 'estimation_end_date', 'lot_id',
+                'name',
+                'state',
+                'schedule_date',
+                'service_type',
+                'vendor_id',
+                'km_pickup',
+                'estimation_end_date',
+                'lot_id',
             ];
 
             $repairs = $this->execute('repair.order', 'read', [$repairIds, $fields]);
@@ -390,9 +402,15 @@ class OdooService
             }
 
             $fields = [
-                'name', 'state', 'schedule_date', 'service_type',
-                'vendor_id', 'km_pickup', 'estimation_end_date',
-                'repair_end_datetime', 'create_date',
+                'name',
+                'state',
+                'schedule_date',
+                'service_type',
+                'vendor_id',
+                'km_pickup',
+                'estimation_end_date',
+                'repair_end_datetime',
+                'create_date',
             ];
 
             $repairs = $this->execute('repair.order', 'read', [$repairIds, $fields]);
@@ -454,8 +472,9 @@ class OdooService
                 }
             }
 
-            $findOdometer = function($moveDateStr) use ($odometerDates) {
-                if (!$moveDateStr) return null;
+            $findOdometer = function ($moveDateStr) use ($odometerDates) {
+                if (!$moveDateStr)
+                    return null;
                 $moveTs = strtotime($moveDateStr);
                 $minDiff = 300; // 5 minutes threshold
                 $closestVal = null;
@@ -491,9 +510,16 @@ class OdooService
 
             // 3. Read move line fields
             $fields = [
-                'reference', 'location_id', 'location_dest_id',
-                'picking_partner_id', 'date', 'lot_id',
-                'origin', 'state', 'move_id', 'latest_km',
+                'reference',
+                'location_id',
+                'location_dest_id',
+                'picking_partner_id',
+                'date',
+                'lot_id',
+                'origin',
+                'state',
+                'move_id',
+                'latest_km',
             ];
 
             $moveLines = $this->execute('stock.move.line', 'read', [$moveLineIds, $fields]);
@@ -513,7 +539,8 @@ class OdooService
                 $moveIds = array_keys($moveIds);
                 try {
                     $moves = $this->execute('stock.move', 'read', [
-                        $moveIds, ['date_deadline', 'date', 'restrict_lot_id', 'lot_ids']
+                        $moveIds,
+                        ['date_deadline', 'date', 'restrict_lot_id', 'lot_ids']
                     ]);
                     foreach ($moves as $move) {
                         $moveData[$move['id']] = $move;
@@ -521,7 +548,8 @@ class OdooService
                 } catch (\Exception $e) {
                     try {
                         $moves = $this->execute('stock.move', 'read', [
-                            $moveIds, ['date_deadline', 'date']
+                            $moveIds,
+                            ['date_deadline', 'date']
                         ]);
                         foreach ($moves as $move) {
                             $moveData[$move['id']] = $move;
@@ -583,7 +611,8 @@ class OdooService
 
                         // Read pickings to get their move_line_ids
                         $pickings = $this->execute('stock.picking', 'read', [
-                            $pickingIds, ['move_line_ids']
+                            $pickingIds,
+                            ['move_line_ids']
                         ]);
 
                         // Collect all move line IDs from the pickings
@@ -600,7 +629,8 @@ class OdooService
 
                         // Read those move lines to find which lots are involved
                         $pickMoveLines = $this->execute('stock.move.line', 'read', [
-                            $allPickMoveLineIds, ['lot_id']
+                            $allPickMoveLineIds,
+                            ['lot_id']
                         ]);
 
                         // Find unique lot IDs that are NOT the primary lot
@@ -631,9 +661,10 @@ class OdooService
                                     $relOdometerDates[$ts] = $odo['value'];
                                 }
                             }
-                            
-                            $findRelOdometer = function($moveDateStr) use ($relOdometerDates) {
-                                if (!$moveDateStr) return null;
+
+                            $findRelOdometer = function ($moveDateStr) use ($relOdometerDates) {
+                                if (!$moveDateStr)
+                                    return null;
                                 $moveTs = strtotime($moveDateStr);
                                 $minDiff = 300;
                                 $closestVal = null;
@@ -665,7 +696,8 @@ class OdooService
                             if (!empty($relatedMoveLines[0]['lot_id'])) {
                                 $relLotName = is_array($relatedMoveLines[0]['lot_id']) ? $relatedMoveLines[0]['lot_id'][1] : '';
                             }
-                            if (!$relLotName) continue;
+                            if (!$relLotName)
+                                continue;
 
                             // Collect move IDs for scheduled dates
                             $relMoveIds = [];
@@ -679,7 +711,8 @@ class OdooService
                             if (!empty($relMoveIds)) {
                                 try {
                                     $relMoves = $this->execute('stock.move', 'read', [
-                                        array_keys($relMoveIds), ['date_deadline', 'date', 'restrict_lot_id']
+                                        array_keys($relMoveIds),
+                                        ['date_deadline', 'date', 'restrict_lot_id']
                                     ]);
                                     foreach ($relMoves as $rm) {
                                         $relMoveData[$rm['id']] = $rm;
@@ -687,12 +720,14 @@ class OdooService
                                 } catch (\Exception $e) {
                                     try {
                                         $relMoves = $this->execute('stock.move', 'read', [
-                                            array_keys($relMoveIds), ['date_deadline', 'date']
+                                            array_keys($relMoveIds),
+                                            ['date_deadline', 'date']
                                         ]);
                                         foreach ($relMoves as $rm) {
                                             $relMoveData[$rm['id']] = $rm;
                                         }
-                                    } catch (\Exception $e2) {}
+                                    } catch (\Exception $e2) {
+                                    }
                                 }
                             }
 
@@ -739,7 +774,7 @@ class OdooService
                             }
                             $months = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
                             $d = $replacementDate ? strtotime($replacementDate) : null;
-                            $replacementDateFormatted = $d ? date('j', $d) . ' ' . $months[(int)date('n', $d)] . ' ' . date('Y', $d) : '-';
+                            $replacementDateFormatted = $d ? date('j', $d) . ' ' . $months[(int) date('n', $d)] . ' ' . date('Y', $d) : '-';
 
                             $relatedGroups[] = [
                                 'rental_order' => $rentalOrder,
@@ -780,7 +815,7 @@ class OdooService
             // product.movement model uses order_id which links to sale.order.
             // We can search by order_id.name to match the rental order names.
             $domain = [['order_id.name', 'in', $rentalOrderNames]];
-            
+
             $movements = $this->execute('product.movement', 'search_read', [$domain], [
                 'fields' => ['order_id'],
             ]);
@@ -813,7 +848,7 @@ class OdooService
         $totals = [];
         try {
             $domain = [['rental_order_id.name', 'in', array_values($rentalOrderNames)]];
-            
+
             $periods = $this->execute('rental.period.invoice', 'search_read', [$domain], [
                 'fields' => ['rental_order_id', 'price_unit'],
             ]);
@@ -821,7 +856,7 @@ class OdooService
             foreach ($periods as $p) {
                 if (!empty($p['rental_order_id']) && is_array($p['rental_order_id'])) {
                     $name = $p['rental_order_id'][1];
-                    $price = (float)($p['price_unit'] ?? 0);
+                    $price = (float) ($p['price_unit'] ?? 0);
                     $totals[$name] = ($totals[$name] ?? 0) + $price;
                 }
             }
@@ -852,7 +887,7 @@ class OdooService
                 ['location_id.usage', '=', 'supplier'],
                 ['state', '=', 'done']
             ];
-            
+
             $moveLines = $this->execute('stock.move.line', 'search_read', [$domain], [
                 'fields' => ['lot_id', 'picking_partner_id'],
             ]);
@@ -860,11 +895,12 @@ class OdooService
             $result = [];
             foreach ($moveLines as $line) {
                 $lotId = is_array($line['lot_id'] ?? null) ? $line['lot_id'][0] : ($line['lot_id'] ?? null);
-                if (!$lotId) continue;
+                if (!$lotId)
+                    continue;
 
                 // partner_id on picking usually maps to picking_partner_id on move line
                 $partner = is_array($line['picking_partner_id'] ?? null) ? $line['picking_partner_id'][1] : null;
-                
+
                 if ($partner) {
                     // Use the most recent move (last one found usually or we could order by date)
                     // If multiple found, the later ones in loop will override (or we can use date desc)
@@ -919,7 +955,7 @@ class OdooService
     protected function authenticate(): ?int
     {
         $commonUrl = $this->url . '/xmlrpc/2/common';
-        
+
         $request = $this->xmlrpcEncode('authenticate', [
             $this->db,
             $this->user,
@@ -929,12 +965,12 @@ class OdooService
 
         $response = $this->sendRequest($commonUrl, $request);
         $result = $this->xmlrpcDecode($response);
-        
+
         if (is_array($result) && isset($result['faultCode'])) {
             throw new \Exception($result['faultString'] ?? 'Unknown XML-RPC error');
         }
 
-        $this->uid = is_numeric($result) ? (int)$result : null;
+        $this->uid = is_numeric($result) ? (int) $result : null;
         return $this->uid;
     }
 
@@ -952,7 +988,7 @@ class OdooService
         }
 
         $objectUrl = $this->url . '/xmlrpc/2/object';
-        
+
         $request = $this->xmlrpcEncode('execute_kw', [
             $this->db,
             $this->uid,
@@ -1005,7 +1041,7 @@ class OdooService
     public function autoDetectMapping(array $availableFields): array
     {
         $mapping = [];
-        
+
         foreach ($this->fieldPatterns as $internalField => $odooPatterns) {
             foreach ($odooPatterns as $pattern) {
                 if (isset($availableFields[$pattern])) {
@@ -1014,7 +1050,7 @@ class OdooService
                 }
             }
         }
-        
+
         return $mapping;
     }
 
@@ -1029,25 +1065,25 @@ class OdooService
             if (!$fieldsResult['success']) {
                 return $fieldsResult;
             }
-            
+
             $availableFields = $fieldsResult['fields'];
             $mapping = $this->autoDetectMapping($availableFields);
-            
+
             // Fetch all records with mapped fields
             $odooFields = array_values($mapping);
             if (empty($odooFields)) {
                 // Fallback to basic fields
                 $odooFields = ['name', 'product_id', 'location_id', 'quantity'];
             }
-            
+
             $records = $this->execute($model, 'search_read', [[]], [
                 'fields' => $odooFields,
                 'limit' => 10000
             ]);
-            
+
             return [
-                'success' => true, 
-                'data' => $records, 
+                'success' => true,
+                'data' => $records,
                 'count' => count($records),
                 'mapping' => $mapping,
                 'model' => $model
@@ -1064,7 +1100,7 @@ class OdooService
     {
         $items = [];
         $today = now()->format('Y-m-d');
-        
+
         foreach ($odooRecords as $record) {
             $item = [
                 'product' => $this->extractValue($record, $mapping, 'product'),
@@ -1072,7 +1108,7 @@ class OdooService
                 'internal_reference' => $this->extractValue($record, $mapping, 'internal_reference'),
                 'engine_number' => $this->extractValue($record, $mapping, 'engine_number'),
                 'location' => $this->extractValue($record, $mapping, 'location'),
-                'on_hand_quantity' => (float)($this->extractValue($record, $mapping, 'on_hand_quantity') ?? 1),
+                'on_hand_quantity' => (float) ($this->extractValue($record, $mapping, 'on_hand_quantity') ?? 1),
                 'rental_id' => $this->extractValue($record, $mapping, 'rental_id'),
                 'rental_type' => $this->extractValue($record, $mapping, 'rental_type'),
                 'actual_start_rental' => $this->parseDate($this->extractValue($record, $mapping, 'actual_start_rental')),
@@ -1083,18 +1119,18 @@ class OdooService
                 'km_last' => $this->extractValue($record, $mapping, 'km_last'),
                 'is_vendor_rent' => $this->parseBool($this->extractValue($record, $mapping, 'is_vendor_rent')),
             ];
-            
+
             // Skip empty records
             if (empty($item['lot_number']) && empty($item['product'])) {
                 continue;
             }
-            
+
             // Calculate location category
             $item = $this->calculateLocationFlags($item, $today);
-            
+
             $items[] = $item;
         }
-        
+
         return $items;
     }
 
@@ -1107,14 +1143,14 @@ class OdooService
         if (!$odooField || !isset($record[$odooField])) {
             return null;
         }
-        
+
         $value = $record[$odooField];
-        
+
         // Handle Odoo many2one fields (returns [id, name])
         if (is_array($value) && count($value) === 2 && is_int($value[0])) {
             return $value[1]; // Return the name part
         }
-        
+
         return $value;
     }
 
@@ -1123,8 +1159,9 @@ class OdooService
      */
     protected function parseDate($value): ?string
     {
-        if (empty($value)) return null;
-        
+        if (empty($value))
+            return null;
+
         try {
             if (is_string($value)) {
                 return \Carbon\Carbon::parse($value)->format('Y-m-d');
@@ -1132,7 +1169,7 @@ class OdooService
         } catch (\Exception $e) {
             return null;
         }
-        
+
         return null;
     }
 
@@ -1141,11 +1178,12 @@ class OdooService
      */
     protected function parseBool($value): bool
     {
-        if (is_bool($value)) return $value;
+        if (is_bool($value))
+            return $value;
         if (is_string($value)) {
             return in_array(strtolower($value), ['true', 'yes', '1', 'ya']);
         }
-        return (bool)$value;
+        return (bool) $value;
     }
 
     /**
@@ -1154,30 +1192,30 @@ class OdooService
     protected function calculateLocationFlags(array $item, string $today): array
     {
         $location = $item['location'] ?? '';
-        
+
         // Check if it's a rental location
-        $isRentalCustomer = $location === Location::RENTAL_CUSTOMER || 
-                            str_contains($location, 'Partners/Customers/Rental');
-        
+        $isRentalCustomer = $location === Location::RENTAL_CUSTOMER ||
+            str_contains($location, 'Partners/Customers/Rental');
+
         // Check if sold
-        $isSold = str_contains($location, 'SOLD') || 
-                  str_contains($location, 'Disposal') ||
-                  $location === Location::SOLD ||
-                  $location === Location::SOLD_STOCK;
-        
+        $isSold = str_contains($location, 'SOLD') ||
+            str_contains($location, 'Disposal') ||
+            $location === Location::SOLD ||
+            $location === Location::SOLD_STOCK;
+
         // Check if in service
         $isService = str_contains($location, 'Service') ||
-                     str_contains($location, 'Workshop') ||
-                     $location === Location::SERVICE_INTERNAL ||
-                     $location === Location::SERVICE_EXTERNAL ||
-                     $location === Location::INSURANCE;
-        
+            str_contains($location, 'Workshop') ||
+            $location === Location::SERVICE_INTERNAL ||
+            $location === Location::SERVICE_EXTERNAL ||
+            $location === Location::INSURANCE;
+
         // Check if in stock (any stock car location)
         $isStock = str_contains($location, 'STOCK CAR') ||
-                   str_contains($location, 'Transit') ||
-                   $location === Location::OPERATION ||
-                   $location === Location::TRANSIT;
-        
+            str_contains($location, 'Transit') ||
+            $location === Location::OPERATION ||
+            $location === Location::TRANSIT;
+
         // Set flags as integers for SQLite compatibility
         $item['is_sold'] = $isSold ? 1 : 0;
         $item['in_stock'] = ($isStock && !$isSold) ? 1 : 0;
@@ -1186,7 +1224,7 @@ class OdooService
         $item['is_on_hand'] = 1;
         $item['is_stock'] = $isStock ? 1 : 0;
         $item['rental_id_count'] = 0;
-        
+
         return $item;
     }
 
@@ -1196,40 +1234,40 @@ class OdooService
     public function syncAndSave(string $model = 'stock.quant'): array
     {
         $result = $this->fetchInventory($model);
-        
+
         if (!$result['success']) {
             return $result;
         }
-        
+
         $mapping = $result['mapping'];
         $items = $this->transformToItems($result['data'], $mapping);
-        
+
         if (empty($items)) {
             return [
-                'success' => false, 
+                'success' => false,
                 'message' => 'No valid items found after transformation. Check field mapping.',
                 'mapping' => $mapping
             ];
         }
-        
+
         // Add timestamps
         $now = now()->toDateTimeString();
         foreach ($items as &$item) {
             $item['created_at'] = $now;
             $item['updated_at'] = $now;
         }
-        
+
         // Clear existing and insert new
         Item::truncate();
-        
+
         foreach (array_chunk($items, 500) as $chunk) {
             Item::insert($chunk);
         }
-        
+
         // Update metadata
         Setting::set('last_import_source', 'odoo');
         Setting::set('imported_at', now()->toIso8601String());
-        
+
         return [
             'success' => true,
             'message' => "Successfully imported " . count($items) . " items from Odoo.",
@@ -1247,14 +1285,14 @@ class OdooService
         $xml .= '<methodCall>';
         $xml .= '<methodName>' . htmlspecialchars($method) . '</methodName>';
         $xml .= '<params>';
-        
+
         foreach ($params as $param) {
             $xml .= '<param>' . $this->encodeValue($param) . '</param>';
         }
-        
+
         $xml .= '</params>';
         $xml .= '</methodCall>';
-        
+
         return $xml;
     }
 
@@ -1266,23 +1304,23 @@ class OdooService
         if (is_null($value)) {
             return '<value><nil/></value>';
         }
-        
+
         if (is_bool($value)) {
             return '<value><boolean>' . ($value ? '1' : '0') . '</boolean></value>';
         }
-        
+
         if (is_int($value)) {
             return '<value><int>' . $value . '</int></value>';
         }
-        
+
         if (is_float($value)) {
             return '<value><double>' . $value . '</double></value>';
         }
-        
+
         if (is_string($value)) {
             return '<value><string>' . htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</string></value>';
         }
-        
+
         if (is_array($value)) {
             if ($this->isAssoc($value)) {
                 $xml = '<value><struct>';
@@ -1303,8 +1341,8 @@ class OdooService
                 return $xml;
             }
         }
-        
-        return '<value><string>' . htmlspecialchars((string)$value) . '</string></value>';
+
+        return '<value><string>' . htmlspecialchars((string) $value) . '</string></value>';
     }
 
     /**
@@ -1312,7 +1350,8 @@ class OdooService
      */
     protected function isAssoc(array $arr): bool
     {
-        if (empty($arr)) return false;
+        if (empty($arr))
+            return false;
         return array_keys($arr) !== range(0, count($arr) - 1);
     }
 
@@ -1323,7 +1362,7 @@ class OdooService
     {
         libxml_use_internal_errors(true);
         $doc = simplexml_load_string($xml);
-        
+
         if ($doc === false) {
             $errors = libxml_get_errors();
             libxml_clear_errors();
@@ -1348,25 +1387,25 @@ class OdooService
     protected function decodeValue($valueNode): mixed
     {
         if (isset($valueNode->int) || isset($valueNode->i4)) {
-            return (int)($valueNode->int ?? $valueNode->i4);
+            return (int) ($valueNode->int ?? $valueNode->i4);
         }
-        
+
         if (isset($valueNode->boolean)) {
-            return (string)$valueNode->boolean === '1';
+            return (string) $valueNode->boolean === '1';
         }
-        
+
         if (isset($valueNode->string)) {
-            return (string)$valueNode->string;
+            return (string) $valueNode->string;
         }
-        
+
         if (isset($valueNode->double)) {
-            return (float)$valueNode->double;
+            return (float) $valueNode->double;
         }
-        
+
         if (isset($valueNode->nil)) {
             return null;
         }
-        
+
         if (isset($valueNode->array)) {
             $result = [];
             if (isset($valueNode->array->data->value)) {
@@ -1376,19 +1415,19 @@ class OdooService
             }
             return $result;
         }
-        
+
         if (isset($valueNode->struct)) {
             $result = [];
             if (isset($valueNode->struct->member)) {
                 foreach ($valueNode->struct->member as $member) {
-                    $name = (string)$member->name;
+                    $name = (string) $member->name;
                     $result[$name] = $this->decodeValue($member->value);
                 }
             }
             return $result;
         }
 
-        return (string)$valueNode;
+        return (string) $valueNode;
     }
 
     /**
@@ -1406,22 +1445,22 @@ class OdooService
             CURLOPT_SSL_VERIFYPEER => env('ODOO_SSL_VERIFY', true),
             CURLOPT_SSL_VERIFYHOST => env('ODOO_SSL_VERIFY', true) ? 2 : 0,
         ]);
-        
+
         $response = curl_exec($ch);
-        
+
         if (curl_errno($ch)) {
             $error = curl_error($ch);
             curl_close($ch);
             throw new \Exception("cURL error: {$error}");
         }
-        
+
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        
+
         if ($httpCode !== 200) {
             throw new \Exception("HTTP error {$httpCode}");
         }
-        
+
         return $response;
     }
     /**
@@ -1438,9 +1477,9 @@ class OdooService
                 'data' => []
             ];
         }
-        
+
         $locationId = $locationIds[0];
-        
+
         // 2. Search for move lines entering or leaving this location
         $moveIds = $this->execute('stock.move.line', 'search', [
             [
@@ -1450,7 +1489,7 @@ class OdooService
                 ['state', '=', 'done']
             ]
         ], ['order' => 'date desc', 'limit' => 50]);
-        
+
         if (empty($moveIds)) {
             return [
                 'success' => true,
@@ -1458,14 +1497,14 @@ class OdooService
                 'data' => []
             ];
         }
-        
+
         // 3. Read move data
         $moves = $this->execute('stock.move.line', 'read', [
-            $moveIds, 
+            $moveIds,
             ['lot_id', 'product_id', 'date', 'location_id', 'location_dest_id', 'reference']
         ]);
-        
-        $data = array_map(function($m) {
+
+        $data = array_map(function ($m) {
             return [
                 'date' => $m['date'],
                 'lot' => is_array($m['lot_id']) ? $m['lot_id'][1] : ($m['lot_id'] ?? '-'),
@@ -1475,7 +1514,7 @@ class OdooService
                 'reference' => $m['reference'] ?? '-'
             ];
         }, $moves);
-        
+
         return [
             'success' => true,
             'data' => $data
@@ -1534,7 +1573,7 @@ class OdooService
                 }
                 $mpName = is_string($mp['name']) ? $mp['name'] : '';
                 $mpEmail = is_string($mp['email']) ? $mp['email'] : '';
-                
+
                 $mainPartnerDetails[$mp['id']] = [
                     'pic_name' => trim($title . $mpName),
                     'pic_email' => $mpEmail,
@@ -1547,7 +1586,7 @@ class OdooService
                 ['parent_id', 'in', $uniquePartnerIds],
                 ['type', '=', 'contact']
             ];
-            
+
             $contacts = $this->execute('res.partner', 'search_read', [$contactDomain], [
                 'fields' => ['name', 'email', 'title', 'parent_id'],
             ]);
@@ -1562,10 +1601,10 @@ class OdooService
                         if (!empty($contact['title']) && is_array($contact['title'])) {
                             $title = $contact['title'][1] . ' ';
                         }
-                        
+
                         $contactName = is_string($contact['name']) ? $contact['name'] : '';
                         $contactEmail = is_string($contact['email']) ? $contact['email'] : '';
-                        
+
                         $partnerContacts[$parentId] = [
                             'pic_name' => trim($title . $contactName),
                             'pic_email' => $contactEmail,
@@ -1579,7 +1618,7 @@ class OdooService
             foreach ($orderToPartnerMap as $orderName => $data) {
                 $partnerId = $data['partner_id'];
                 $picData = $partnerContacts[$partnerId] ?? ($mainPartnerDetails[$partnerId] ?? ['pic_name' => '-', 'pic_email' => '-']);
-                
+
                 $result[$orderName] = [
                     'pic_name' => $picData['pic_name'],
                     'pic_email' => $picData['pic_email'],
@@ -1621,7 +1660,7 @@ class OdooService
                     $orderToPeriodsMap[$order['name']] = $order['invoice_period_ids'];
                 }
             }
-            
+
             $periodIds = array_values(array_unique($periodIds));
             if (empty($periodIds)) {
                 return [];
@@ -1634,7 +1673,7 @@ class OdooService
                 'fields' => ['id', 'price_unit', 'start_rental_period_date', 'end_rental_period_date', 'tax_ids', 'product_id'],
                 'order' => 'start_rental_period_date asc'
             ]);
-            
+
             $periodsMap = [];
             foreach ($periods as $p) {
                 $periodsMap[$p['id']] = $p;
@@ -1649,7 +1688,7 @@ class OdooService
                     }
                 }
             }
-            
+
             $taxMap = [];
             if (!empty($taxIds)) {
                 $taxes = $this->execute('account.tax', 'search_read', [
@@ -1669,9 +1708,9 @@ class OdooService
                         $orderPeriods[] = $periodsMap[$pid];
                     }
                 }
-                
+
                 // Sort by start date
-                usort($orderPeriods, function($a, $b) {
+                usort($orderPeriods, function ($a, $b) {
                     return strcmp($a['start_rental_period_date'] ?? '', $b['start_rental_period_date'] ?? '');
                 });
 
@@ -1679,21 +1718,24 @@ class OdooService
                 $currentGroup = null;
 
                 foreach ($orderPeriods as $p) {
-                    $price = (float)($p['price_unit'] ?? 0);
-                    if ($price <= 0) continue; 
-                    
+                    $price = (float) ($p['price_unit'] ?? 0);
+                    if ($price <= 0)
+                        continue;
+
                     $startDate = $p['start_rental_period_date'] ?? null;
                     $endDate = $p['end_rental_period_date'] ?? null;
-                    
+
                     $taxNames = [];
                     if (!empty($p['tax_ids'])) {
                         foreach ($p['tax_ids'] as $tid) {
-                            if (isset($taxMap[$tid])) $taxNames[] = $taxMap[$tid];
+                            if (isset($taxMap[$tid]))
+                                $taxNames[] = $taxMap[$tid];
                         }
                     }
                     $taxStr = empty($taxNames) ? '-' : implode(', ', $taxNames);
 
-                    if (!$startDate) continue;
+                    if (!$startDate)
+                        continue;
 
                     if ($currentGroup === null) {
                         $currentGroup = [
@@ -1769,7 +1811,7 @@ class OdooService
                     }
                 }
             }
-            
+
             $taxMap = [];
             if (!empty($taxIds)) {
                 $taxes = $this->execute('account.tax', 'search_read', [
@@ -1785,21 +1827,24 @@ class OdooService
             $currentGroup = null;
 
             foreach ($periods as $p) {
-                $price = (float)($p['price_unit'] ?? 0);
-                if ($price <= 0) continue; // Skip zero-price invoice periods per user request
-                
+                $price = (float) ($p['price_unit'] ?? 0);
+                if ($price <= 0)
+                    continue; // Skip zero-price invoice periods per user request
+
                 $startDate = $p['start_rental_period_date'] ?? null;
                 $endDate = $p['end_rental_period_date'] ?? null;
-                
+
                 $taxNames = [];
                 if (!empty($p['tax_ids'])) {
                     foreach ($p['tax_ids'] as $tid) {
-                        if (isset($taxMap[$tid])) $taxNames[] = $taxMap[$tid];
+                        if (isset($taxMap[$tid]))
+                            $taxNames[] = $taxMap[$tid];
                     }
                 }
                 $taxStr = empty($taxNames) ? '-' : implode(', ', $taxNames);
 
-                if (!$startDate) continue;
+                if (!$startDate)
+                    continue;
 
                 if ($currentGroup === null) {
                     $currentGroup = [
@@ -1888,18 +1933,19 @@ class OdooService
             $records = [];
             foreach ($result['datas'] as $row) {
                 $lotNumber = $row[0] ?? '';
-                if (empty($lotNumber)) continue;
+                if (empty($lotNumber))
+                    continue;
 
                 $customer = !empty($row[6]) ? $row[6] : (!empty($row[7]) ? $row[7] : null);
                 $isVendorRent = !empty($row[8]) && ($row[8] === true || $row[8] === 'true' || $row[8] == 1);
 
                 $records[] = [
                     'lot_number' => $lotNumber,
-                    'internal_reference' => !empty($row[1]) ? (string)$row[1] : null,
-                    'engine_number' => !empty($row[2]) ? (string)$row[2] : null,
-                    'product' => !empty($row[3]) ? (string)$row[3] : '',
-                    'year' => !empty($row[4]) ? (string)$row[4] : date('Y'),
-                    'location' => !empty($row[5]) ? (string)$row[5] : '',
+                    'internal_reference' => !empty($row[1]) ? (string) $row[1] : null,
+                    'engine_number' => !empty($row[2]) ? (string) $row[2] : null,
+                    'product' => !empty($row[3]) ? (string) $row[3] : '',
+                    'year' => !empty($row[4]) ? (string) $row[4] : date('Y'),
+                    'location' => !empty($row[5]) ? (string) $row[5] : '',
                     'current_customer' => $customer,
                     'on_hand_quantity' => 0,
                     'is_on_hand' => true,

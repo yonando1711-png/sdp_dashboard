@@ -22,6 +22,9 @@ class User extends Authenticatable
         'branch',
         'role',
         'menu_permissions',
+        'can_view_lor_smd',
+        'allowed_salespersons',
+        'allowed_sales_teams',
     ];
 
     /**
@@ -45,6 +48,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'menu_permissions' => 'array',
+            'can_view_lor_smd' => 'boolean',
+            'allowed_salespersons' => 'array',
+            'allowed_sales_teams' => 'array',
         ];
     }
 
@@ -54,6 +60,30 @@ class User extends Authenticatable
     public function isItAdmin(): bool
     {
         return $this->role === 'it_admin';
+    }
+
+    /**
+     * Check if user can access LoR (SMD)
+     */
+    public function canAccessSmd(): bool
+    {
+        return $this->isItAdmin() || (bool) $this->can_view_lor_smd;
+    }
+
+    /**
+     * Get allowed salespersons array
+     */
+    public function getAllowedSalespersons(): array
+    {
+        return is_array($this->allowed_salespersons) ? array_values(array_filter($this->allowed_salespersons)) : [];
+    }
+
+    /**
+     * Get allowed sales teams array
+     */
+    public function getAllowedSalesTeams(): array
+    {
+        return is_array($this->allowed_sales_teams) ? array_values(array_filter($this->allowed_sales_teams)) : [];
     }
 
     /**
@@ -76,8 +106,12 @@ class User extends Authenticatable
         // Standardize key hyphens/underscores
         $key = str_replace('_', '-', strtolower($menu));
 
-        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR or CRM
-        if (!$this->isNationwide() && in_array($key, ['lor', 'crm'])) {
+        if ($key === 'lor-smd') {
+            return $this->canAccessSmd();
+        }
+
+        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR, CRM, or Surat Kuasa unless explicitly permitted
+        if (!$this->isNationwide() && in_array($key, ['lor', 'crm', 'surat-kuasa'])) {
             return false;
         }
 
@@ -93,7 +127,7 @@ class User extends Authenticatable
 
         // Default fallbacks when menu_permissions is null
         if ($this->isNationwide()) {
-            return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm']);
+            return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm', 'surat-kuasa']);
         }
 
         return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details']);

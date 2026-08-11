@@ -25,9 +25,75 @@ class UserController extends Controller
             ->sort()
             ->values();
 
+        // Default Odoo Team Leader -> Sales Teams fallback matrix
+        $defaultTeamsMap = [
+            'Wahyu Waraka' => ['WW - WW - Inge', 'WW - WW - Nicko', 'WW - Fahmi - Aprilia', 'WW - Fahmi - Rofi'],
+            'Adhitya' => ['AD - AD - Denny', 'AD - AD - Wira', 'AD - AD - Hakim'],
+            'Kiki' => ['KI - Irwan - Ravellino', 'KI - Irwan - Irwan', 'KI - Erza - Nizam', 'KI - Erza - Erza'],
+            'Fuji' => ['FJ - FJ - Hanna', 'FJ - FJ -Vico', 'FJ - FJ - Andreas'],
+            'Suryanti' => ['SY - Ridho - Ridho', 'SY - Ridho - Kelvin', 'SY - Ridho - Keyzia', 'SY - Rizal - Rifai', 'SY - Rizal - Fikri'],
+            'Bambang Sumantri' => ['BS-BS-Aldy', 'BS-BS-BS'],
+            'Ahmad Sofwan Qudsy' => ['Tim Sofwan'],
+            'Wahyu Iskandar' => ['Tim Wahyu Iskandar'],
+        ];
+
+        // Auto-detect all active Salespersons synced from Odoo
+        $syncedSalespersons = Item::withoutGlobalScope('exclude_order_only')
+            ->whereNotNull('salesperson')
+            ->where('salesperson', '!=', '')
+            ->distinct()
+            ->pluck('salesperson')
+            ->toArray();
+
+        $odooSalespersons = collect(array_unique(array_merge(array_keys($defaultTeamsMap), $syncedSalespersons)))->sort()->values();
+
+        // Auto-detect Salesperson -> Sales Teams mapping matrix
+        $syncedMap = Item::withoutGlobalScope('exclude_order_only')
+            ->whereNotNull('salesperson')
+            ->where('salesperson', '!=', '')
+            ->whereNotNull('sales_team')
+            ->where('sales_team', '!=', '')
+            ->select('salesperson', 'sales_team')
+            ->distinct()
+            ->get()
+            ->groupBy('salesperson')
+            ->map(fn($group) => $group->pluck('sales_team')->unique()->sort()->values()->toArray())
+            ->toArray();
+
+        $salespersonTeamsMap = collect($defaultTeamsMap)->map(function($teams, $sp) use ($syncedMap) {
+            $merged = array_unique(array_merge($teams, $syncedMap[$sp] ?? []));
+            sort($merged);
+            return $merged;
+        });
+
+        // Add any additional synced salespersons not in default map
+        foreach ($syncedMap as $sp => $teams) {
+            if (!isset($salespersonTeamsMap[$sp])) {
+                $salespersonTeamsMap[$sp] = $teams;
+            }
+        }
+
+        // All distinct sales teams
+        $syncedTeams = Item::withoutGlobalScope('exclude_order_only')
+            ->whereNotNull('sales_team')
+            ->where('sales_team', '!=', '')
+            ->distinct()
+            ->pluck('sales_team')
+            ->toArray();
+
+        $allDefaultTeams = [];
+        foreach ($defaultTeamsMap as $teams) {
+            $allDefaultTeams = array_merge($allDefaultTeams, $teams);
+        }
+
+        $allSalesTeams = collect(array_unique(array_merge($allDefaultTeams, $syncedTeams)))->sort()->values();
+
         return view('settings.users', [
             'users' => $users,
             'odooBranches' => $odooBranches,
+            'odooSalespersons' => $odooSalespersons,
+            'salespersonTeamsMap' => $salespersonTeamsMap,
+            'allSalesTeams' => $allSalesTeams,
         ]);
     }
 
@@ -43,6 +109,9 @@ class UserController extends Controller
             'branch' => 'required|string',
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
+            'can_view_lor_smd' => 'nullable|boolean',
+            'allowed_salespersons' => 'nullable|array',
+            'allowed_sales_teams' => 'nullable|array',
         ]);
 
         User::create([
@@ -51,7 +120,10 @@ class UserController extends Controller
             'password' => Hash::make($validated['password']),
             'branch' => strtoupper(trim($validated['branch'])),
             'role' => $validated['role'],
-            'menu_permissions' => $request->has('menu_permissions') ? (array)$request->input('menu_permissions') : ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'],
+            'menu_permissions' => $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [],
+            'can_view_lor_smd' => $request->has('can_view_lor_smd'),
+            'allowed_salespersons' => $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [],
+            'allowed_sales_teams' => $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [],
         ]);
 
         return redirect()->route('users.index')->with('success', 'User account created successfully!');
@@ -71,13 +143,19 @@ class UserController extends Controller
             'branch' => 'required|string',
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
+            'can_view_lor_smd' => 'nullable|boolean',
+            'allowed_salespersons' => 'nullable|array',
+            'allowed_sales_teams' => 'nullable|array',
         ]);
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->branch = strtoupper(trim($validated['branch']));
         $user->role = $validated['role'];
-        $user->menu_permissions = $request->has('menu_permissions') ? (array)$request->input('menu_permissions') : [];
+        $user->menu_permissions = $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [];
+        $user->can_view_lor_smd = $request->has('can_view_lor_smd');
+        $user->allowed_salespersons = $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [];
+        $user->allowed_sales_teams = $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [];
 
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);

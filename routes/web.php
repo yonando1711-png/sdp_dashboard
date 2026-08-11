@@ -8,6 +8,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\LorController;
+use App\Http\Controllers\SuratKuasaController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\CheckItAdmin;
 use App\Http\Middleware\CheckMenuPermission;
@@ -48,6 +49,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/location-history', [DashboardController::class, 'apiLocationHistory'])->name('api.location.history');
     Route::get('/api/settings/targets', [SettingsController::class, 'getTargets'])->name('api.settings.targets');
 
+    // LoR SMD Route (Protected by SMD Access Permission)
+    Route::get('/lor/smd', [LorController::class, 'indexSmd'])->middleware(CheckMenuPermission::class . ':lor-smd')->name('lor.smd');
+
     // LoR Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':lor'])->group(function () {
         Route::get('/lor', [LorController::class, 'index'])->name('lor.index');
@@ -64,6 +68,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/crm/auth', [CrmController::class, 'authenticate'])->middleware('throttle:10,1')->name('crm.auth');
         Route::get('/settings/crm', [CrmController::class, 'settings'])->name('crm.settings');
         Route::post('/settings/crm', [CrmController::class, 'updatePassword'])->name('crm.settings.update');
+    });
+
+    // Surat Kuasa Routes (Protected by Menu Permission & Secondary Password)
+    Route::middleware([CheckMenuPermission::class . ':surat-kuasa'])->group(function () {
+        Route::get('/surat-kuasa', [SuratKuasaController::class, 'index'])->name('surat-kuasa.index');
+        Route::get('/surat-kuasa/report', [SuratKuasaController::class, 'report'])->name('surat-kuasa.report');
+        Route::post('/surat-kuasa/auth', [SuratKuasaController::class, 'authenticate'])->middleware('throttle:10,1')->name('surat-kuasa.auth');
+        Route::post('/surat-kuasa/sync-odoo', [SuratKuasaController::class, 'syncOdooData'])->name('surat-kuasa.sync-odoo');
+        Route::post('/surat-kuasa/fast-sync', [SuratKuasaController::class, 'fastSync'])->name('surat-kuasa.fast-sync');
+        Route::get('/surat-kuasa/print/{id}', [SuratKuasaController::class, 'print'])->name('surat-kuasa.print');
+        Route::get('/surat-kuasa/download-docx/{id}', [SuratKuasaController::class, 'downloadDocx'])->name('surat-kuasa.download-docx');
+        Route::get('/surat-kuasa/download-pdf/{id}', [SuratKuasaController::class, 'downloadPdf'])->name('surat-kuasa.download-pdf');
+        Route::post('/surat-kuasa/email/{id}', [SuratKuasaController::class, 'sendEmail'])->name('surat-kuasa.send-email');
+        Route::get('/surat-kuasa/export', [SuratKuasaController::class, 'export'])->name('surat-kuasa.export');
+        Route::post('/settings/surat-kuasa-password', [SuratKuasaController::class, 'updatePassword'])->name('surat-kuasa.settings.update');
     });
 
     // IT Admin Only Routes (Utilities & User Management)
@@ -89,5 +108,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
         Route::post('/settings/targets', [SettingsController::class, 'updateTargets'])->name('settings.targets');
         Route::post('/settings/odoo', [SettingsController::class, 'updateOdoo'])->name('settings.odoo');
+        Route::post('/settings/surat-kuasa', [SettingsController::class, 'updateSuratKuasaSettings'])->name('settings.surat-kuasa');
     });
 });

@@ -20,7 +20,7 @@ class SummaryGenerator
         // specific reader setup might be needed if date formatting is an issue, 
         // but default import usually works.
         // We'll calculate everything in memory.
-        
+
         // Support both file paths (string) and pre-parsed arrays (from Odoo API)
         if (is_array($file)) {
             // Already parsed data (from Odoo export_data)
@@ -29,9 +29,10 @@ class SummaryGenerator
             // File path - parse via Excel
             $sheets = Excel::toArray([], $file);
             $data = null;
-            
+
             foreach ($sheets as $sheetData) {
-                if (empty($sheetData)) continue;
+                if (empty($sheetData))
+                    continue;
                 // Check if specific column exists in first row
                 $firstRow = $sheetData[0] ?? [];
                 // Cast to string for search
@@ -41,10 +42,10 @@ class SummaryGenerator
                     break;
                 }
             }
-            
+
             if (!$data) {
-                 // Fallback or error
-                 $data = $sheets[0] ?? []; 
+                // Fallback or error
+                $data = $sheets[0] ?? [];
             }
         }
 
@@ -136,21 +137,22 @@ class SummaryGenerator
         // Column Mapping
         // Define Required Headers
         $requiredHeaders = [
-            'Product', 
-            'Lot/Serial Number', 
-            'Location', 
+            'Product',
+            'Lot/Serial Number',
+            'Location',
             'On Hand Quantity'
         ];
-        
+
         $header = array_shift($data);
         if (!$header) {
-             throw new \InvalidArgumentException("The file is empty or missing headers.");
+            throw new \InvalidArgumentException("The file is empty or missing headers.");
         }
-        
+
         // Cast to string and trim
-        $header = array_map(function($h) { return trim((string)$h); }, $header);
+        $header = array_map(function ($h) {
+            return trim((string) $h); }, $header);
         $colMap = array_flip($header);
-        
+
         // Validate Required Headers
         $missingHeaders = [];
         foreach ($requiredHeaders as $req) {
@@ -158,7 +160,7 @@ class SummaryGenerator
                 $missingHeaders[] = $req;
             }
         }
-        
+
         if (!empty($missingHeaders)) {
             throw new \InvalidArgumentException("Missing required columns: " . implode(', ', $missingHeaders));
         }
@@ -189,8 +191,10 @@ class SummaryGenerator
             'total_price' => $colMap['Total Price'] ?? -1,
             'status' => $colMap['Rental Status'] ?? -1,
             'city' => $colMap['Lokasi Pemakaian'] ?? $colMap['City'] ?? $colMap['CITY'] ?? $colMap['Lokasi'] ?? -1,
+            'salesperson' => $colMap['Salesperson'] ?? -1,
+            'sales_team' => $colMap['Sales Team'] ?? -1,
         ];
-        
+
         // Pre-compute rental_id occurrence counts
         $rentalIdCounts = [];
         $uniqueRentalIdsForOdoo = [];
@@ -201,7 +205,7 @@ class SummaryGenerator
                 $uniqueRentalIdsForOdoo[$rentalId] = true;
             }
         }
-        
+
         // Fetch Product Movement Counts & Invoice Period Totals
         $productMovementCounts = [];
         $invoicePeriodTotals = [];
@@ -213,7 +217,7 @@ class SummaryGenerator
         } catch (\Exception $e) {
             \Log::warning('Could not fetch odoo extra data: ' . $e->getMessage());
         }
-        
+
         // Date Logic Setup
         $baseDate = \Carbon\Carbon::create(1899, 12, 30);
         $today = \Carbon\Carbon::now();
@@ -228,31 +232,32 @@ class SummaryGenerator
 
         $items = [];
         foreach ($data as $i => $row) {
-             // Skip row if Lot Number is missing
-             $lotNo = trim($row[$idxParams['lot_no']] ?? '');
-             if (empty($lotNo)) continue;
+            // Skip row if Lot Number is missing
+            $lotNo = trim($row[$idxParams['lot_no']] ?? '');
+            if (empty($lotNo))
+                continue;
 
-             // Helper to safely get value or default
-             $getValue = function($key) use ($row, $idxParams) {
-                 $idx = $idxParams[$key];
-                 return ($idx !== -1) ? ($row[$idx] ?? null) : null;
-             };
+            // Helper to safely get value or default
+            $getValue = function ($key) use ($row, $idxParams) {
+                $idx = $idxParams[$key];
+                return ($idx !== -1) ? ($row[$idx] ?? null) : null;
+            };
 
-            $qty = (float)($getValue('on_hand_qty') ?? 0);
-            
+            $qty = (float) ($getValue('on_hand_qty') ?? 0);
+
             // Boolean Checks
             $isVendorRentVal = $getValue('is_vendor_rent');
             $isVendorRent = !empty($isVendorRentVal) && $isVendorRentVal !== false && $isVendorRentVal !== 'False';
-            
+
             $inStockVal = $getValue('in_stock');
             // If explicit "In Stock?" column exists, use it. Otherwise assume TRUE if qty > 0 (fallback logic if needed, but stick to column for now)
             $inStock = !empty($inStockVal) && $inStockVal !== false && $inStockVal !== 'False';
-            
+
             $location = trim($getValue('location') ?? '');
-            
+
             $reservedLot = trim($getValue('reserved_lot') ?? '');
             $rentalType = trim($getValue('rental_type') ?? '');
-            
+
             $actualStartRental = $getValue('actual_start_rental');
             $actualEndRental = $getValue('actual_end_rental');
             $rentalId = trim($getValue('rental_id') ?? '');
@@ -261,19 +266,19 @@ class SummaryGenerator
             $isActiveRental = true;
             $startComparison = $this->compareDateToToday($actualStartRental);
             $endComparison = $this->compareDateToToday($actualEndRental);
-            
+
             // Check if rental has started
             if ($startComparison === 1) {
                 // If start date is in the future, it is PENDING
                 $isActiveRental = false;
             }
-            
+
             // Check if rental has ended
             if ($endComparison !== null && $endComparison === -1) {
                 // If end date is in the past, it is EXPIRED
                 $isActiveRental = false;
             }
-            
+
             // Note: If dates are empty/null, we assume Active (existing behavior)
 
             // Check for SOLD
@@ -288,17 +293,17 @@ class SummaryGenerator
             } else {
                 // SDP Stock Accumulator (Total Active Stock)
                 $summary['sdp_stock'] += $qty;
-                
+
                 // Reserved Rental Logic (Future Start Date Only)
                 if ($startComparison === 1) {
                     $summary['pending_rental'] += $qty;
                 }
-                
+
                 // Vendor Rent Count (Independent of category, but part of active stock)
                 if ($isVendorRent) {
                     $summary['vendor_rent'] += $qty;
                 }
-                
+
                 // Rental Type Count (Subscription/Regular) - Only count ACTIVE rentals
                 // MODIFIED: Exclude expired rentals (end < today) and pending (start > today)
                 if ($isActiveRental) {
@@ -340,7 +345,7 @@ class SummaryGenerator
             // In Stock
             if (!$isSold && $inStock) {
                 $summary['in_stock']['total'] += $qty;
-                
+
                 // --- RENTAL STATUS BREAKDOWN ---
                 // Helper vars
                 $sRentalId = $rentalId;
@@ -348,11 +353,11 @@ class SummaryGenerator
                 $sReservedLot = $reservedLot;
                 $sIsOriginal = (!empty($sRentalId) && $sLotNo == $sReservedLot);
                 $sRentalCount = $rentalIdCounts[$sRentalId] ?? 0;
-                
+
                 // Check Reserve (Future Start)
                 // Use compareDateToToday for both Excel serial and Odoo ISO formats
                 $isFuture = ($startComparison === 1);
-                
+
                 if ($isFuture) {
                     $summary['in_stock']['rental_status']['reserve'] += $qty;
                 } elseif ($isActiveRental && !empty($sRentalId)) {
@@ -368,65 +373,66 @@ class SummaryGenerator
                         // Treat as Pure Stock for now or track separately if needed.
                         // For the user request "Original in stock breakdown", we focus on originals.
                         // If we add to pure_stock efficiently:
-                        $summary['in_stock']['rental_status']['pure_stock'] += $qty; 
+                        $summary['in_stock']['rental_status']['pure_stock'] += $qty;
                     }
                 } else {
                     // No Active Rental ID (Pure Stock or Expired)
                     $summary['in_stock']['rental_status']['pure_stock'] += $qty;
                 }
-                
+
                 // Categorize Location
                 if (stripos($location, 'Operation') !== false) {
-                     $summary['in_stock']['details'][Location::OPERATION]['count'] += $qty; 
+                    $summary['in_stock']['details'][Location::OPERATION]['count'] += $qty;
                 } else {
-                     $loc = $location;                      if (!isset($summary['in_stock']['details']['locations'])) {
-                          $summary['in_stock']['details']['locations'] = [];
-                      }
-                      
-                      // Ensure LOST location always exists in details for the dashboard
-                      if (!isset($summary['in_stock']['details']['locations']['SDP/LOST'])) {
-                          $summary['in_stock']['details']['locations']['SDP/LOST'] = 0;
-                      }
+                    $loc = $location;
+                    if (!isset($summary['in_stock']['details']['locations'])) {
+                        $summary['in_stock']['details']['locations'] = [];
+                    }
 
-                      if (!isset($summary['in_stock']['details']['locations'][$loc])) {
-                          $summary['in_stock']['details']['locations'][$loc] = 0;
-                      }
-                      $summary['in_stock']['details']['locations'][$loc] += $qty;
+                    // Ensure LOST location always exists in details for the dashboard
+                    if (!isset($summary['in_stock']['details']['locations']['SDP/LOST'])) {
+                        $summary['in_stock']['details']['locations']['SDP/LOST'] = 0;
+                    }
+
+                    if (!isset($summary['in_stock']['details']['locations'][$loc])) {
+                        $summary['in_stock']['details']['locations'][$loc] = 0;
+                    }
+                    $summary['in_stock']['details']['locations'][$loc] += $qty;
                 }
             }
-            
+
             // Rented in Customer
             elseif (!$isSold && $location == Location::RENTAL_CUSTOMER) {
                 $summary['rented_in_customer']['total'] += $qty;
                 $rentalIdCount = $rentalIdCounts[$rentalId] ?? 0;
-                
+
                 // Sub-logic
                 if ($isVendorRent) {
-                     $summary['rented_in_customer']['details']['Vendor Rent'] += $qty;
+                    $summary['rented_in_customer']['details']['Vendor Rent'] += $qty;
                 } elseif ($this->inventoryService->isOriginal($lotNo, $reservedLot)) {
-                     $summary['rented_in_customer']['details']['Original in Customer'] += $qty;
+                    $summary['rented_in_customer']['details']['Original in Customer'] += $qty;
                 } elseif ($this->inventoryService->isReplacement($lotNo, $reservedLot, $rentalId, $isVendorRent)) {
-                     // Replacement - split into Service vs RBO
-                     $movementCount = $productMovementCounts[$rentalId] ?? 0;
-                     if ($movementCount > 1) {
-                         // Service: more than 1 historical movement
-                         $summary['rented_in_customer']['details']['Replacement - Service'] += $qty;
-                     } else {
-                         // RBO: exactly 1 historical movement
-                         $summary['rented_in_customer']['details']['Replacement - RBO'] += $qty;
-                     }
+                    // Replacement - split into Service vs RBO
+                    $movementCount = $productMovementCounts[$rentalId] ?? 0;
+                    if ($movementCount > 1) {
+                        // Service: more than 1 historical movement
+                        $summary['rented_in_customer']['details']['Replacement - Service'] += $qty;
+                    } else {
+                        // RBO: exactly 1 historical movement
+                        $summary['rented_in_customer']['details']['Replacement - RBO'] += $qty;
+                    }
                 } elseif (empty($rentalId)) {
-                     // "Check Rent position" -> rental ID=Blank
-                     $summary['rented_in_customer']['details']['Check Rent position'] += $qty;
+                    // "Check Rent position" -> rental ID=Blank
+                    $summary['rented_in_customer']['details']['Check Rent position'] += $qty;
                 }
-                
+
             }
-            
+
             // External Service
             elseif (!$isSold && stripos($location, Location::SERVICE_EXTERNAL) === 0) {
                 $summary['stock_external_service']['total'] += $qty;
                 $rentalIdCount = $rentalIdCounts[$rentalId] ?? 0;
-                
+
                 // Sub-logic with replacement detection
                 if (!empty($rentalId) && $lotNo == $reservedLot) {
                     // Original Rented - check if replacement exists
@@ -445,7 +451,7 @@ class SummaryGenerator
             elseif (!$isSold && $location == Location::SERVICE_INTERNAL) {
                 $summary['stock_internal_service']['total'] += $qty;
                 $rentalIdCount = $rentalIdCounts[$rentalId] ?? 0;
-                
+
                 if (!empty($rentalId) && $lotNo == $reservedLot) {
                     if ($rentalIdCount > 1) {
                         $summary['stock_internal_service']['details']['Original Rented with Replace'] += $qty;
@@ -462,7 +468,7 @@ class SummaryGenerator
             elseif (!$isSold && stripos($location, Location::INSURANCE) === 0) {
                 $summary['stock_insurance']['total'] += $qty;
                 $rentalIdCount = $rentalIdCounts[$rentalId] ?? 0;
-                
+
                 if (!empty($rentalId) && $lotNo == $reservedLot) {
                     if ($rentalIdCount > 1) {
                         $summary['stock_insurance']['details']['Original Rented with Replace'] += $qty;
@@ -524,6 +530,8 @@ class SummaryGenerator
                 'status' => $getValue('status'),
                 'is_order_only' => false,
                 'city' => $getValue('city'),
+                'salesperson' => $getValue('salesperson'),
+                'sales_team' => $getValue('sales_team'),
                 'driver' => null,
             ];
         }
@@ -535,10 +543,66 @@ class SummaryGenerator
             $domain = [['is_rental_order', '=', true]];
             $saleOrderIds = $odoo->execute('sale.order', 'search', [$domain]);
             if (!empty($saleOrderIds)) {
-                $saleOrders = $odoo->execute('sale.order', 'read', [$saleOrderIds, [
-                    'name', 'partner_id', 'client_order_ref', 'rental_status', 'state', 'rental_start_date', 'rental_return_date', 'amount_untaxed', 'amount_total'
-                ]]);
-                
+                $saleOrders = $odoo->execute('sale.order', 'read', [
+                    $saleOrderIds,
+                    [
+                        'name',
+                        'partner_id',
+                        'client_order_ref',
+                        'rental_status',
+                        'state',
+                        'rental_start_date',
+                        'rental_return_date',
+                        'amount_untaxed',
+                        'amount_total',
+                        'user_id',
+                        'team_id',
+                        'order_line'
+                    ]
+                ]);
+
+                // Batch fetch sale.order.line to extract product_id and price_unit for orders
+                $allLineIds = collect($saleOrders)->pluck('order_line')->flatten()->filter()->unique()->toArray();
+                $allRentalIds = collect($saleOrders)->pluck('name')->filter()->unique()->toArray();
+
+                $orderLineMap = [];
+                $moveLineLotMap = [];
+
+                if (!empty($allLineIds)) {
+                    try {
+                        $linesData = $odoo->execute('sale.order.line', 'read', [$allLineIds, ['order_id', 'name', 'product_id', 'price_unit']]);
+                        foreach ($linesData as $line) {
+                            $orderId = is_array($line['order_id'] ?? null) ? $line['order_id'][0] : null;
+                            if ($orderId && !isset($orderLineMap[$orderId])) {
+                                $orderLineMap[$orderId] = $line;
+                            }
+                        }
+                    } catch (\Exception $exLine) {
+                        \Log::warning('Could not fetch sale order line details: ' . $exLine->getMessage());
+                    }
+                }
+
+                if (!empty($allRentalIds)) {
+                    try {
+                        $movesData = $odoo->execute('stock.move.line', 'search_read', [
+                            [
+                                ['origin', 'in', $allRentalIds],
+                                ['lot_id', '!=', false]
+                            ],
+                            ['origin', 'lot_id']
+                        ]);
+
+                        foreach ($movesData as $m) {
+                            $orig = $m['origin'] ?? '';
+                            if ($orig && !isset($moveLineLotMap[$orig]) && is_array($m['lot_id'] ?? null)) {
+                                $moveLineLotMap[$orig] = $m['lot_id'][1];
+                            }
+                        }
+                    } catch (\Exception $exMove) {
+                        \Log::warning('Could not fetch stock move lines for lot numbers: ' . $exMove->getMessage());
+                    }
+                }
+
                 $statusMap = [
                     'draft' => 'Quotation',
                     'sent' => 'Quotation Sent',
@@ -552,17 +616,23 @@ class SummaryGenerator
                     $rentalId = $order['name'];
                     if (!in_array($rentalId, $existingRentalIds)) {
                         $mappedStatus = $statusMap[$order['rental_status'] ?? ''] ?? ($order['state'] === 'cancel' ? 'Cancelled' : ($order['rental_status'] ?? ''));
-                        
+
                         // Attempt to find previous lot_number to preserve history
                         $prevItem = \App\Models\Item::withoutGlobalScope('exclude_order_only')
                             ->where('rental_id', $rentalId)
                             ->whereNotNull('lot_number')
                             ->where('lot_number', '!=', '')
                             ->first();
-                            
+
+                        $lineData = $orderLineMap[$order['id']] ?? null;
+                        $productName = $prevItem ? $prevItem->product : ($lineData && is_array($lineData['product_id'] ?? null) ? $lineData['product_id'][1] : ($lineData['name'] ?? ''));
+                        $unitPrice = $lineData['price_unit'] ?? null;
+                        $contractRef = !empty($order['client_order_ref']) ? $order['client_order_ref'] : ($prevItem ? $prevItem->contract_ref : '');
+                        $lotNumber = $prevItem ? $prevItem->lot_number : ($moveLineLotMap[$rentalId] ?? '');
+
                         $items[] = [
-                            'product' => $prevItem ? $prevItem->product : '',
-                            'lot_number' => $prevItem ? $prevItem->lot_number : '',
+                            'product' => $productName,
+                            'lot_number' => $lotNumber,
                             'internal_reference' => $prevItem ? $prevItem->internal_reference : '',
                             'year' => $prevItem ? $prevItem->year : '',
                             'purchase_date' => $prevItem ? $prevItem->purchase_date : null,
@@ -588,14 +658,17 @@ class SummaryGenerator
                             'current_customer' => is_array($order['partner_id']) ? $order['partner_id'][1] : '',
                             'warehouse' => null,
                             'vendor_unit' => null,
-                            'contract_ref' => '',
+                            'contract_ref' => $contractRef,
                             'engine_number' => '',
                             'po' => $order['client_order_ref'] ?? '',
-                            'price' => null,
+                            'price' => $unitPrice,
                             'total_price' => $invoicePeriodTotals[$rentalId] ?? ($order['amount_untaxed'] ?? ($order['amount_total'] ?? 0)),
+                            'amount_total' => $order['amount_total'] ?? null,
                             'status' => $mappedStatus,
                             'is_order_only' => true,
                             'city' => $prevItem ? $prevItem->city : null,
+                            'salesperson' => is_array($order['user_id'] ?? null) ? $order['user_id'][1] : null,
+                            'sales_team' => is_array($order['team_id'] ?? null) ? $order['team_id'][1] : null,
                             'driver' => null,
                         ];
                     }
@@ -604,7 +677,7 @@ class SummaryGenerator
         } catch (\Exception $e) {
             \Log::warning('Could not fetch sale orders for missing rentals: ' . $e->getMessage());
         }
-        
+
         // Second pass: Find linked vehicles (vehicles sharing the same rental_id)
         // Build a map of rental_id -> list of lot_numbers
         $rentalGroups = [];
@@ -617,7 +690,7 @@ class SummaryGenerator
                 $rentalGroups[$rid][] = ['index' => $idx, 'lot_number' => $item['lot_number']];
             }
         }
-        
+
         // For each rental group with multiple vehicles, link them
         foreach ($rentalGroups as $rid => $group) {
             if (count($group) > 1) {
@@ -633,7 +706,7 @@ class SummaryGenerator
                 }
             }
         }
-        
+
         // Count rental pairs for summary
         $rentalPairsCount = 0;
         foreach ($rentalGroups as $group) {
@@ -642,18 +715,20 @@ class SummaryGenerator
             }
         }
         $summary['rental_pairs_count'] = $rentalPairsCount;
-        
+
         // Populate unique rental contract counts
         $summary['unique_rental_contracts']['Subscription'] = count($uniqueSubscriptionRentals) + $nonIdSubscriptionItems;
         $summary['unique_rental_contracts']['Regular'] = count($uniqueRegularRentals) + $nonIdRegularItems;
-        
+
         return ['summary' => $summary, 'items' => $items];
     }
-    
+
     // Helper to tag items for drilldown (simplified for DB)
-    private function determineCategory($summary, $location, $isVendorRent, $lotNo, $reservedLot, $rentalId, $qty) {
+    private function determineCategory($summary, $location, $isVendorRent, $lotNo, $reservedLot, $rentalId, $qty)
+    {
         $tags = [];
-        if ($isVendorRent) $tags[] = 'vendor_rent';
+        if ($isVendorRent)
+            $tags[] = 'vendor_rent';
         return $tags;
     }
 
@@ -672,32 +747,44 @@ class SummaryGenerator
         try {
             // 0.5 LoR Snapshot Diffing Logic
             $existingItems = \App\Models\Item::whereNotNull('rental_id')->where('rental_id', '!=', '')
-                ->where(function($q) {
+                ->where(function ($q) {
                     $q->where('rental_id_count', '<=', 1)
-                      ->orWhere('in_stock', false);
+                        ->orWhere('in_stock', false);
                 })
-                ->get()->keyBy(function($item) {
+                ->get()->keyBy(function ($item) {
                     return $item->rental_id;
-            });
+                });
 
             $historyInserts = [];
             $now = now();
 
             foreach ($items as $item) {
-                if (empty($item['rental_id']) || empty($item['lot_number'])) continue;
-                
+                if (empty($item['rental_id']) || empty($item['lot_number']))
+                    continue;
+
                 $key = $item['rental_id'];
                 if (isset($existingItems[$key])) {
                     // Only compare if the incoming item is also the active one for this rental
-                    if ($item['rental_id_count'] > 1 && $item['in_stock']) continue;
+                    if ($item['rental_id_count'] > 1 && $item['in_stock'])
+                        continue;
 
                     $old = $existingItems[$key];
-                    
+
                     $fieldsToCompare = [
-                        'lot_number', 'contract_ref', 'product', 'year', 'city', 'current_customer', 
-                        'po', 'actual_start_rental', 'actual_end_rental', 'price', 'driver', 'status'
+                        'lot_number',
+                        'contract_ref',
+                        'product',
+                        'year',
+                        'city',
+                        'current_customer',
+                        'po',
+                        'actual_start_rental',
+                        'actual_end_rental',
+                        'price',
+                        'driver',
+                        'status'
                     ];
-                    
+
                     $changed = false;
                     foreach ($fieldsToCompare as $field) {
                         $oldVal = $old->$field;
@@ -706,15 +793,15 @@ class SummaryGenerator
                         }
                         $newVal = $item[$field] ?? null;
                         if (in_array($field, ['actual_start_rental', 'actual_end_rental']) && $newVal) {
-                             $newVal = $this->excelDateToCarbon($newVal);
+                            $newVal = $this->excelDateToCarbon($newVal);
                         }
-                        
-                        if ((string)$oldVal !== (string)$newVal) {
+
+                        if ((string) $oldVal !== (string) $newVal) {
                             $changed = true;
                             break;
                         }
                     }
-                    
+
                     if ($changed) {
                         $historyInserts[] = [
                             'rental_id' => $old->rental_id,
@@ -738,7 +825,7 @@ class SummaryGenerator
                     }
                 }
             }
-            
+
             if (!empty($historyInserts)) {
                 $chunkedHistories = array_chunk($historyInserts, 500);
                 foreach ($chunkedHistories as $chunk) {
@@ -761,98 +848,101 @@ class SummaryGenerator
             // -----------------------------------------------------------------------
 
             \App\Models\Item::truncate();
-        
-        $chunkedItems = array_chunk($items, 500);
-        foreach ($chunkedItems as $chunk) {
-            $insertData = [];
-            foreach ($chunk as $item) {
-                // Convert Dates
-                $start = $this->excelDateToCarbon($item['actual_start_rental']);
-                $end = $this->excelDateToCarbon($item['actual_end_rental']);
-                
-                $insertData[] = [
-                    'product' => $item['product'],
-                    'lot_number' => $item['lot_number'],
-                    'internal_reference' => $item['internal_reference'],
-                    'year' => $item['year'],
-                    'purchase_date' => $item['purchase_date'],
-                    'location' => $item['location'],
-                    'on_hand_quantity' => $item['on_hand_quantity'],
-                    'is_vendor_rent' => $item['is_vendor_rent'],
-                    'is_on_hand' => $item['is_on_hand'],
-                    'in_stock' => $item['in_stock'], 
-                    // 'is_stock' => $item['in_stock'], // Mapping if renamed
-                    'is_sold' => $item['is_sold'],
-                    'is_active_rental' => $item['is_active_rental'],
-                    'rental_id' => $item['rental_id'],
-                    'reserved_lot' => $item['reserved_lot'],
-                    'rental_type' => $item['rental_type'],
-                    'actual_start_rental' => $start,
-                    'actual_end_rental' => $end,
-                    'km_last' => $item['km_last'],
-                    'vehicle_role' => $item['vehicle_role'],
-                    'rental_id_count' => $item['rental_id_count'],
-                    'product_movement_count' => $item['product_movement_count'],
-                    'linked_vehicle' => $item['linked_vehicle'],
-                    'category_flags' => json_encode($item['category_flags']),
-                    'last_customer' => $item['last_customer'],
-                    'current_customer' => $item['current_customer'],
-                    'warehouse' => $item['warehouse'],
-                    'vendor_unit' => $item['vendor_unit'] ?? null,
-                    'contract_ref' => $item['contract_ref'] ?? null,
-                    'engine_number' => $item['engine_number'] ?? null,
-                    'po' => $item['po'] ?? null,
-                    'price' => $item['price'] ?? null,
-                    'total_price' => $item['total_price'] ?? null,
-                    'status' => $item['status'] ?? null,
-                    'city' => $item['city'] ?? null,
-                    'driver' => $item['driver'] ?? null,
-                    'is_order_only' => $item['is_order_only'] ?? false,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-            \App\Models\Item::insert($insertData);
-        }
 
-        // -- Restore Surat Kuasa units that were not in the main sync dataset --
-        if (!empty($suratKuasaBackup)) {
-            $restoreData = [];
-            foreach ($suratKuasaBackup as $row) {
-                unset($row['id']); // Remove PK so insert gets a fresh ID
-                $row['created_at'] = $row['created_at'] ?? now();
-                $row['updated_at'] = now();
-                // Decode category_flags if it was cast to array by Eloquent
-                if (is_array($row['category_flags'])) {
-                    $row['category_flags'] = json_encode($row['category_flags']);
+            $chunkedItems = array_chunk($items, 500);
+            foreach ($chunkedItems as $chunk) {
+                $insertData = [];
+                foreach ($chunk as $item) {
+                    // Convert Dates
+                    $start = $this->excelDateToCarbon($item['actual_start_rental']);
+                    $end = $this->excelDateToCarbon($item['actual_end_rental']);
+
+                    $insertData[] = [
+                        'product' => $item['product'],
+                        'lot_number' => $item['lot_number'],
+                        'internal_reference' => $item['internal_reference'],
+                        'year' => $item['year'],
+                        'purchase_date' => $item['purchase_date'],
+                        'location' => $item['location'],
+                        'on_hand_quantity' => $item['on_hand_quantity'],
+                        'is_vendor_rent' => $item['is_vendor_rent'],
+                        'is_on_hand' => $item['is_on_hand'],
+                        'in_stock' => $item['in_stock'],
+                        // 'is_stock' => $item['in_stock'], // Mapping if renamed
+                        'is_sold' => $item['is_sold'],
+                        'is_active_rental' => $item['is_active_rental'],
+                        'rental_id' => $item['rental_id'],
+                        'reserved_lot' => $item['reserved_lot'],
+                        'rental_type' => $item['rental_type'],
+                        'actual_start_rental' => $start,
+                        'actual_end_rental' => $end,
+                        'km_last' => $item['km_last'],
+                        'vehicle_role' => $item['vehicle_role'],
+                        'rental_id_count' => $item['rental_id_count'],
+                        'product_movement_count' => $item['product_movement_count'],
+                        'linked_vehicle' => $item['linked_vehicle'],
+                        'category_flags' => json_encode($item['category_flags']),
+                        'last_customer' => $item['last_customer'],
+                        'current_customer' => $item['current_customer'],
+                        'warehouse' => $item['warehouse'],
+                        'vendor_unit' => $item['vendor_unit'] ?? null,
+                        'contract_ref' => $item['contract_ref'] ?? null,
+                        'engine_number' => $item['engine_number'] ?? null,
+                        'po' => $item['po'] ?? null,
+                        'price' => $item['price'] ?? null,
+                        'total_price' => $item['total_price'] ?? null,
+                        'amount_total' => $item['amount_total'] ?? null,
+                        'status' => $item['status'] ?? null,
+                        'city' => $item['city'] ?? null,
+                        'salesperson' => $item['salesperson'] ?? null,
+                        'sales_team' => $item['sales_team'] ?? null,
+                        'driver' => $item['driver'] ?? null,
+                        'is_order_only' => $item['is_order_only'] ?? false,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
                 }
-                $restoreData[] = $row;
+                \App\Models\Item::insert($insertData);
             }
-            foreach (array_chunk($restoreData, 500) as $chunk) {
-                \App\Models\Item::insert($chunk);
-            }
-        }
-        // -----------------------------------------------------------------------
 
-        // 2. Save History Snapshot
-        $history = \App\Models\History::updateOrCreate(
-            ['snapshot_date' => now()->toDateString()],
-            [
-                'sdp_stock' => $summary['sdp_stock'],
-                'in_stock' => $summary['in_stock']['total'],
-                'rented' => $summary['rented_in_customer']['total'],
-                'in_service' => $summary['stock_external_service']['total'] + $summary['stock_internal_service']['total'] + ($summary['stock_insurance']['total'] ?? 0),
-                'summary_json' => $summary,
-            ]
-        );
-        
-        // Force update timestamp even if data is identical (for "Updated X mins ago" display)
-        if ($history->wasRecentlyCreated === false) {
-             $history->touch();
-        }
-        
-        // 3. Update Metadata (optional now as History handles date, but for compat)
-        // We can retire the JSON metadata file usage in Controller.
+            // -- Restore Surat Kuasa units that were not in the main sync dataset --
+            if (!empty($suratKuasaBackup)) {
+                $restoreData = [];
+                foreach ($suratKuasaBackup as $row) {
+                    unset($row['id']); // Remove PK so insert gets a fresh ID
+                    $row['created_at'] = $row['created_at'] ?? now();
+                    $row['updated_at'] = now();
+                    // Decode category_flags if it was cast to array by Eloquent
+                    if (is_array($row['category_flags'])) {
+                        $row['category_flags'] = json_encode($row['category_flags']);
+                    }
+                    $restoreData[] = $row;
+                }
+                foreach (array_chunk($restoreData, 500) as $chunk) {
+                    \App\Models\Item::insert($chunk);
+                }
+            }
+            // -----------------------------------------------------------------------
+
+            // 2. Save History Snapshot
+            $history = \App\Models\History::updateOrCreate(
+                ['snapshot_date' => now()->toDateString()],
+                [
+                    'sdp_stock' => $summary['sdp_stock'],
+                    'in_stock' => $summary['in_stock']['total'],
+                    'rented' => $summary['rented_in_customer']['total'],
+                    'in_service' => $summary['stock_external_service']['total'] + $summary['stock_internal_service']['total'] + ($summary['stock_insurance']['total'] ?? 0),
+                    'summary_json' => $summary,
+                ]
+            );
+
+            // Force update timestamp even if data is identical (for "Updated X mins ago" display)
+            if ($history->wasRecentlyCreated === false) {
+                $history->touch();
+            }
+
+            // 3. Update Metadata (optional now as History handles date, but for compat)
+            // We can retire the JSON metadata file usage in Controller.
         } catch (\Exception $e) {
             // Update import log with failure status
             $importLog->update([
@@ -865,22 +955,23 @@ class SummaryGenerator
 
     private function excelDateToCarbon($serial)
     {
-        if (empty($serial)) return null;
-        
+        if (empty($serial))
+            return null;
+
         try {
             // Handle Excel serial date (numeric)
             if (is_numeric($serial)) {
                 // Excel base date: 1899-12-30
-                $date = \Carbon\Carbon::create(1899, 12, 30)->addDays((int)$serial);
+                $date = \Carbon\Carbon::create(1899, 12, 30)->addDays((int) $serial);
                 return $date->format('Y-m-d');
             }
-            
+
             // Handle ISO date string from Odoo (e.g., '2026-02-06' or '2026-02-06 00:00:00')
             if (is_string($serial)) {
                 $date = \Carbon\Carbon::parse($serial);
                 return $date->format('Y-m-d');
             }
-            
+
             return null;
         } catch (\Exception $e) {
             return null;
@@ -893,26 +984,28 @@ class SummaryGenerator
      */
     private function compareDateToToday($dateValue): ?int
     {
-        if (empty($dateValue)) return null;
-        
+        if (empty($dateValue))
+            return null;
+
         try {
             $today = \Carbon\Carbon::now()->startOfDay();
-            
+
             // Handle Excel serial date (numeric)
             if (is_numeric($dateValue)) {
                 $baseDate = \Carbon\Carbon::create(1899, 12, 30);
-                $date = $baseDate->copy()->addDays((int)$dateValue)->startOfDay();
+                $date = $baseDate->copy()->addDays((int) $dateValue)->startOfDay();
             }
             // Handle ISO date string from Odoo
             elseif (is_string($dateValue)) {
                 $date = \Carbon\Carbon::parse($dateValue)->startOfDay();
-            }
-            else {
+            } else {
                 return null;
             }
-            
-            if ($date->lt($today)) return -1;
-            if ($date->gt($today)) return 1;
+
+            if ($date->lt($today))
+                return -1;
+            if ($date->gt($today))
+                return 1;
             return 0;
         } catch (\Exception $e) {
             return null;
