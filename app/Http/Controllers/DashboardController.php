@@ -16,6 +16,9 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
         if ($user && !$user->hasMenuPermission('dashboard')) {
+            if ($user->canAccessSmd()) {
+                return redirect()->route('lor.smd');
+            }
             if ($user->hasMenuPermission('crm')) {
                 return redirect()->route('crm.index');
             }
@@ -36,6 +39,9 @@ class DashboardController extends Controller
             }
             if ($user->hasMenuPermission('in-service')) {
                 return redirect()->route('details', ['category' => 'in_service']);
+            }
+            if ($user->hasMenuPermission('surat-kuasa')) {
+                return redirect()->route('surat-kuasa.index');
             }
             abort(403, 'Access Denied: You do not have permission to view any dashboard pages.');
         }

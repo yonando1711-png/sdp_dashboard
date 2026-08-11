@@ -69,7 +69,6 @@
                             </div>
                         </label>
                     </div>
-                    </div>
                 </div>
 
                 <!-- Dashboard Visibility -->
@@ -174,6 +173,84 @@
                     <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         Save Targets
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Surat Kuasa Settings Card -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gradient-to-br from-cyan-500 to-indigo-500 rounded-lg">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Surat Kuasa Configuration</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Configure Pemberi Kuasa signatories, owner address fallbacks, and access password</p>
+                    </div>
+                </div>
+            </div>
+
+            <form action="{{ route('settings.surat-kuasa') }}" method="POST" class="p-6 space-y-6">
+                @csrf
+                
+                <!-- Pemberi Kuasa 1 & 2 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Pemberi Kuasa 1 -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
+                        <h3 class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pemberi Kuasa 1</h3>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama</label>
+                            <input type="text" name="pemberi_1_nama" value="{{ $suratKuasa['pemberi_1_nama'] }}" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jabatan</label>
+                            <input type="text" name="pemberi_1_jabatan" value="{{ $suratKuasa['pemberi_1_jabatan'] }}" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                        </div>
+                    </div>
+
+                    <!-- Pemberi Kuasa 2 -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
+                        <h3 class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Pemberi Kuasa 2</h3>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama</label>
+                            <input type="text" name="pemberi_2_nama" value="{{ $suratKuasa['pemberi_2_nama'] }}" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Jabatan</label>
+                            <input type="text" name="pemberi_2_jabatan" value="{{ $suratKuasa['pemberi_2_jabatan'] }}" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Addresses & Owner -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Pemberi Kuasa</label>
+                        <textarea name="pemberi_alamat" required rows="2" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">{{ $suratKuasa['pemberi_alamat'] }}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Pemilik Kendaraan</label>
+                        <input type="text" name="pemilik_nama" value="{{ $suratKuasa['pemilik_nama'] }}" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Pemilik Kendaraan <span class="text-slate-400 font-normal">(Nullable / Optional)</span></label>
+                        <textarea name="pemilik_alamat" rows="2" placeholder="Leave empty or enter address fallback" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">{{ $suratKuasa['pemilik_alamat'] }}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Default Recipient Email Address(es) <span class="text-slate-400 font-normal">(Comma-separated for multiple)</span></label>
+                        <input type="text" name="default_recipient_email" value="{{ $suratKuasa['default_recipient_email'] ?? '' }}" placeholder="e.g. client@company.com, manager@company.com" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 dark:shadow-none flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Save Surat Kuasa Settings
                     </button>
                 </div>
             </form>
