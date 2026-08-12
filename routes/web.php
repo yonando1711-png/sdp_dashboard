@@ -81,6 +81,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/surat-kuasa/download-docx/{id}', [SuratKuasaController::class, 'downloadDocx'])->name('surat-kuasa.download-docx');
         Route::get('/surat-kuasa/download-pdf/{id}', [SuratKuasaController::class, 'downloadPdf'])->name('surat-kuasa.download-pdf');
         Route::post('/surat-kuasa/email/{id}', [SuratKuasaController::class, 'sendEmail'])->name('surat-kuasa.send-email');
+        Route::post('/surat-kuasa/test-email', [SuratKuasaController::class, 'testEmail'])->name('surat-kuasa.test-email');
         Route::get('/surat-kuasa/export', [SuratKuasaController::class, 'export'])->name('surat-kuasa.export');
         Route::post('/settings/surat-kuasa-password', [SuratKuasaController::class, 'updatePassword'])->name('surat-kuasa.settings.update');
     });

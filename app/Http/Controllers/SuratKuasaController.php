@@ -1006,6 +1006,42 @@ class SuratKuasaController extends Controller
     }
 
     /**
+     * Send a test email to verify SMTP configuration
+     */
+    public function testEmail(Request $request)
+    {
+        if (!$this->checkSuratKuasaSession()) {
+            return response()->json(['success' => false, 'message' => 'Session expired.'], 401);
+        }
+
+        try {
+            $recipientEmail = \App\Models\Setting::get('surat_kuasa_default_recipient_email', '');
+            
+            // Parse multiple email recipients separated by comma or semicolon
+            $recipients = array_map('trim', preg_split('/[,;]+/', $recipientEmail));
+            $recipients = array_values(array_filter($recipients, function($e) {
+                return filter_var($e, FILTER_VALIDATE_EMAIL);
+            }));
+
+            if (empty($recipients)) {
+                return response()->json(['success' => false, 'message' => 'Please configure a valid Default Recipient Email Address in Settings.'], 422);
+            }
+            
+            \Illuminate\Support\Facades\Mail::raw('This is a test email from the SDP Dashboard Surat Kuasa module to verify SMTP settings are working correctly.', function ($mail) use ($recipients) {
+                foreach ($recipients as $recipient) {
+                    $mail->to($recipient);
+                }
+                $mail->subject('Test Email - SDP Dashboard Surat Kuasa');
+            });
+
+            $recipientStr = implode(', ', $recipients);
+            return response()->json(['success' => true, 'message' => "Test email successfully sent to {$recipientStr}."]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to send test email: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Check if current Surat Kuasa secondary authentication is valid (15 minutes inactivity limit)
      */
     private function checkSuratKuasaSession(): bool
