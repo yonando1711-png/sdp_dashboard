@@ -1951,6 +1951,7 @@ class OdooService
                     'is_on_hand' => true,
                     'is_order_only' => false,
                     'is_vendor_rent' => $isVendorRent,
+                    'surat_kuasa_tracked' => true,
                 ];
             }
 

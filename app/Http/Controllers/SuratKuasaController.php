@@ -30,22 +30,16 @@ class SuratKuasaController extends Controller
         $search = $request->input('search');
 
         // Query Lot/Serial vehicle units fulfilling conditions:
-        // 1. on_hand_quantity == 0
-        // 2. BOTH No Rangka (internal_reference) AND No Mesin (engine_number) are empty
-        // 3. Exclude Vendor Rent (is_vendor_rent == false)
+        // 1. on_hand_quantity == 0 AND surat_kuasa_tracked == true (units being tracked for Surat Kuasa)
+        // 2. Exclude Vendor Rent (is_vendor_rent == false)
+        // NOTE: Units with rangka/mesin filled stay in the list with ✅ status (ready to generate SK)
+        //       Units with empty rangka/mesin show ❌ status (waiting for Odoo data)
         $query = Item::forUserBranch()
             ->where('on_hand_quantity', 0)
+            ->where('surat_kuasa_tracked', true)
             ->where(function ($q) {
                 $q->whereNull('is_vendor_rent')
                     ->orWhere('is_vendor_rent', false);
-            })
-            ->where(function ($q) {
-                $q->whereNull('internal_reference')
-                    ->orWhere('internal_reference', '');
-            })
-            ->where(function ($q) {
-                $q->whereNull('engine_number')
-                    ->orWhere('engine_number', '');
             });
 
         if ($search) {
@@ -148,10 +142,18 @@ class SuratKuasaController extends Controller
 
                 $existing = Item::where('lot_number', $itemData['lot_number'])->first();
 
+                $refEmpty = empty($itemData['internal_reference']);
+                $engEmpty = empty($itemData['engine_number']);
+                $shouldTrack = $refEmpty || $engEmpty;
+
                 if ($existing) {
                     $existing->on_hand_quantity = 0;
                     $existing->is_on_hand = true;
                     $existing->is_order_only = false;
+                    // Keep tracking if already tracked, OR start tracking if missing rangka/mesin
+                    if ($existing->surat_kuasa_tracked || $shouldTrack) {
+                        $existing->surat_kuasa_tracked = true;
+                    }
                     if (!empty($itemData['internal_reference']))
                         $existing->internal_reference = $itemData['internal_reference'];
                     if (!empty($itemData['engine_number']))
@@ -166,27 +168,40 @@ class SuratKuasaController extends Controller
                         $existing->location = $itemData['location'];
                     $existing->save();
                 } else {
+                    $itemData['surat_kuasa_tracked'] = $shouldTrack;
                     Item::create($itemData);
                 }
                 $syncedCount++;
             }
 
-            $suratKuasaCount = Item::forUserBranch()
+            // Auto-reconcile: remove local SK tracking for lots no longer returned by Odoo SK fetch
+            $activeSkLots = collect($records)->pluck('lot_number')->filter()->toArray();
+            Item::where('surat_kuasa_tracked', true)
+                ->whereNotIn('lot_number', $activeSkLots)
+                ->update(['surat_kuasa_tracked' => false]);
+
+            $totalSK = Item::forUserBranch()
                 ->where('on_hand_quantity', 0)
+                ->where('surat_kuasa_tracked', true)
+                ->where(function ($q) {
+                    $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
+                })->count();
+
+            $readySK = Item::forUserBranch()
+                ->where('on_hand_quantity', 0)
+                ->where('surat_kuasa_tracked', true)
                 ->where(function ($q) {
                     $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
                 })
-                ->where(function ($q) {
-                    $q->whereNull('internal_reference')->orWhere('internal_reference', '');
-                })
-                ->where(function ($q) {
-                    $q->whereNull('engine_number')->orWhere('engine_number', '');
-                })->count();
+                ->whereNotNull('internal_reference')->where('internal_reference', '!=', '')
+                ->whereNotNull('engine_number')->where('engine_number', '!=', '')->count();
+
+            $pendingSK = $totalSK - $readySK;
 
             return response()->json([
                 'success' => true,
-                'message' => "Successfully synced Odoo! Found {$suratKuasaCount} Surat Kuasa vehicle units awaiting STNK & BPKB processing.",
-                'updated_count' => $suratKuasaCount
+                'message' => "Successfully synced Odoo! Found {$totalSK} Surat Kuasa units ({$readySK} ready to generate, {$pendingSK} awaiting No. Rangka & No. Mesin).",
+                'updated_count' => $totalSK
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Surat Kuasa Sync failed: ' . $e->getMessage()], 500);
@@ -220,8 +235,16 @@ class SuratKuasaController extends Controller
 
                 $existing = Item::where('lot_number', $itemData['lot_number'])->first();
 
+                $refEmpty = empty($itemData['internal_reference']);
+                $engEmpty = empty($itemData['engine_number']);
+                $shouldTrack = $refEmpty || $engEmpty;
+
                 if ($existing) {
                     $hasChanges = false;
+
+                    if ($existing->surat_kuasa_tracked || $shouldTrack) {
+                        $existing->surat_kuasa_tracked = true;
+                    }
 
                     if (!empty($itemData['internal_reference']) && $existing->internal_reference !== $itemData['internal_reference']) {
                         $existing->internal_reference = $itemData['internal_reference'];
@@ -238,28 +261,44 @@ class SuratKuasaController extends Controller
                         $hasChanges = true;
                     }
 
-                    if ($hasChanges) {
+                    if ($hasChanges || $existing->isDirty()) {
                         $existing->save();
-                        $updatedCount++;
+                        if ($hasChanges) {
+                            $updatedCount++;
+                        }
                     }
+                } else {
+                    $itemData['surat_kuasa_tracked'] = $shouldTrack;
+                    Item::create($itemData);
+                    $updatedCount++;
                 }
             }
 
-            $suratKuasaCount = Item::forUserBranch()
+            // Auto-reconcile: remove local SK tracking for lots no longer returned by Odoo SK fetch
+            $activeSkLots = collect($records)->pluck('lot_number')->filter()->toArray();
+            Item::where('surat_kuasa_tracked', true)
+                ->whereNotIn('lot_number', $activeSkLots)
+                ->update(['surat_kuasa_tracked' => false]);
+
+            $totalSK = Item::forUserBranch()
                 ->where('on_hand_quantity', 0)
+                ->where('surat_kuasa_tracked', true)
+                ->where(function ($q) {
+                    $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
+                })->count();
+
+            $readySK = Item::forUserBranch()
+                ->where('on_hand_quantity', 0)
+                ->where('surat_kuasa_tracked', true)
                 ->where(function ($q) {
                     $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
                 })
-                ->where(function ($q) {
-                    $q->whereNull('internal_reference')->orWhere('internal_reference', '');
-                })
-                ->where(function ($q) {
-                    $q->whereNull('engine_number')->orWhere('engine_number', '');
-                })->count();
+                ->whereNotNull('internal_reference')->where('internal_reference', '!=', '')
+                ->whereNotNull('engine_number')->where('engine_number', '!=', '')->count();
 
             return response()->json([
                 'success' => true,
-                'message' => "Fast Sync completed! Detected & updated {$updatedCount} chassis/engine numbers from Odoo. ({$suratKuasaCount} units in list)",
+                'message' => "Fast Sync completed! Updated {$updatedCount} chassis/engine numbers. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)",
                 'updated_count' => $updatedCount
             ]);
         } catch (\Exception $e) {
