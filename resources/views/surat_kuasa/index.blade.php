@@ -95,6 +95,13 @@
                 <svg x-show="isSyncing" class="w-4 h-4 animate-spin" style="display:none;" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 <span x-text="isSyncing ? 'Syncing...' : 'Fast Sync Odoo'">Fast Sync Odoo</span>
             </button>
+
+            <!-- Button 3: Test Email -->
+            <button type="button" @click="testEmail()" :disabled="isTestingEmail" class="px-4 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2" title="Test SMTP Email Settings">
+                <svg x-show="!isTestingEmail" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <svg x-show="isTestingEmail" class="w-4 h-4 animate-spin" style="display:none;" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span x-text="isTestingEmail ? 'Testing...' : 'Test Email'">Test Email</span>
+            </button>
         </div>
     </div>
 
@@ -430,6 +437,7 @@ function suratKuasaApp() {
         showPreviewModal: false,
         pendingAction: 'word', // 'word' or 'email'
         isGenerating: false,
+        isTestingEmail: false,
 
         emailForm: {
             recipientEmail: {!! json_encode($settings['default_recipient_email'] ?? '') !!},
@@ -592,6 +600,34 @@ function suratKuasaApp() {
                 alert('Fast Sync failed: ' + e.message);
             } finally {
                 this.isSyncing = false;
+            }
+        },
+
+        async testEmail() {
+            if (this.isTestingEmail) return;
+            this.isTestingEmail = true;
+
+            try {
+                const response = await fetch('{{ route('surat-kuasa.test-email') }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                } else {
+                    alert('Test Email error: ' + (result.message || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Test Email failed: ' + e.message);
+            } finally {
+                this.isTestingEmail = false;
             }
         }
     };
