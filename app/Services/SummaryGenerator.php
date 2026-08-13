@@ -845,7 +845,27 @@ class SummaryGenerator
                 ->whereNotIn('lot_number', array_keys($incomingLotNumbers))
                 ->get()
                 ->toArray();
+
+            // -- Cross-check backed-up SK units against live Odoo SK fetch to remove orphaned/renamed lots --
+            if (!empty($suratKuasaBackup)) {
+                try {
+                    $odooService = app(\App\Services\OdooService::class);
+                    $odooSkRes = $odooService->fetchSuratKuasaUnits();
+                    if ($odooSkRes['success'] && !empty($odooSkRes['data'])) {
+                        $odooSkLotNumbers = collect($odooSkRes['data'])->pluck('lot_number')->filter()->flip()->toArray();
+                        // Only restore units that still exist in Odoo's SK list (lot_number renamed units won't be here)
+                        $suratKuasaBackup = array_filter($suratKuasaBackup, function ($row) use ($odooSkLotNumbers) {
+                            return isset($odooSkLotNumbers[$row['lot_number']]);
+                        });
+                    }
+                } catch (\Exception $e) {
+                    // If Odoo call fails, fall back to restoring all backed-up SK units (safe degradation)
+                    \Illuminate\Support\Facades\Log::warning('SK backup Odoo validation failed, restoring all: ' . $e->getMessage());
+                }
+            }
             // -----------------------------------------------------------------------
+
+            $trackedLotNumbers = \App\Models\Item::where('surat_kuasa_tracked', true)->pluck('lot_number')->filter()->flip()->toArray();
 
             \App\Models\Item::truncate();
 
@@ -898,6 +918,7 @@ class SummaryGenerator
                         'sales_team' => $item['sales_team'] ?? null,
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
+                        'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']]),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];

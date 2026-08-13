@@ -19,6 +19,7 @@ class Item extends Model
         'in_stock' => 'boolean',
         'is_sold' => 'boolean',
         'is_active_rental' => 'boolean',
+        'surat_kuasa_tracked' => 'boolean',
         'actual_start_rental' => 'date',
         'actual_end_rental' => 'date',
         'category_flags' => 'array',
