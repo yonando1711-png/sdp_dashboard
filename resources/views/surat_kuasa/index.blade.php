@@ -71,6 +71,81 @@
 
         <!-- Action Controls & Search -->
         <div class="flex flex-wrap items-center gap-3">
+            <!-- Notification Bell Icon & Recent Sync Updates Dropdown -->
+            <div class="relative" x-data="{
+                showNotifications: false,
+                readUpdates: JSON.parse(localStorage.getItem('readSkUpdates') || '[]'),
+                get unreadCount() {
+                    return notificationsList.filter(u => !this.readUpdates.includes(u.key)).length;
+                },
+                markAsRead(key) {
+                    if (!this.readUpdates.includes(key)) {
+                        this.readUpdates.push(key);
+                        localStorage.setItem('readSkUpdates', JSON.stringify(this.readUpdates));
+                    }
+                },
+                markAllAsRead() {
+                    notificationsList.forEach(u => {
+                        if (!this.readUpdates.includes(u.key)) {
+                            this.readUpdates.push(u.key);
+                        }
+                    });
+                    localStorage.setItem('readSkUpdates', JSON.stringify(this.readUpdates));
+                }
+            }" @click.away="showNotifications = false">
+                
+                <button @click="showNotifications = !showNotifications" type="button" class="relative inline-flex items-center justify-center p-2.5 text-slate-400 hover:text-indigo-400 bg-slate-50 dark:bg-[#050913] border border-slate-200 dark:border-slate-800 rounded-2xl transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" title="Recent Surat Kuasa Sync Updates">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    <span class="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4" x-show="unreadCount > 0" style="display: none;">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-4 w-4 bg-indigo-600 text-[10px] text-white font-extrabold items-center justify-center" x-text="unreadCount"></span>
+                    </span>
+                </button>
+
+                <div x-show="showNotifications" x-transition style="display: none;" class="absolute right-0 sm:right-auto sm:left-0 mt-3 w-80 md:w-96 bg-white dark:bg-[#0d1322] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden text-left z-50">
+                    <div class="p-4 bg-slate-50 dark:bg-[#050913] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <div>
+                            <h3 class="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                Recent Sync Updates
+                            </h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Changes detected in the last sync.</p>
+                        </div>
+                        <button @click="markAllAsRead()" x-show="unreadCount > 0" type="button" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold transition-colors">Mark all as read</button>
+                    </div>
+
+                    <div class="max-h-80 overflow-y-auto p-2 space-y-1">
+                        <template x-for="item in notificationsList" :key="item.key">
+                            <div @mouseenter="markAsRead(item.key)" 
+                                 class="p-3 rounded-2xl transition-all border-l-4 cursor-default text-xs"
+                                 :class="readUpdates.includes(item.key) ? 'bg-slate-50/50 dark:bg-slate-800/20 border-slate-300 dark:border-slate-700 opacity-80' : 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-500 shadow-sm'">
+                                <div class="flex items-center justify-between font-bold text-slate-900 dark:text-slate-100 font-mono">
+                                    <span x-text="item.lot_number"></span>
+                                    <span :class="item.is_ready ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'" class="px-2 py-0.5 rounded-lg text-[10px] font-extrabold border" x-text="item.status_label"></span>
+                                </div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium" x-text="item.product"></div>
+                                <div class="mt-1.5 space-y-0.5">
+                                    <template x-for="change in item.changes">
+                                        <div class="text-[11px] text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block"></span>
+                                            <span x-text="change"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template x-if="notificationsList.length === 0">
+                            <div class="text-center py-8 px-4">
+                                <svg class="w-8 h-8 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No new changes detected.</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Everything is up to date!</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
             <form method="GET" action="{{ route('surat-kuasa.index') }}" class="flex items-center gap-2">
                 <div class="relative min-w-[240px]">
                     <input type="text" name="search" value="{{ $search }}" placeholder="Search Lot, Product, Frame/Engine..." class="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">
@@ -427,6 +502,95 @@
         </div>
     </div>
     @endif
+
+    <!-- STEP 3: SYNC NOTIFICATION & CHANGE DETAILS MODAL -->
+    <div x-show="showSyncNotifModal" style="display: none;" class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md" x-transition>
+        <div @click.away="closeSyncNotifModal()" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-3xl shadow-2xl space-y-5 text-slate-900 dark:text-slate-100 max-h-[90vh] flex flex-col">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 font-bold text-lg">
+                        ✓
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Odoo Sync Completed</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium" x-text="syncNotifData.message"></p>
+                    </div>
+                </div>
+                <button type="button" @click="closeSyncNotifModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Stats Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total SK Units</div>
+                    <div class="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5" x-text="syncNotifData.total_sk">0</div>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                    <div class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Ready to Generate</div>
+                    <div class="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5" x-text="syncNotifData.ready_sk">0</div>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                    <div class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Awaiting Data</div>
+                    <div class="text-lg font-extrabold text-amber-600 dark:text-amber-400 mt-0.5" x-text="syncNotifData.pending_sk">0</div>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20">
+                    <div class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Units Updated</div>
+                    <div class="text-lg font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5" x-text="syncNotifData.updated_count">0</div>
+                </div>
+            </div>
+
+            <!-- Changes Detail Table -->
+            <div class="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1">
+                <div class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Changed & Updated Lot Numbers Summary</div>
+                
+                <template x-if="syncNotifData.changes && syncNotifData.changes.length > 0">
+                    <div class="space-y-2">
+                        <template x-for="item in syncNotifData.changes" :key="item.lot_number">
+                            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-slate-900 dark:text-white font-mono" x-text="item.lot_number"></span>
+                                        <span x-show="item.is_new" class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 text-[10px] font-bold border border-cyan-500/20">NEW</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5" x-text="item.product"></div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <template x-for="c in item.changes">
+                                            <span class="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 text-[10px] font-semibold" x-text="c"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="flex-shrink-0 text-right">
+                                    <span :class="item.is_ready ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'" class="px-2.5 py-1 rounded-xl text-[11px] font-extrabold border inline-flex items-center gap-1" x-text="item.status_label">
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template x-if="!syncNotifData.changes || syncNotifData.changes.length === 0">
+                    <div class="p-6 text-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <svg class="w-8 h-8 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p class="text-xs font-bold">All units are up-to-date.</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">No chassis or engine numbers were changed in Odoo during this sync.</p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Footer Action -->
+            <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button type="button" @click="closeSyncNotifModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all">
+                    Dismiss
+                </button>
+                <button type="button" @click="applyAndReload()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white text-xs font-extrabold shadow-md transition-all">
+                    Refresh Table & Apply Changes
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -435,9 +599,29 @@ function suratKuasaApp() {
         isSyncing: false,
         showGeneratorModal: false,
         showPreviewModal: false,
+        showSyncNotifModal: false,
         pendingAction: 'word', // 'word' or 'email'
         isGenerating: false,
         isTestingEmail: false,
+
+        notificationsList: {!! json_encode($recentNotifications ?? []) !!},
+
+        syncNotifData: {
+            message: '',
+            total_sk: 0,
+            ready_sk: 0,
+            pending_sk: 0,
+            updated_count: 0,
+            changes: []
+        },
+
+        closeSyncNotifModal() {
+            this.showSyncNotifModal = false;
+        },
+
+        applyAndReload() {
+            window.location.reload();
+        },
 
         emailForm: {
             recipientEmail: {!! json_encode($settings['default_recipient_email'] ?? '') !!},
@@ -562,8 +746,15 @@ function suratKuasaApp() {
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(result.message);
-                    window.location.reload();
+                    this.syncNotifData = {
+                        message: result.message,
+                        total_sk: result.total_sk || 0,
+                        ready_sk: result.ready_sk || 0,
+                        pending_sk: result.pending_sk || 0,
+                        updated_count: result.updated_count || 0,
+                        changes: result.changes || []
+                    };
+                    this.showSyncNotifModal = true;
                 } else {
                     alert('Sync error: ' + result.message);
                 }
@@ -591,8 +782,15 @@ function suratKuasaApp() {
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(result.message);
-                    window.location.reload();
+                    this.syncNotifData = {
+                        message: result.message,
+                        total_sk: result.total_sk || 0,
+                        ready_sk: result.ready_sk || 0,
+                        pending_sk: result.pending_sk || 0,
+                        updated_count: result.updated_count || 0,
+                        changes: result.changes || []
+                    };
+                    this.showSyncNotifModal = true;
                 } else {
                     alert('Fast Sync error: ' + result.message);
                 }
