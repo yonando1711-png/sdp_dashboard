@@ -31,6 +31,7 @@ class Item extends Model
         'repair_estimation_end' => 'date',
         'repair_odometer' => 'integer',
         'purchase_date' => 'date',
+        'last_invoice_date' => 'date',
     ];
 
     protected static function booted()

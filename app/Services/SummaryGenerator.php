@@ -716,9 +716,24 @@ class SummaryGenerator
         }
         $summary['rental_pairs_count'] = $rentalPairsCount;
 
-        // Populate unique rental contract counts
-        $summary['unique_rental_contracts']['Subscription'] = count($uniqueSubscriptionRentals) + $nonIdSubscriptionItems;
-        $summary['unique_rental_contracts']['Regular'] = count($uniqueRegularRentals) + $nonIdRegularItems;
+        // Bulk fetch Last Invoice Dates from Odoo
+        try {
+            $allRentalNames = collect($items)->pluck('rental_id')->filter()->unique()->values()->toArray();
+            if (!empty($allRentalNames)) {
+                $odoo = app(\App\Services\OdooService::class);
+                $lastInvMap = $odoo->fetchLastInvoiceDatesForRentalOrders($allRentalNames);
+                if (!empty($lastInvMap)) {
+                    foreach ($items as &$it) {
+                        $rid = $it['rental_id'] ?? null;
+                        if ($rid && isset($lastInvMap[$rid])) {
+                            $it['last_invoice_date'] = $lastInvMap[$rid];
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $exInv) {
+            \Log::warning('Could not bulk fetch last invoice dates: ' . $exInv->getMessage());
+        }
 
         return ['summary' => $summary, 'items' => $items];
     }

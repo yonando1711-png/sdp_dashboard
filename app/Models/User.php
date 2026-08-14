@@ -23,6 +23,8 @@ class User extends Authenticatable
         'role',
         'menu_permissions',
         'can_view_lor_smd',
+        'can_view_smd_last_invoice_date',
+        'can_export_lor_smd',
         'allowed_salespersons',
         'allowed_sales_teams',
     ];
@@ -49,6 +51,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'menu_permissions' => 'array',
             'can_view_lor_smd' => 'boolean',
+            'can_view_smd_last_invoice_date' => 'boolean',
+            'can_export_lor_smd' => 'boolean',
             'allowed_salespersons' => 'array',
             'allowed_sales_teams' => 'array',
         ];
@@ -68,6 +72,22 @@ class User extends Authenticatable
     public function canAccessSmd(): bool
     {
         return $this->isItAdmin() || (bool) $this->can_view_lor_smd;
+    }
+
+    /**
+     * Check if user can view Last Invoice Date on LoR (SMD)
+     */
+    public function canViewSmdLastInvoiceDate(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_view_smd_last_invoice_date);
+    }
+
+    /**
+     * Check if user can export data on LoR (SMD)
+     */
+    public function canExportSmd(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_export_lor_smd);
     }
 
     /**
