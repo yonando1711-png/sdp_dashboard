@@ -70,12 +70,39 @@ class SuratKuasaController extends Controller
             'default_recipient_email' => Setting::get('surat_kuasa_default_recipient_email', ''),
         ];
 
+        // Fetch recent sync updates for notification bell
+        $recentNotifications = Item::where('surat_kuasa_tracked', true)
+            ->where(function ($q) {
+                $q->whereNotNull('internal_reference')->where('internal_reference', '!=', '')
+                    ->orWhereNotNull('engine_number')->where('engine_number', '!=', '');
+            })
+            ->latest('updated_at')
+            ->limit(15)
+            ->get()
+            ->map(function ($item) {
+                $isReady = !empty($item->internal_reference) && !empty($item->engine_number);
+                $changes = [];
+                if (!empty($item->internal_reference)) $changes[] = "No. Rangka: " . $item->internal_reference;
+                if (!empty($item->engine_number)) $changes[] = "No. Mesin: " . $item->engine_number;
+                return [
+                    'key' => 'sk_' . $item->id . '_' . strtotime($item->updated_at),
+                    'lot_number' => $item->lot_number,
+                    'product' => $item->product,
+                    'internal_reference' => $item->internal_reference,
+                    'engine_number' => $item->engine_number,
+                    'changes' => $changes,
+                    'is_ready' => $isReady,
+                    'status_label' => $isReady ? 'Ready to Generate' : 'Awaiting Data',
+                ];
+            })->values();
+
         return view('surat_kuasa.index', [
             'authenticated' => true,
             'items' => $items,
             'generatedItemIds' => $generatedItemIds,
             'settings' => $settings,
-            'search' => $search
+            'search' => $search,
+            'recentNotifications' => $recentNotifications
         ]);
     }
 
@@ -130,10 +157,11 @@ class SuratKuasaController extends Controller
 
             $records = $res['data'] ?? [];
             if (empty($records)) {
-                return response()->json(['success' => true, 'message' => 'Sync completed. No matching Surat Kuasa units found in Odoo.', 'updated_count' => 0]);
+                return response()->json(['success' => true, 'message' => 'Sync completed. No matching Surat Kuasa units found in Odoo.', 'updated_count' => 0, 'changes' => []]);
             }
 
             $syncedCount = 0;
+            $changedDetails = [];
 
             foreach ($records as $itemData) {
                 if (empty($itemData['lot_number'])) {
@@ -144,34 +172,91 @@ class SuratKuasaController extends Controller
 
                 $refEmpty = empty($itemData['internal_reference']);
                 $engEmpty = empty($itemData['engine_number']);
-                $shouldTrack = $refEmpty || $engEmpty;
+                $isMissingData = $refEmpty || $engEmpty;
 
                 if ($existing) {
+                    $wasReady = !empty($existing->internal_reference) && !empty($existing->engine_number);
+                    $wasTracked = $existing->surat_kuasa_tracked;
+
+                    // PERSISTENCE RULE:
+                    // Keep tracking if ALREADY tracked (wasTracked == true), OR start tracking if missing rangka/mesin
+                    if ($wasTracked || $isMissingData) {
+                        $existing->surat_kuasa_tracked = true;
+                    }
+
                     $existing->on_hand_quantity = 0;
                     $existing->is_on_hand = true;
                     $existing->is_order_only = false;
-                    // Keep tracking if already tracked, OR start tracking if missing rangka/mesin
-                    if ($existing->surat_kuasa_tracked || $shouldTrack) {
-                        $existing->surat_kuasa_tracked = true;
-                    }
-                    if (!empty($itemData['internal_reference']))
+
+                    $lotChanges = [];
+
+                    if (!empty($itemData['internal_reference']) && $existing->internal_reference !== $itemData['internal_reference']) {
+                        $lotChanges[] = "No. Rangka: " . $itemData['internal_reference'];
                         $existing->internal_reference = $itemData['internal_reference'];
-                    if (!empty($itemData['engine_number']))
+                    }
+
+                    if (!empty($itemData['engine_number']) && $existing->engine_number !== $itemData['engine_number']) {
+                        $lotChanges[] = "No. Mesin: " . $itemData['engine_number'];
                         $existing->engine_number = $itemData['engine_number'];
-                    if (!empty($itemData['product']))
+                    }
+
+                    if (!empty($itemData['product']) && $existing->product !== $itemData['product']) {
                         $existing->product = $itemData['product'];
-                    if (!empty($itemData['year']))
+                    }
+
+                    if (!empty($itemData['year']) && $existing->year !== $itemData['year']) {
                         $existing->year = $itemData['year'];
-                    if (!empty($itemData['current_customer']))
+                    }
+
+                    if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer']) {
                         $existing->current_customer = $itemData['current_customer'];
-                    if (!empty($itemData['location']))
+                    }
+
+                    if (!empty($itemData['location'])) {
                         $existing->location = $itemData['location'];
-                    $existing->save();
+                    }
+
+                    if ($existing->isDirty() || !empty($lotChanges)) {
+                        $existing->save();
+                        if (!empty($lotChanges)) {
+                            $syncedCount++;
+                        }
+                    }
+
+                    $isNowReady = !empty($existing->internal_reference) && !empty($existing->engine_number);
+                    if ($existing->surat_kuasa_tracked && (!empty($lotChanges) || ($isNowReady && !$wasReady))) {
+                        $changedDetails[] = [
+                            'lot_number' => $existing->lot_number,
+                            'product' => $existing->product,
+                            'internal_reference' => $existing->internal_reference,
+                            'engine_number' => $existing->engine_number,
+                            'changes' => !empty($lotChanges) ? $lotChanges : ["Status: Ready to Generate SK"],
+                            'is_ready' => $isNowReady,
+                            'status_label' => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
+                            'is_new' => false,
+                        ];
+                    }
                 } else {
-                    $itemData['surat_kuasa_tracked'] = $shouldTrack;
-                    Item::create($itemData);
+                    // New lot from Odoo: ONLY track if missing No. Rangka or No. Mesin
+                    if ($isMissingData) {
+                        $itemData['surat_kuasa_tracked'] = true;
+                        $itemData['on_hand_quantity'] = 0;
+                        $itemData['is_on_hand'] = true;
+                        $newItem = Item::create($itemData);
+                        $syncedCount++;
+
+                        $changedDetails[] = [
+                            'lot_number' => $newItem->lot_number,
+                            'product' => $newItem->product,
+                            'internal_reference' => $newItem->internal_reference,
+                            'engine_number' => $newItem->engine_number,
+                            'changes' => ["New Staging Unit tracked (awaiting No. Rangka & Mesin)"],
+                            'is_ready' => false,
+                            'status_label' => 'Awaiting Data',
+                            'is_new' => true,
+                        ];
+                    }
                 }
-                $syncedCount++;
             }
 
             // Auto-reconcile: remove local SK tracking for lots no longer returned by Odoo SK fetch
@@ -198,10 +283,18 @@ class SuratKuasaController extends Controller
 
             $pendingSK = $totalSK - $readySK;
 
+            $msg = ($syncedCount > 0)
+                ? "Sync completed! Updated {$syncedCount} chassis/engine number(s). ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)"
+                : "Sync completed! No new chassis/engine numbers updated in Odoo. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)";
+
             return response()->json([
                 'success' => true,
-                'message' => "Successfully synced Odoo! Found {$totalSK} Surat Kuasa units ({$readySK} ready to generate, {$pendingSK} awaiting No. Rangka & No. Mesin).",
-                'updated_count' => $totalSK
+                'message' => $msg,
+                'updated_count' => $syncedCount,
+                'total_sk' => $totalSK,
+                'ready_sk' => $readySK,
+                'pending_sk' => $pendingSK,
+                'changes' => $changedDetails,
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Surat Kuasa Sync failed: ' . $e->getMessage()], 500);
@@ -227,6 +320,7 @@ class SuratKuasaController extends Controller
 
             $records = $res['data'] ?? [];
             $updatedCount = 0;
+            $changedDetails = [];
 
             foreach ($records as $itemData) {
                 if (empty($itemData['lot_number'])) {
@@ -237,40 +331,82 @@ class SuratKuasaController extends Controller
 
                 $refEmpty = empty($itemData['internal_reference']);
                 $engEmpty = empty($itemData['engine_number']);
-                $shouldTrack = $refEmpty || $engEmpty;
+                $isMissingData = $refEmpty || $engEmpty;
 
                 if ($existing) {
-                    $hasChanges = false;
+                    $wasReady = !empty($existing->internal_reference) && !empty($existing->engine_number);
+                    $wasTracked = $existing->surat_kuasa_tracked;
 
-                    if ($existing->surat_kuasa_tracked || $shouldTrack) {
+                    // PERSISTENCE RULE:
+                    // Keep tracking if ALREADY tracked (wasTracked == true), OR start tracking if missing rangka/mesin
+                    if ($wasTracked || $isMissingData) {
                         $existing->surat_kuasa_tracked = true;
                     }
 
+                    $lotChanges = [];
+
                     if (!empty($itemData['internal_reference']) && $existing->internal_reference !== $itemData['internal_reference']) {
+                        $lotChanges[] = "No. Rangka: " . $itemData['internal_reference'];
                         $existing->internal_reference = $itemData['internal_reference'];
-                        $hasChanges = true;
                     }
 
                     if (!empty($itemData['engine_number']) && $existing->engine_number !== $itemData['engine_number']) {
+                        $lotChanges[] = "No. Mesin: " . $itemData['engine_number'];
                         $existing->engine_number = $itemData['engine_number'];
-                        $hasChanges = true;
                     }
 
                     if (!empty($itemData['year']) && $existing->year !== $itemData['year']) {
                         $existing->year = $itemData['year'];
-                        $hasChanges = true;
                     }
 
-                    if ($hasChanges || $existing->isDirty()) {
+                    if (!empty($itemData['product']) && $existing->product !== $itemData['product']) {
+                        $existing->product = $itemData['product'];
+                    }
+
+                    if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer']) {
+                        $existing->current_customer = $itemData['current_customer'];
+                    }
+
+                    if ($existing->isDirty() || !empty($lotChanges)) {
                         $existing->save();
-                        if ($hasChanges) {
+                        if (!empty($lotChanges)) {
                             $updatedCount++;
                         }
                     }
+
+                    $isNowReady = !empty($existing->internal_reference) && !empty($existing->engine_number);
+                    if ($existing->surat_kuasa_tracked && (!empty($lotChanges) || ($isNowReady && !$wasReady))) {
+                        $changedDetails[] = [
+                            'lot_number' => $existing->lot_number,
+                            'product' => $existing->product,
+                            'internal_reference' => $existing->internal_reference,
+                            'engine_number' => $existing->engine_number,
+                            'changes' => !empty($lotChanges) ? $lotChanges : ["Status: Ready to Generate SK"],
+                            'is_ready' => $isNowReady,
+                            'status_label' => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
+                            'is_new' => false,
+                        ];
+                    }
                 } else {
-                    $itemData['surat_kuasa_tracked'] = $shouldTrack;
-                    Item::create($itemData);
-                    $updatedCount++;
+                    // New lot from Odoo: ONLY track if missing No. Rangka or No. Mesin
+                    if ($isMissingData) {
+                        $itemData['surat_kuasa_tracked'] = true;
+                        $itemData['on_hand_quantity'] = 0;
+                        $itemData['is_on_hand'] = true;
+                        $newItem = Item::create($itemData);
+                        $updatedCount++;
+
+                        $changedDetails[] = [
+                            'lot_number' => $newItem->lot_number,
+                            'product' => $newItem->product,
+                            'internal_reference' => $newItem->internal_reference,
+                            'engine_number' => $newItem->engine_number,
+                            'changes' => ["New Staging Unit tracked (awaiting No. Rangka & Mesin)"],
+                            'is_ready' => false,
+                            'status_label' => 'Awaiting Data',
+                            'is_new' => true,
+                        ];
+                    }
                 }
             }
 
@@ -296,10 +432,20 @@ class SuratKuasaController extends Controller
                 ->whereNotNull('internal_reference')->where('internal_reference', '!=', '')
                 ->whereNotNull('engine_number')->where('engine_number', '!=', '')->count();
 
+            $pendingSK = $totalSK - $readySK;
+
+            $msg = ($updatedCount > 0)
+                ? "Fast Sync completed! Updated {$updatedCount} chassis/engine number(s). ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)"
+                : "Fast Sync completed! No new chassis/engine numbers updated in Odoo. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)";
+
             return response()->json([
                 'success' => true,
-                'message' => "Fast Sync completed! Updated {$updatedCount} chassis/engine numbers. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)",
-                'updated_count' => $updatedCount
+                'message' => $msg,
+                'updated_count' => $updatedCount,
+                'total_sk' => $totalSK,
+                'ready_sk' => $readySK,
+                'pending_sk' => $pendingSK,
+                'changes' => $changedDetails,
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Fast Sync failed: ' . $e->getMessage()], 500);
@@ -887,7 +1033,7 @@ class SuratKuasaController extends Controller
 
             // Parse multiple email recipients separated by comma or semicolon
             $recipients = array_map('trim', preg_split('/[,;]+/', $recipientEmail));
-            $recipients = array_values(array_filter($recipients, function($e) {
+            $recipients = array_values(array_filter($recipients, function ($e) {
                 return filter_var($e, FILTER_VALIDATE_EMAIL);
             }));
 
@@ -900,7 +1046,7 @@ class SuratKuasaController extends Controller
                     $mail->to($recipient);
                 }
                 $mail->subject($customSubject)
-                     ->attach($filePath, ['as' => $filename, 'mime' => $mimeType]);
+                    ->attach($filePath, ['as' => $filename, 'mime' => $mimeType]);
             });
 
             @unlink($filePath);
@@ -1055,17 +1201,17 @@ class SuratKuasaController extends Controller
 
         try {
             $recipientEmail = \App\Models\Setting::get('surat_kuasa_default_recipient_email', '');
-            
+
             // Parse multiple email recipients separated by comma or semicolon
             $recipients = array_map('trim', preg_split('/[,;]+/', $recipientEmail));
-            $recipients = array_values(array_filter($recipients, function($e) {
+            $recipients = array_values(array_filter($recipients, function ($e) {
                 return filter_var($e, FILTER_VALIDATE_EMAIL);
             }));
 
             if (empty($recipients)) {
                 return response()->json(['success' => false, 'message' => 'Please configure a valid Default Recipient Email Address in Settings.'], 422);
             }
-            
+
             \Illuminate\Support\Facades\Mail::raw('This is a test email from the SDP Dashboard Surat Kuasa module to verify SMTP settings are working correctly.', function ($mail) use ($recipients) {
                 foreach ($recipients as $recipient) {
                     $mail->to($recipient);
