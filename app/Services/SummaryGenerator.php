@@ -834,35 +834,18 @@ class SummaryGenerator
             }
 
             // 1. Save Items
-            // -- Preserve Surat Kuasa units (qty=0, is_on_hand=true, not vendor_rent) before wipe --
+            // -- Preserve Surat Kuasa tracked units before wipe --
+            // Primary criterion: surat_kuasa_tracked = true (set by SK sync operations)
+            // Also includes broad SK candidates (qty=0, not vendor_rent, not in incoming data) for safety
             $incomingLotNumbers = collect($items)->pluck('lot_number')->filter()->flip()->toArray();
 
-            $suratKuasaBackup = \App\Models\Item::where('on_hand_quantity', 0)
-                ->where('is_on_hand', true)
-                ->where(function ($q) {
-                    $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false);
+            $suratKuasaBackup = \App\Models\Item::where(function ($q) use ($incomingLotNumbers) {
+                    $q->where('surat_kuasa_tracked', true)
+                      ->whereNotIn('lot_number', array_keys($incomingLotNumbers));
                 })
-                ->whereNotIn('lot_number', array_keys($incomingLotNumbers))
                 ->get()
                 ->toArray();
 
-            // -- Cross-check backed-up SK units against live Odoo SK fetch to remove orphaned/renamed lots --
-            if (!empty($suratKuasaBackup)) {
-                try {
-                    $odooService = app(\App\Services\OdooService::class);
-                    $odooSkRes = $odooService->fetchSuratKuasaUnits();
-                    if ($odooSkRes['success'] && !empty($odooSkRes['data'])) {
-                        $odooSkLotNumbers = collect($odooSkRes['data'])->pluck('lot_number')->filter()->flip()->toArray();
-                        // Only restore units that still exist in Odoo's SK list (lot_number renamed units won't be here)
-                        $suratKuasaBackup = array_filter($suratKuasaBackup, function ($row) use ($odooSkLotNumbers) {
-                            return isset($odooSkLotNumbers[$row['lot_number']]);
-                        });
-                    }
-                } catch (\Exception $e) {
-                    // If Odoo call fails, fall back to restoring all backed-up SK units (safe degradation)
-                    \Illuminate\Support\Facades\Log::warning('SK backup Odoo validation failed, restoring all: ' . $e->getMessage());
-                }
-            }
             // -----------------------------------------------------------------------
 
             $trackedLotNumbers = \App\Models\Item::where('surat_kuasa_tracked', true)->pluck('lot_number')->filter()->flip()->toArray();
@@ -919,6 +902,8 @@ class SummaryGenerator
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
                         'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']]),
+                        // odoo_lot_id intentionally left null for main-sync items; SK sync populates this
+                        'odoo_lot_id' => null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
@@ -926,7 +911,10 @@ class SummaryGenerator
                 \App\Models\Item::insert($insertData);
             }
 
-            // -- Restore Surat Kuasa units that were not in the main sync dataset --
+            // -- Restore Surat Kuasa tracked units that were not in the main sync dataset --
+            // These are SK staging units (qty=0, awaiting No.Rangka & No.Mesin) that never appear
+            // in the main Odoo export. They must be preserved across syncs.
+            // surat_kuasa_tracked=true is the authoritative flag set by SK sync operations.
             if (!empty($suratKuasaBackup)) {
                 $restoreData = [];
                 foreach ($suratKuasaBackup as $row) {

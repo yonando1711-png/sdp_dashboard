@@ -1897,65 +1897,132 @@ class OdooService
 
     /**
      * Dedicated Odoo fetch specifically for Surat Kuasa units:
-     * Domain: product_qty = 0 AND is_on_hand = true
+     * Domain: product_qty = 0 AND ref (No.Rangka) is NOT set AND engine_number (No.Mesin) is NOT set AND vendor_rent is NOT set.
+     * Matches exactly the Odoo filter: On Hand Qty=0, Internal Reference not set, No.Mesin not set, Is Vendor Rent not set.
+     * Uses search_read to return the Odoo lot integer ID for stable rename-tracking.
      */
     public function fetchSuratKuasaUnits(): array
     {
         try {
+            // This domain exactly mirrors the Odoo manual filter:
+            // On Hand Quantity = 0 | Internal Reference is not set | No.Mesin is not set | Is Vendor Rent is not set
             $domain = [
                 ['product_qty', '=', 0],
-                ['is_on_hand', '=', true],
-                ['is_vendor_rent', '!=', true]
+                ['ref', '=', false],
+                ['engine_number', '=', false],
+                ['is_vendor_rent', '!=', true],
             ];
 
-            $ids = $this->execute('stock.lot', 'search', [$domain]);
-            if (empty($ids)) {
-                return ['success' => true, 'data' => [], 'count' => 0];
-            }
-
-            $exportFields = [
+            $readFields = [
+                'id',
                 'name',
                 'ref',
                 'engine_number',
-                'product_id/display_name',
+                'product_id',
                 'vehicle_year',
-                'location_id/display_name',
+                'location_id',
                 'x_studio_partnercust',
-                'rental_id/partner_id/display_name',
                 'is_vendor_rent',
             ];
 
-            $result = $this->execute('stock.lot', 'export_data', [$ids, $exportFields]);
-            if (!isset($result['datas'])) {
-                return ['success' => false, 'message' => 'Failed to export Surat Kuasa lot data', 'data' => []];
+            $rows = $this->execute('stock.lot', 'search_read', [$domain], ['fields' => $readFields]);
+
+            if (!is_array($rows)) {
+                return ['success' => false, 'message' => 'Unexpected response from Odoo search_read', 'data' => []];
             }
 
             $records = [];
-            foreach ($result['datas'] as $row) {
-                $lotNumber = $row[0] ?? '';
-                if (empty($lotNumber))
-                    continue;
+            foreach ($rows as $row) {
+                $lotNumber = $row['name'] ?? '';
+                if (empty($lotNumber)) continue;
 
-                $customer = !empty($row[6]) ? $row[6] : (!empty($row[7]) ? $row[7] : null);
-                $isVendorRent = !empty($row[8]) && ($row[8] === true || $row[8] === 'true' || $row[8] == 1);
+                $odooLotId = $row['id'] ?? null;
+                $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
+
+                // product_id and location_id come as [id, display_name] tuples
+                $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
+                $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
+                $customer = $row['x_studio_partnercust'] ?? null;
 
                 $records[] = [
-                    'lot_number' => $lotNumber,
-                    'internal_reference' => !empty($row[1]) ? (string) $row[1] : null,
-                    'engine_number' => !empty($row[2]) ? (string) $row[2] : null,
-                    'product' => !empty($row[3]) ? (string) $row[3] : '',
-                    'year' => !empty($row[4]) ? (string) $row[4] : date('Y'),
-                    'location' => !empty($row[5]) ? (string) $row[5] : '',
-                    'current_customer' => $customer,
-                    'on_hand_quantity' => 0,
-                    'is_on_hand' => true,
-                    'is_order_only' => false,
-                    'is_vendor_rent' => $isVendorRent,
+                    'odoo_lot_id'        => $odooLotId,
+                    'lot_number'         => $lotNumber,
+                    'internal_reference' => !empty($row['ref']) ? (string) $row['ref'] : null,
+                    'engine_number'      => !empty($row['engine_number']) ? (string) $row['engine_number'] : null,
+                    'product'            => $product,
+                    'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
+                    'location'           => $location,
+                    'current_customer'   => $customer ?: null,
+                    'on_hand_quantity'   => 0,
+                    'is_on_hand'         => true,
+                    'is_order_only'      => false,
+                    'is_vendor_rent'     => $isVendorRent,
                     'surat_kuasa_tracked' => true,
                 ];
             }
 
             return ['success' => true, 'data' => $records, 'count' => count($records)];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
+        }
+    }
+
+    /**
+     * Fetch current Odoo data for a set of tracked lots identified by their Odoo lot IDs.
+     * Used by Fast Sync to detect updates (No. Rangka / No. Mesin filled) and lot renames,
+     * even after the lot name has changed in Odoo (e.g. "00161-GRANMAX" → "00921-GRANMAX").
+     *
+     * @param array $odooIds  Array of Odoo integer lot IDs to fetch
+     * @return array ['success' => bool, 'data' => [...records keyed by odoo_lot_id...]]
+     */
+    public function fetchSuratKuasaByOdooIds(array $odooIds): array
+    {
+        if (empty($odooIds)) {
+            return ['success' => true, 'data' => []];
+        }
+
+        try {
+            $readFields = [
+                'id',
+                'name',
+                'ref',
+                'engine_number',
+                'product_id',
+                'vehicle_year',
+                'location_id',
+                'x_studio_partnercust',
+                'is_vendor_rent',
+                'product_qty',
+            ];
+
+            $rows = $this->execute('stock.lot', 'read', [$odooIds, $readFields]);
+
+            if (!is_array($rows)) {
+                return ['success' => false, 'message' => 'Unexpected Odoo response', 'data' => []];
+            }
+
+            $data = [];
+            foreach ($rows as $row) {
+                $odooId = $row['id'];
+                $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
+                $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
+                $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
+
+                $data[$odooId] = [
+                    'odoo_lot_id'        => $odooId,
+                    'lot_number'         => $row['name'] ?? '',
+                    'internal_reference' => !empty($row['ref']) ? (string) $row['ref'] : null,
+                    'engine_number'      => !empty($row['engine_number']) ? (string) $row['engine_number'] : null,
+                    'product'            => $product,
+                    'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
+                    'location'           => $location,
+                    'current_customer'   => $row['x_studio_partnercust'] ?? null,
+                    'on_hand_quantity'   => $row['product_qty'] ?? 0,
+                    'is_vendor_rent'     => $isVendorRent,
+                ];
+            }
+
+            return ['success' => true, 'data' => $data];
         } catch (\Exception $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
         }
