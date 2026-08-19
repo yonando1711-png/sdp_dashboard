@@ -1441,7 +1441,9 @@ class OdooService
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: text/xml; charset=utf-8'],
-            CURLOPT_TIMEOUT => 60,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT => 180,
+            CURLOPT_CONNECTTIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => env('ODOO_SSL_VERIFY', true),
             CURLOPT_SSL_VERIFYHOST => env('ODOO_SSL_VERIFY', true) ? 2 : 0,
         ]);
