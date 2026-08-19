@@ -42,6 +42,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
                     body: JSON.stringify({
@@ -51,8 +52,13 @@
                         odoo_password: this.odooConfig.password
                     })
                 });
-                const data = await response.json();
-                alert(data.message);
+                const text = await response.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch (_) {}
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.message || `Server Error (${response.status})`);
+                }
+                alert(data.message || 'Configuration saved successfully.');
             } catch (e) {
                 alert('Error: ' + e.message);
             } finally {
@@ -68,16 +74,17 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     }
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    let msg = `Server Error (${response.status})`;
-                    try { const res = JSON.parse(text); if (res.message) msg = res.message; } catch (_) {}
-                    throw new Error(msg);
+                const text = await response.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch (_) {}
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.message || (text.length < 200 ? text : `Server Error (${response.status})`));
                 }
-                this.testResult = await response.json();
+                this.testResult = data;
             } catch (e) {
                 this.testResult = { success: false, message: 'Error: ' + e.message };
             } finally {
@@ -93,16 +100,17 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     }
                 });
-                if (!response.ok) {
-                    const text = await response.text();
-                    let msg = `Server Error (${response.status})`;
-                    try { const res = JSON.parse(text); if (res.message) msg = res.message; } catch (_) {}
-                    throw new Error(msg);
+                const text = await response.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch (_) {}
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.message || (text.length < 200 ? text : `Server Error (${response.status})`));
                 }
-                this.syncResult = await response.json();
+                this.syncResult = data;
                 // Refresh schedule info after sync
                 await this.loadSchedule();
             } catch (e) {
