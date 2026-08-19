@@ -78,6 +78,10 @@ class ImportController extends Controller
      */
     public function syncOdoo(SummaryGenerator $generator)
     {
+        ini_set('memory_limit', '1024M');
+        set_time_limit(600);
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
         try {
             $odoo = new OdooService();
 

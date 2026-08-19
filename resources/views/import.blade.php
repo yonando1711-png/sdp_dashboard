@@ -71,6 +71,12 @@
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     }
                 });
+                if (!response.ok) {
+                    const text = await response.text();
+                    let msg = `Server Error (${response.status})`;
+                    try { const res = JSON.parse(text); if (res.message) msg = res.message; } catch (_) {}
+                    throw new Error(msg);
+                }
                 this.testResult = await response.json();
             } catch (e) {
                 this.testResult = { success: false, message: 'Error: ' + e.message };
@@ -90,6 +96,12 @@
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     }
                 });
+                if (!response.ok) {
+                    const text = await response.text();
+                    let msg = `Server Error (${response.status})`;
+                    try { const res = JSON.parse(text); if (res.message) msg = res.message; } catch (_) {}
+                    throw new Error(msg);
+                }
                 this.syncResult = await response.json();
                 // Refresh schedule info after sync
                 await this.loadSchedule();

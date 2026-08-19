@@ -734,6 +734,8 @@ class SummaryGenerator
 
     public function saveToDatabase($items, $summary, $source = 'excel', $filename = null)
     {
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
         // 0. Log Import Start
         $importLog = \App\Models\ImportLog::create([
             'source' => $source,
