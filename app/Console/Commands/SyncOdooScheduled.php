@@ -15,6 +15,10 @@ class SyncOdooScheduled extends Command
 
     public function handle(): int
     {
+        ini_set('memory_limit', '1024M');
+        set_time_limit(600);
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
         $this->info('Starting Odoo sync...');
         
         // Check if sync is enabled (unless --force)

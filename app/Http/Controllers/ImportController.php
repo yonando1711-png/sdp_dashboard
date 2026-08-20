@@ -78,6 +78,10 @@ class ImportController extends Controller
      */
     public function syncOdoo(SummaryGenerator $generator)
     {
+        ini_set('memory_limit', '1024M');
+        set_time_limit(600);
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
         try {
             $odoo = new OdooService();
 
@@ -88,7 +92,7 @@ class ImportController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Odoo fetch failed: ' . ($result['message'] ?? 'Unknown error')
-                ]);
+                ], 400);
             }
 
             // Pass Excel-like data directly to SummaryGenerator
@@ -103,16 +107,26 @@ class ImportController extends Controller
             $this->enrichWithVendorUnits($odoo);
             $this->enrichWithCrmData($odoo);
 
+            // Update last sync time
+            Setting::setValue('odoo_last_sync', now()->toISOString());
+
             return response()->json([
                 'success' => true,
                 'message' => "Synced {$result['count']} items from Odoo",
                 'summary' => $processedData['summary']
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Odoo manual sync failed: ' . $e->getMessage(), [
+                'exception' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Sync failed: ' . $e->getMessage()
-            ]);
+            ], 500);
         }
     }
 
@@ -148,26 +162,28 @@ class ImportController extends Controller
         // Fetch active repair orders
         $repairData = $odoo->fetchRepairOrders($lotMap);
 
-        // Update items with repair data
-        foreach ($repairData as $lotNumber => $data) {
-            \App\Models\Item::where('lot_number', $lotNumber)->update($data);
-        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($repairData, $inServiceItems) {
+            // Update items with repair data
+            foreach ($repairData as $lotNumber => $data) {
+                \App\Models\Item::where('lot_number', $lotNumber)->update($data);
+            }
 
-        // Clear repair data for in-service items that have NO active repair
-        $lotsWithRepairs = array_keys($repairData);
-        $lotsWithoutRepairs = array_diff($inServiceItems, $lotsWithRepairs);
+            // Clear repair data for in-service items that have NO active repair
+            $lotsWithRepairs = array_keys($repairData);
+            $lotsWithoutRepairs = array_diff($inServiceItems, $lotsWithRepairs);
 
-        if (!empty($lotsWithoutRepairs)) {
-            \App\Models\Item::whereIn('lot_number', $lotsWithoutRepairs)->update([
-                'repair_order_name' => null,
-                'repair_state' => null,
-                'repair_schedule_date' => null,
-                'repair_service_type' => null,
-                'repair_vendor' => null,
-                'repair_odometer' => null,
-                'repair_estimation_end' => null,
-            ]);
-        }
+            if (!empty($lotsWithoutRepairs)) {
+                \App\Models\Item::whereIn('lot_number', $lotsWithoutRepairs)->update([
+                    'repair_order_name' => null,
+                    'repair_state' => null,
+                    'repair_schedule_date' => null,
+                    'repair_service_type' => null,
+                    'repair_vendor' => null,
+                    'repair_odometer' => null,
+                    'repair_estimation_end' => null,
+                ]);
+            }
+        });
     }
 
     /**
@@ -192,14 +208,16 @@ class ImportController extends Controller
         // Fetch vendor units
         $vendorData = $odoo->fetchVendorUnits(array_values($lotMap));
 
-        // Map back to lot numbers and update
+        // Map back to lot numbers and update in transaction
         $lotIdToName = array_flip($lotMap);
-        foreach ($vendorData as $lotId => $vendorName) {
-            $lotNumber = $lotIdToName[$lotId] ?? null;
-            if ($lotNumber) {
-                \App\Models\Item::where('lot_number', $lotNumber)->update(['vendor_unit' => $vendorName]);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($vendorData, $lotIdToName) {
+            foreach ($vendorData as $lotId => $vendorName) {
+                $lotNumber = $lotIdToName[$lotId] ?? null;
+                if ($lotNumber) {
+                    \App\Models\Item::where('lot_number', $lotNumber)->update(['vendor_unit' => $vendorName]);
+                }
             }
-        }
+        });
     }
 
     /**
@@ -219,15 +237,17 @@ class ImportController extends Controller
 
         $crmData = $odoo->fetchBulkCrmData(array_values($rentalIds));
 
-        foreach ($crmData as $rentalId => $data) {
-            \App\Models\Item::where('rental_id', $rentalId)->update([
-                'pic_name' => !empty($data['pic_name']) ? $data['pic_name'] : '-',
-                'pic_email' => !empty($data['pic_email']) ? $data['pic_email'] : '-',
-                'rental_period_start' => $data['rental_period_start'] ?? null,
-                'rental_period_end' => $data['rental_period_end'] ?? null,
-                'is_company' => $data['is_company'] ?? false,
-            ]);
-        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($crmData) {
+            foreach ($crmData as $rentalId => $data) {
+                \App\Models\Item::where('rental_id', $rentalId)->update([
+                    'pic_name' => !empty($data['pic_name']) ? $data['pic_name'] : '-',
+                    'pic_email' => !empty($data['pic_email']) ? $data['pic_email'] : '-',
+                    'rental_period_start' => $data['rental_period_start'] ?? null,
+                    'rental_period_end' => $data['rental_period_end'] ?? null,
+                    'is_company' => $data['is_company'] ?? false,
+                ]);
+            }
+        });
     }
 
     /**
