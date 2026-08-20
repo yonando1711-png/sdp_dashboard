@@ -309,12 +309,17 @@ class LorController extends Controller
      */
     public function export(Request $request)
     {
-        if ($request->input('source') === 'smd') {
-            abort(403, 'Exporting is strictly disabled for LoR (SMD).');
-        }
+        $user = auth()->user();
+        $isSmd = ($request->input('source') === 'smd');
 
-        if (!$this->checkLorSession()) {
-            return redirect()->route('lor.index');
+        if ($isSmd) {
+            if (!$user || !$user->canExportSmd()) {
+                abort(403, 'You do not have permission to export LoR (SMD) data.');
+            }
+        } else {
+            if (!$this->checkLorSession()) {
+                return redirect()->route('lor.index');
+            }
         }
 
         $search = $request->input('search');
@@ -335,6 +340,21 @@ class LorController extends Controller
             $q->where('rental_id_count', '<=', 1)
               ->orWhere('in_stock', false);
         });
+
+        if ($isSmd && $user) {
+            $allowedSalespersons = $user->getAllowedSalespersons();
+            $allowedSalesTeams = $user->getAllowedSalesTeams();
+            if (!$user->isItAdmin() || (!empty($allowedSalespersons) || !empty($allowedSalesTeams))) {
+                if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                    $query->whereIn('salesperson', $allowedSalespersons)
+                          ->whereIn('sales_team', $allowedSalesTeams);
+                } elseif (!empty($allowedSalespersons)) {
+                    $query->whereIn('salesperson', $allowedSalespersons);
+                } elseif (!empty($allowedSalesTeams)) {
+                    $query->whereIn('sales_team', $allowedSalesTeams);
+                }
+            }
+        }
         
         if (!empty($selectedStatuses)) {
             $query->whereIn('status', $selectedStatuses);

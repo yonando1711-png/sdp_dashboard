@@ -110,9 +110,13 @@ class UserController extends Controller
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
             'can_view_lor_smd' => 'nullable|boolean',
+            'can_view_smd_last_invoice_date' => 'nullable|boolean',
+            'can_export_lor_smd' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
+
+        $canViewSmd = $request->has('can_view_lor_smd');
 
         User::create([
             'name' => $validated['name'],
@@ -121,7 +125,9 @@ class UserController extends Controller
             'branch' => strtoupper(trim($validated['branch'])),
             'role' => $validated['role'],
             'menu_permissions' => $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [],
-            'can_view_lor_smd' => $request->has('can_view_lor_smd'),
+            'can_view_lor_smd' => $canViewSmd,
+            'can_view_smd_last_invoice_date' => $canViewSmd && $request->has('can_view_smd_last_invoice_date'),
+            'can_export_lor_smd' => $canViewSmd && $request->has('can_export_lor_smd'),
             'allowed_salespersons' => $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [],
             'allowed_sales_teams' => $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [],
         ]);
@@ -144,16 +150,22 @@ class UserController extends Controller
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
             'can_view_lor_smd' => 'nullable|boolean',
+            'can_view_smd_last_invoice_date' => 'nullable|boolean',
+            'can_export_lor_smd' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
+
+        $canViewSmd = $request->has('can_view_lor_smd');
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->branch = strtoupper(trim($validated['branch']));
         $user->role = $validated['role'];
         $user->menu_permissions = $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [];
-        $user->can_view_lor_smd = $request->has('can_view_lor_smd');
+        $user->can_view_lor_smd = $canViewSmd;
+        $user->can_view_smd_last_invoice_date = $canViewSmd && $request->has('can_view_smd_last_invoice_date');
+        $user->can_export_lor_smd = $canViewSmd && $request->has('can_export_lor_smd');
         $user->allowed_salespersons = $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [];
         $user->allowed_sales_teams = $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [];
 

@@ -47,6 +47,8 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
 
         $headers = [
             'Rental ID',
+            'Salesperson',
+            'Sales Team',
             'Nomor Kontrak',
             'Type',
             'Police-No',
@@ -57,6 +59,7 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             'Status',
             'Start Sewa',
             'End Sewa',
+            'Last Invoice Date',
             $hargaHeader,
             'Total Harga',
             'COP/Driver',
@@ -97,11 +100,6 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
         // Also apply tax logic to the main Harga column if possible
         $mainHargaRaw = $rental->price;
         if ($mainHargaRaw) {
-            // We don't have the exact tax string for the main price easily available here without joining, 
-            // but we can assume it follows the same logic if we force it.
-            // If the user wants to force include, and it's not already included... 
-            // Wait, the main price comes from the item record. We don't know its tax status directly.
-            // Let's just calculate it directly if forced.
             if ($this->taxMode === 'include') {
                 $mainHargaRaw = $mainHargaRaw * 1.11;
             } elseif ($this->taxMode === 'exclude') {
@@ -120,6 +118,8 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
 
         $row = [
             $rental->rental_id,
+            $rental->salesperson ?: '-',
+            $rental->sales_team ?: '-',
             $rental->contract_ref,
             $rental->product,
             $rental->lot_number,
@@ -130,6 +130,7 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
             $rental->status,
             $rental->actual_start_rental ? \Carbon\Carbon::parse($rental->actual_start_rental)->format('d-m-Y') : '-',
             $rental->actual_end_rental ? \Carbon\Carbon::parse($rental->actual_end_rental)->format('d-m-Y') : '-',
+            $rental->last_invoice_date ? \Carbon\Carbon::parse($rental->last_invoice_date)->format('d-m-Y') : '-',
             $mainHargaRaw ? 'Rp ' . number_format($mainHargaRaw, 0, ',', '.') : '-',
             $totalHargaRaw ? 'Rp ' . number_format($totalHargaRaw, 0, ',', '.') : '-',
             $rental->driver,

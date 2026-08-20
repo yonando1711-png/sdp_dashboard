@@ -1524,6 +1524,128 @@ class OdooService
     }
 
     /**
+     * Fetch Last Invoice Date for a list of Rental Order names (e.g. R/2025/00492) from Odoo.
+     * Applies exclusion rules: skips draft, cancelled, zero-amount, unbilled, and reversed credit note invoices.
+     *
+     * @param array $rentalNames List of sale.order names
+     * @return array Map of [rental_name => 'YYYY-MM-DD']
+     */
+    public function fetchLastInvoiceDatesForRentalOrders(array $rentalNames): array
+    {
+        $rentalNames = array_values(array_filter($rentalNames));
+        if (empty($rentalNames)) {
+            return [];
+        }
+
+        try {
+            // 1. Fetch sale.order records for invoice_ids
+            $orders = $this->execute('sale.order', 'search_read', [
+                [['name', 'in', $rentalNames]]
+            ], [
+                'fields' => ['name', 'invoice_ids']
+            ]);
+
+            if (empty($orders)) {
+                return [];
+            }
+
+            $orderToInvIdsMap = [];
+            $allInvoiceIds = [];
+            foreach ($orders as $order) {
+                if (!empty($order['invoice_ids']) && is_array($order['invoice_ids'])) {
+                    $orderToInvIdsMap[$order['name']] = $order['invoice_ids'];
+                    foreach ($order['invoice_ids'] as $invId) {
+                        $allInvoiceIds[] = $invId;
+                    }
+                }
+            }
+
+            $allInvoiceIds = array_unique($allInvoiceIds);
+            if (empty($allInvoiceIds)) {
+                return [];
+            }
+
+            // 2. Fetch account.move records in chunks
+            $chunkedInvoiceIds = array_chunk($allInvoiceIds, 200);
+            $allMoveRecords = [];
+            foreach ($chunkedInvoiceIds as $chunk) {
+                $moves = $this->execute('account.move', 'search_read', [
+                    [['id', 'in', $chunk]]
+                ], [
+                    'fields' => ['id', 'name', 'invoice_date', 'state', 'move_type', 'amount_total', 'reversed_entry_id']
+                ]);
+
+                if (is_array($moves)) {
+                    foreach ($moves as $m) {
+                        $allMoveRecords[$m['id']] = $m;
+                    }
+                }
+            }
+
+            // 3. Find reversed entry IDs (invoices credited by posted out_refund)
+            $reversedInvIds = [];
+            foreach ($allMoveRecords as $m) {
+                if (($m['move_type'] ?? '') === 'out_refund' && ($m['state'] ?? '') === 'posted' && !empty($m['reversed_entry_id'])) {
+                    $revId = is_array($m['reversed_entry_id']) ? $m['reversed_entry_id'][0] : $m['reversed_entry_id'];
+                    if ($revId) {
+                        $reversedInvIds[] = $revId;
+                    }
+                }
+            }
+
+            // 4. Resolve max valid invoice_date per rental name
+            $result = [];
+            foreach ($orderToInvIdsMap as $rentalName => $invIds) {
+                $latestDate = null;
+
+                foreach ($invIds as $invId) {
+                    if (!isset($allMoveRecords[$invId])) {
+                        continue;
+                    }
+                    $inv = $allMoveRecords[$invId];
+
+                    // Exclusion filters:
+                    // 1. Must be out_invoice
+                    if (($inv['move_type'] ?? '') !== 'out_invoice') {
+                        continue;
+                    }
+                    // 2. Must be posted
+                    if (($inv['state'] ?? '') !== 'posted') {
+                        continue;
+                    }
+                    // 3. Skip zero amount
+                    if (floatval($inv['amount_total'] ?? 0) <= 0) {
+                        continue;
+                    }
+                    // 4. Skip if reversed by Credit Note
+                    if (in_array($inv['id'], $reversedInvIds)) {
+                        continue;
+                    }
+                    // 5. Must have invoice_date
+                    if (empty($inv['invoice_date'])) {
+                        continue;
+                    }
+
+                    $dateStr = substr($inv['invoice_date'], 0, 10);
+                    if ($latestDate === null || strcmp($dateStr, $latestDate) > 0) {
+                        $latestDate = $dateStr;
+                    }
+                }
+
+                if ($latestDate) {
+                    $result[$rentalName] = $latestDate;
+                }
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error in fetchLastInvoiceDatesForRentalOrders: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Fetch PIC Name and Email for given Rental IDs from sale.order and res.partner
      * 
      * @param array $rentalIds

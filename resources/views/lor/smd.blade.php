@@ -10,15 +10,30 @@
                     <span class="px-3 py-1 text-xs font-bold bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
                         Sales Management Division
                     </span>
-                    <span class="px-3 py-1 text-xs font-bold bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20 rounded-full flex items-center gap-1">
-                        🔒 Read-Only (No Export)
-                    </span>
+                    @if(auth()->user()?->canExportSmd())
+                        <span class="px-3 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
+                            📊 Export Enabled
+                        </span>
+                    @else
+                        <span class="px-3 py-1 text-xs font-bold bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20 rounded-full flex items-center gap-1">
+                            🔒 Read-Only (No Export)
+                        </span>
+                    @endif
                 </div>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Scoped view grouped by assigned Salespersons and Sales Teams</p>
             </div>
+
+            @if(auth()->user()?->canExportSmd())
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('lor.export', array_merge(request()->all(), ['source' => 'smd', 'format' => 'xlsx'])) }}" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Export Data (Excel)</span>
+                    </a>
+                </div>
+            @endif
         </div>
 
-        <!-- Filters Bar (No Export Buttons) -->
+        <!-- Filters Bar -->
         <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700/80">
             <form method="GET" action="{{ route('lor.smd') }}" class="flex flex-wrap items-center justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-3 flex-1">
@@ -29,7 +44,7 @@
                         <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
 
-                    <!-- Salesperson Filter (Only shown if user has access to > 1 salesperson) -->
+                    <!-- Salesperson Filter -->
                     @if(count($filterSalespersons) > 1)
                     <select name="salesperson" onchange="this.form.submit()" class="px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200 font-medium">
                         <option value="">👤 All Salespersons</option>
@@ -39,7 +54,7 @@
                     </select>
                     @endif
 
-                    <!-- Sales Team Filter (Only shown if user has access to > 1 sales team) -->
+                    <!-- Sales Team Filter -->
                     @if(count($filterSalesTeams) > 1)
                     <select name="sales_team" onchange="this.form.submit()" class="px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200 font-medium">
                         <option value="">🚩 All Sales Teams</option>
@@ -83,6 +98,9 @@
                             <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">PRODUCT</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">START SEWA</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">END SEWA</th>
+                            @if(auth()->user()?->canViewSmdLastInvoiceDate())
+                                <th class="py-3.5 px-4 whitespace-nowrap text-cyan-600 dark:text-cyan-400">LAST INVOICE DATE</th>
+                            @endif
                             <th class="py-3.5 px-4 text-right whitespace-nowrap">TOTAL HARGA</th>
                             <th class="py-3.5 px-4 text-center whitespace-nowrap">STATUS</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">NOMOR KONTRAK</th>
@@ -116,6 +134,11 @@
                                 <td class="py-3.5 px-4 whitespace-nowrap">
                                     {{ $rental->actual_end_rental ? \Carbon\Carbon::parse($rental->actual_end_rental)->format('d M Y') : '-' }}
                                 </td>
+                                @if(auth()->user()?->canViewSmdLastInvoiceDate())
+                                    <td class="py-3.5 px-4 whitespace-nowrap font-mono font-bold text-cyan-600 dark:text-cyan-400">
+                                        {{ $rental->last_invoice_date ? \Carbon\Carbon::parse($rental->last_invoice_date)->format('d M Y') : '-' }}
+                                    </td>
+                                @endif
                                 <td class="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                                     {{ $rental->amount_total ? 'Rp ' . number_format($rental->amount_total, 0, ',', '.') : ($rental->total_price ? 'Rp ' . number_format($rental->total_price, 0, ',', '.') : '-') }}
                                 </td>
@@ -145,7 +168,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="p-8 text-center text-slate-500 dark:text-slate-400">
+                                <td colspan="{{ auth()->user()?->canViewSmdLastInvoiceDate() ? 13 : 12 }}" class="p-8 text-center text-slate-500 dark:text-slate-400">
                                     No rental contracts found matching your assigned Salesperson / Sales Team scope.
                                 </td>
                             </tr>
