@@ -2047,6 +2047,7 @@ class OdooService
                 'location_id',
                 'x_studio_partnercust',
                 'is_vendor_rent',
+                'bbn_id',
             ];
 
             $rows = $this->execute('stock.lot', 'search_read', [$domain], ['fields' => $readFields]);
@@ -2063,10 +2064,11 @@ class OdooService
                 $odooLotId = $row['id'] ?? null;
                 $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
 
-                // product_id and location_id come as [id, display_name] tuples
+                // product_id, location_id, bbn_id come as [id, display_name] tuples
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $customer = $row['x_studio_partnercust'] ?? null;
+                $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
 
                 $records[] = [
                     'odoo_lot_id'        => $odooLotId,
@@ -2076,6 +2078,7 @@ class OdooService
                     'product'            => $product,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
                     'location'           => $location,
+                    'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
                     'current_customer'   => $customer ?: null,
                     'on_hand_quantity'   => 0,
                     'is_on_hand'         => true,
@@ -2117,6 +2120,7 @@ class OdooService
                 'x_studio_partnercust',
                 'is_vendor_rent',
                 'product_qty',
+                'bbn_id',
             ];
 
             $rows = $this->execute('stock.lot', 'read', [$odooIds, $readFields]);
@@ -2131,6 +2135,7 @@ class OdooService
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
+                $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
 
                 $data[$odooId] = [
                     'odoo_lot_id'        => $odooId,
@@ -2140,6 +2145,7 @@ class OdooService
                     'product'            => $product,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
                     'location'           => $location,
+                    'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
                     'current_customer'   => $row['x_studio_partnercust'] ?? null,
                     'on_hand_quantity'   => $row['product_qty'] ?? 0,
                     'is_vendor_rent'     => $isVendorRent,
