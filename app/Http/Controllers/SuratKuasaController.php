@@ -48,7 +48,7 @@ class SuratKuasaController extends Controller
                     ->orWhere('internal_reference', 'like', "%{$search}%")
                     ->orWhere('engine_number', 'like', "%{$search}%")
                     ->orWhere('product', 'like', "%{$search}%")
-                    ->orWhere('current_customer', 'like', "%{$search}%")
+                    ->orWhere('bbn', 'like', "%{$search}%")
                     ->orWhere('rental_id', 'like', "%{$search}%");
             });
         }
@@ -221,6 +221,7 @@ class SuratKuasaController extends Controller
                     if (!empty($itemData['product']) && $existing->product !== $itemData['product']) $existing->product = $itemData['product'];
                     if (!empty($itemData['year']) && $existing->year !== $itemData['year']) $existing->year = $itemData['year'];
                     if (!empty($itemData['location'])) $existing->location = $itemData['location'];
+                    if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn']) $existing->bbn = $itemData['bbn'];
                     if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer']) $existing->current_customer = $itemData['current_customer'];
 
                     if ($existing->isDirty()) {
@@ -248,6 +249,7 @@ class SuratKuasaController extends Controller
                             'product'             => $itemData['product'] ?? '',
                             'year'                => $itemData['year'] ?? date('Y'),
                             'location'            => $itemData['location'] ?? '',
+                            'bbn'                 => $itemData['bbn'] ?? null,
                             'current_customer'    => $itemData['current_customer'] ?? null,
                             'internal_reference'  => null,
                             'engine_number'       => null,
@@ -420,6 +422,10 @@ class SuratKuasaController extends Controller
 
                 if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
+                if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
+                    $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
+                    $item->bbn = $odooRow['bbn'];
+                }
                 if (!empty($odooRow['current_customer']) && $item->current_customer !== $odooRow['current_customer']) $item->current_customer = $odooRow['current_customer'];
 
                 if ($item->isDirty()) {
@@ -463,6 +469,10 @@ class SuratKuasaController extends Controller
                 }
                 if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
+                if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
+                    $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
+                    $item->bbn = $odooRow['bbn'];
+                }
 
                 if ($item->isDirty()) {
                     $item->save();
@@ -1227,7 +1237,7 @@ class SuratKuasaController extends Controller
 
         $callback = function () use ($items) {
             $file = fopen('php://output', 'w');
-            fputcsv($file, ['Lot Serial', 'No Rangka (Internal Ref)', 'No Mesin (Engine No)', 'Merk/Type', 'Warna', 'Tahun', 'Customer', 'Status']);
+            fputcsv($file, ['Lot Serial', 'No Rangka (Internal Ref)', 'No Mesin (Engine No)', 'Merk/Type', 'Warna', 'Tahun', 'Location', 'Status']);
 
             foreach ($items as $item) {
                 $noRangka = $item->internal_reference;
@@ -1241,7 +1251,7 @@ class SuratKuasaController extends Controller
                     $item->product,
                     $item->color ?: '-',
                     $item->year ?: '-',
-                    $item->current_customer ?: '-',
+                    $item->bbn ?: 'No BBN on Odoo',
                     $isReady ? 'Ready to Print' : 'Incomplete Odoo Data',
                 ]);
             }
