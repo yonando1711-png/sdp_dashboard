@@ -1493,6 +1493,9 @@ class SuratKuasaController extends Controller
         $item->auto_sk_sent = null;
         $item->save();
 
+        // Also remove from SuratKuasaLog so auto-generate picks it up cleanly
+        SuratKuasaLog::where('item_id', $item->id)->delete();
+
         return response()->json([
             'success' => true,
             'message' => "Auto SK flag reset for unit {$item->lot_number}. It will be re-processed on the next auto-generate run.",

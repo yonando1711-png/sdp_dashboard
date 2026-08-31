@@ -20,7 +20,7 @@ class AutoGenerateSuratKuasa extends Command
     public function handle(): int
     {
         ini_set('memory_limit', '512M');
-        set_time_limit(300);
+        set_time_limit(600);
 
         $this->info('=== Auto Surat Kuasa Generator ===');
         $this->info('Started at: ' . now()->format('Y-m-d H:i:s'));
@@ -295,6 +295,9 @@ class AutoGenerateSuratKuasa extends Command
                 );
 
                 $successCount++;
+
+                // 2-second pacing to prevent SMTP burst spam filtering / rate limits
+                sleep(2);
 
             } catch (\Exception $e) {
                 @unlink($filePath ?? '');
