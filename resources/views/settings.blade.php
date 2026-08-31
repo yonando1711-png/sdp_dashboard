@@ -236,6 +236,44 @@
                     </div>
                 </div>
 
+                <!-- Nomor Surat Kuasa Auto-numbering Configuration -->
+                <div class="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-4"
+                     x-data="{
+                         prefix: '{{ $suratKuasa['doc_prefix'] ?? 'HRCJ/FOD' }}',
+                         lastSeq: {{ (int) ($suratKuasa['last_sequence'] ?? 1545) }},
+                         romanMonth: '{{ \App\Http\Controllers\SuratKuasaController::getRomanMonth((int) date('n')) }}',
+                         year2: '{{ date('y') }}',
+                         get nextPreview() {
+                             const next = (parseInt(this.lastSeq) || 0) + 1;
+                             return next + '/' + (this.prefix || 'HRCJ/FOD') + '/' + this.romanMonth + '/' + this.year2;
+                         }
+                     }">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-800/40 pb-3">
+                        <div>
+                            <h3 class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
+                                Penomoran Otomatis Surat Kuasa
+                            </h3>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Format: [Nomor Urut]/[Prefix]/[Bulan Romawi]/[2 Digit Tahun]</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Preview Next:</span>
+                            <span class="px-3 py-1 bg-indigo-600 text-white text-xs font-mono font-bold rounded-lg shadow-sm" x-text="nextPreview"></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Prefix Nomor Surat (e.g. HRCJ/FOD)</label>
+                            <input type="text" name="doc_prefix" x-model="prefix" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor Urut Terakhir (Last Sequence)</label>
+                            <input type="number" name="last_sequence" x-model="lastSeq" min="0" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 font-mono">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Alamat Pemilik Kendaraan <span class="text-slate-400 font-normal">(Nullable / Optional)</span></label>
@@ -258,6 +296,111 @@
 
 
 
+
+        <!-- Auto Surat Kuasa Configuration Card -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden"
+             x-data="{ autoEnabled: {{ $suratKuasaAuto['auto_enabled'] ? 'true' : 'false' }} }">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2M12 3v4"></path></svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Auto Surat Kuasa — Automation Settings</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Automatically generate & email SK when No. Rangka + No. Mesin are both filled in Odoo</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span x-show="autoEnabled" class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold rounded-full flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> AUTO ON
+                        </span>
+                        <span x-show="!autoEnabled" style="display: none;" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-full">
+                            AUTO OFF
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <form action="{{ route('settings.surat-kuasa-auto') }}" method="POST" class="p-6 space-y-6">
+                @csrf
+
+                <!-- Enable Toggle + Interval -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-200 dark:border-indigo-800/50">
+                    <div class="flex items-center gap-3">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="auto_enabled" value="true" class="sr-only peer" {{ $suratKuasaAuto['auto_enabled'] ? 'checked' : '' }} id="auto-sk-toggle" @change="autoEnabled = $event.target.checked">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        </label>
+                        <div>
+                            <div class="text-xs font-bold text-slate-700 dark:text-slate-300">Enable Auto-Generate</div>
+                            <div class="text-[11px] text-slate-500" x-text="autoEnabled ? 'Status: Active (Will process ready units)' : 'Status: Disabled'"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Check Interval</label>
+                        <select name="auto_interval" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                            <option value="every_30_min" {{ $suratKuasaAuto['auto_interval'] === 'every_30_min' ? 'selected' : '' }}>Every 30 Minutes</option>
+                            <option value="hourly"        {{ $suratKuasaAuto['auto_interval'] === 'hourly' ? 'selected' : '' }}>Every Hour</option>
+                            <option value="every_2_hours" {{ $suratKuasaAuto['auto_interval'] === 'every_2_hours' ? 'selected' : '' }}>Every 2 Hours</option>
+                            <option value="every_4_hours" {{ $suratKuasaAuto['auto_interval'] === 'every_4_hours' ? 'selected' : '' }}>Every 4 Hours</option>
+                            <option value="every_6_hours" {{ $suratKuasaAuto['auto_interval'] === 'every_6_hours' ? 'selected' : '' }}>Every 6 Hours</option>
+                            <option value="daily"         {{ $suratKuasaAuto['auto_interval'] === 'daily' ? 'selected' : '' }}>Once Daily</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Document Format</label>
+                        <select name="auto_format" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                            <option value="docx" {{ $suratKuasaAuto['auto_format'] === 'docx' ? 'selected' : '' }}>Word (.docx)</option>
+                            <option value="pdf"  {{ $suratKuasaAuto['auto_format'] === 'pdf'  ? 'selected' : '' }}>PDF (.pdf)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- How it works info box -->
+                <div class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl space-y-2">
+                    <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span class="text-xs font-bold">How Auto-Generate Works</span>
+                    </div>
+                    <ul class="text-[11px] text-amber-700 dark:text-amber-400 space-y-1 ml-6 list-disc">
+                        <li>Runs on schedule (check interval above), separate from regular Odoo sync</li>
+                        <li>Automatically detects units where <strong>No. Rangka + No. Mesin</strong> are both filled in Odoo</li>
+                        <li>Generates SK document & sends email to the <strong>Default Recipient Email</strong> in SK Configuration above</li>
+                        <li>Each unit is processed <strong>only once</strong> — marked with a timestamp to prevent duplicate sending</li>
+                        <li>IT Admin can reset the auto-flag from the SK dashboard to allow re-processing</li>
+                        <li>All auto-generated SKs appear in <strong>SK Report</strong> with <em>Generated By: System (Auto)</em></li>
+                    </ul>
+                </div>
+
+                <!-- Optional auto Penerima defaults -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Auto Penerima Kuasa Nama
+                            <span class="text-slate-400 font-normal">(Optional — leave blank for dotted lines)</span>
+                        </label>
+                        <input type="text" name="auto_penerima_nama" value="{{ $suratKuasaAuto['auto_penerima_nama'] }}" placeholder="Leave blank = dotted lines in document" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Auto Penerima Kuasa Alamat
+                            <span class="text-slate-400 font-normal">(Optional)</span>
+                        </label>
+                        <input type="text" name="auto_penerima_alamat" value="{{ $suratKuasaAuto['auto_penerima_alamat'] }}" placeholder="Leave blank = dotted lines in document" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100">
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button type="submit" class="px-6 py-2.5 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 transition-colors shadow-lg shadow-violet-200 dark:shadow-none flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Save Auto SK Settings
+                    </button>
+                </div>
+            </form>
+        </div>
 
         <!-- About Section -->
         <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 text-center">

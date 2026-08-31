@@ -2056,6 +2056,31 @@ class OdooService
                 return ['success' => false, 'message' => 'Unexpected response from Odoo search_read', 'data' => []];
             }
 
+            // Batch fetch vehicle_category_id from product.product
+            $productIds = [];
+            foreach ($rows as $row) {
+                if (!empty($row['product_id']) && is_array($row['product_id'])) {
+                    $productIds[] = $row['product_id'][0];
+                }
+            }
+            $productIds = array_values(array_unique(array_filter($productIds)));
+
+            $categoryMap = [];
+            if (!empty($productIds)) {
+                try {
+                    $prods = $this->execute('product.product', 'read', [$productIds, ['id', 'vehicle_category_id']]);
+                    if (is_array($prods)) {
+                        foreach ($prods as $p) {
+                            if (!empty($p['vehicle_category_id']) && is_array($p['vehicle_category_id'])) {
+                                $categoryMap[$p['id']] = $p['vehicle_category_id'][1] ?? null;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('Could not batch read vehicle_category_id from product.product: ' . $e->getMessage());
+                }
+            }
+
             $records = [];
             foreach ($rows as $row) {
                 $lotNumber = $row['name'] ?? '';
@@ -2065,10 +2090,12 @@ class OdooService
                 $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
 
                 // product_id, location_id, bbn_id come as [id, display_name] tuples
+                $productId = is_array($row['product_id']) ? ($row['product_id'][0] ?? null) : null;
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $customer = $row['x_studio_partnercust'] ?? null;
                 $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
+                $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
 
                 $records[] = [
                     'odoo_lot_id'        => $odooLotId,
@@ -2076,6 +2103,7 @@ class OdooService
                     'internal_reference' => !empty($row['ref']) ? (string) $row['ref'] : null,
                     'engine_number'      => !empty($row['engine_number']) ? (string) $row['engine_number'] : null,
                     'product'            => $product,
+                    'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
                     'location'           => $location,
                     'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
@@ -2129,13 +2157,40 @@ class OdooService
                 return ['success' => false, 'message' => 'Unexpected Odoo response', 'data' => []];
             }
 
+            // Batch fetch vehicle_category_id from product.product
+            $productIds = [];
+            foreach ($rows as $row) {
+                if (!empty($row['product_id']) && is_array($row['product_id'])) {
+                    $productIds[] = $row['product_id'][0];
+                }
+            }
+            $productIds = array_values(array_unique(array_filter($productIds)));
+
+            $categoryMap = [];
+            if (!empty($productIds)) {
+                try {
+                    $prods = $this->execute('product.product', 'read', [$productIds, ['id', 'vehicle_category_id']]);
+                    if (is_array($prods)) {
+                        foreach ($prods as $p) {
+                            if (!empty($p['vehicle_category_id']) && is_array($p['vehicle_category_id'])) {
+                                $categoryMap[$p['id']] = $p['vehicle_category_id'][1] ?? null;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('Could not batch read vehicle_category_id from product.product: ' . $e->getMessage());
+                }
+            }
+
             $data = [];
             foreach ($rows as $row) {
                 $odooId = $row['id'];
+                $productId = is_array($row['product_id']) ? ($row['product_id'][0] ?? null) : null;
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
                 $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
+                $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
 
                 $data[$odooId] = [
                     'odoo_lot_id'        => $odooId,
@@ -2143,6 +2198,7 @@ class OdooService
                     'internal_reference' => !empty($row['ref']) ? (string) $row['ref'] : null,
                     'engine_number'      => !empty($row['engine_number']) ? (string) $row['engine_number'] : null,
                     'product'            => $product,
+                    'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
                     'location'           => $location,
                     'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
