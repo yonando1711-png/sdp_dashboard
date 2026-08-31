@@ -74,6 +74,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware([CheckMenuPermission::class . ':surat-kuasa'])->group(function () {
         Route::get('/surat-kuasa', [SuratKuasaController::class, 'index'])->name('surat-kuasa.index');
         Route::get('/surat-kuasa/report', [SuratKuasaController::class, 'report'])->name('surat-kuasa.report');
+        Route::delete('/surat-kuasa/report/{id}', [SuratKuasaController::class, 'deleteLog'])->name('surat-kuasa.report.delete');
+        Route::post('/surat-kuasa/report/clear-all', [SuratKuasaController::class, 'clearAllLogs'])->name('surat-kuasa.report.clear-all');
         Route::post('/surat-kuasa/auth', [SuratKuasaController::class, 'authenticate'])->middleware('throttle:10,1')->name('surat-kuasa.auth');
         Route::post('/surat-kuasa/sync-odoo', [SuratKuasaController::class, 'syncOdooData'])->name('surat-kuasa.sync-odoo');
         Route::post('/surat-kuasa/fast-sync', [SuratKuasaController::class, 'fastSync'])->name('surat-kuasa.fast-sync');
@@ -84,6 +86,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/surat-kuasa/test-email', [SuratKuasaController::class, 'testEmail'])->name('surat-kuasa.test-email');
         Route::get('/surat-kuasa/export', [SuratKuasaController::class, 'export'])->name('surat-kuasa.export');
         Route::post('/settings/surat-kuasa-password', [SuratKuasaController::class, 'updatePassword'])->name('surat-kuasa.settings.update');
+        // IT Admin: Reset auto_sk_sent flag to allow re-processing by scheduler
+        Route::post('/surat-kuasa/reset-auto-flag/{id}', [SuratKuasaController::class, 'resetAutoFlag'])->name('surat-kuasa.reset-auto-flag');
+        // IT Admin: System & Automation Debug Logs
+        Route::get('/surat-kuasa/logs', [SuratKuasaController::class, 'systemLogs'])->name('surat-kuasa.logs');
+        Route::delete('/surat-kuasa/logs/clear', [SuratKuasaController::class, 'clearSystemLogs'])->name('surat-kuasa.logs.clear');
+        Route::delete('/surat-kuasa/logs/{id}', [SuratKuasaController::class, 'deleteSystemLog'])->name('surat-kuasa.logs.delete');
     });
 
     // IT Admin Only Routes (Utilities & User Management)
@@ -110,5 +118,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/settings/targets', [SettingsController::class, 'updateTargets'])->name('settings.targets');
         Route::post('/settings/odoo', [SettingsController::class, 'updateOdoo'])->name('settings.odoo');
         Route::post('/settings/surat-kuasa', [SettingsController::class, 'updateSuratKuasaSettings'])->name('settings.surat-kuasa');
+        Route::post('/settings/surat-kuasa-auto', [SettingsController::class, 'updateSuratKuasaAutoSettings'])->name('settings.surat-kuasa-auto');
     });
 });

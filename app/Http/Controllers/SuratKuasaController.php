@@ -7,10 +7,97 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
 use App\Models\Item;
 use App\Models\SuratKuasaLog;
+use App\Models\SuratKuasaSystemLog;
 use App\Services\OdooService;
 
 class SuratKuasaController extends Controller
 {
+    /**
+     * Clean product string by stripping leading bracketed prefix code e.g. [DHT-GMAXMB13-MT-B]
+     */
+    public static function cleanProductName(?string $product): string
+    {
+        if (empty($product)) {
+            return '-';
+        }
+        return trim(preg_replace('/^\s*\[[^\]]+\]\s*/', '', $product));
+    }
+
+    /**
+     * Convert integer month to Roman numeral
+     */
+    public static function getRomanMonth(int $month): string
+    {
+        $romanMonths = [
+            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI',
+            7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'
+        ];
+        return $romanMonths[$month] ?? 'I';
+    }
+
+    /**
+     * Format a date string with Indonesian month name (e.g. 31 Agustus 2026)
+     */
+    public static function formatIndonesianDate($date = null): string
+    {
+        try {
+            $carbon = $date ? (\Carbon\Carbon::parse($date)) : \Carbon\Carbon::now();
+        } catch (\Exception $e) {
+            $carbon = \Carbon\Carbon::now();
+        }
+
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+
+        $day = $carbon->format('d');
+        $month = $months[(int) $carbon->format('n')] ?? $carbon->format('F');
+        $year = $carbon->format('Y');
+
+        return "{$day} {$month} {$year}";
+    }
+
+    /**
+     * Generate the next sequential Surat Kuasa document number
+     * Format: {sequence}/{prefix}/{RomanMonth}/{TwoDigitYear} e.g. 1546/HRCJ/FOD/VIII/26
+     */
+    public static function generateNextDocNo(?int $sequence = null, ?string $prefix = null): string
+    {
+        $prefix = $prefix ?: Setting::get('surat_kuasa_doc_prefix', 'HRCJ/FOD');
+        if ($sequence === null) {
+            $lastSeq = (int) Setting::get('surat_kuasa_last_sequence', 1545);
+            $sequence = $lastSeq + 1;
+
+            // Automatically check and skip any sequence numbers already taken in SuratKuasaLog
+            while (SuratKuasaLog::where('doc_no', 'like', "{$sequence}/%")->exists()) {
+                $sequence++;
+            }
+        }
+
+        $romanMonth = self::getRomanMonth((int) date('n'));
+        $twoDigitYear = date('y');
+
+        return "{$sequence}/{$prefix}/{$romanMonth}/{$twoDigitYear}";
+    }
+
+    /**
+     * Advance the last sequence in settings based on the document number used
+     */
+    public static function advanceDocSequence(?string $docNo): void
+    {
+        if (empty($docNo)) return;
+
+        if (preg_match('/^(\d+)/', trim($docNo), $matches)) {
+            $usedSeq = (int) $matches[1];
+            $currentLast = (int) Setting::get('surat_kuasa_last_sequence', 1545);
+            if ($usedSeq >= $currentLast) {
+                Setting::set('surat_kuasa_last_sequence', $usedSeq);
+            }
+        }
+    }
+
     /**
      * Display the Surat Kuasa dashboard or password unlock prompt
      */
@@ -55,8 +142,9 @@ class SuratKuasaController extends Controller
 
         $items = $query->orderBy('product')->orderBy('lot_number')->paginate(50);
 
-        // Fetch list of item IDs that already have generated Surat Kuasa logs
-        $generatedItemIds = SuratKuasaLog::pluck('item_id')->unique()->toArray();
+        // Fetch map of item IDs that already have generated Surat Kuasa logs with their latest log data
+        $generatedLogsByItemId = SuratKuasaLog::latest('id')->get()->keyBy('item_id');
+        $generatedItemIds = $generatedLogsByItemId->keys()->toArray();
 
         // Fetch dynamic Surat Kuasa settings from UTILITIES -> Settings
         $settings = [
@@ -68,6 +156,8 @@ class SuratKuasaController extends Controller
             'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
             'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
             'default_recipient_email' => Setting::get('surat_kuasa_default_recipient_email', ''),
+            'doc_prefix' => Setting::get('surat_kuasa_doc_prefix', 'HRCJ/FOD'),
+            'last_sequence' => (int) Setting::get('surat_kuasa_last_sequence', 1545),
         ];
 
         // Fetch recent sync updates for notification bell
@@ -100,8 +190,11 @@ class SuratKuasaController extends Controller
             'authenticated' => true,
             'items' => $items,
             'generatedItemIds' => $generatedItemIds,
+            'generatedLogsByItemId' => $generatedLogsByItemId,
             'settings' => $settings,
             'search' => $search,
+            'nextDocNo' => self::generateNextDocNo(),
+            'defaultDate' => self::formatIndonesianDate(),
             'recentNotifications' => $recentNotifications
         ]);
     }
@@ -219,6 +312,7 @@ class SuratKuasaController extends Controller
                     $existing->is_order_only = false;
 
                     if (!empty($itemData['product']) && $existing->product !== $itemData['product']) $existing->product = $itemData['product'];
+                    if (isset($itemData['vehicle_category']) && $existing->vehicle_category !== $itemData['vehicle_category']) $existing->vehicle_category = $itemData['vehicle_category'];
                     if (!empty($itemData['year']) && $existing->year !== $itemData['year']) $existing->year = $itemData['year'];
                     if (!empty($itemData['location'])) $existing->location = $itemData['location'];
                     if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn']) $existing->bbn = $itemData['bbn'];
@@ -247,6 +341,7 @@ class SuratKuasaController extends Controller
                             'odoo_lot_id'         => $odooLotId,
                             'lot_number'          => $itemData['lot_number'],
                             'product'             => $itemData['product'] ?? '',
+                            'vehicle_category'    => $itemData['vehicle_category'] ?? null,
                             'year'                => $itemData['year'] ?? date('Y'),
                             'location'            => $itemData['location'] ?? '',
                             'bbn'                 => $itemData['bbn'] ?? null,
@@ -421,6 +516,7 @@ class SuratKuasaController extends Controller
                 }
 
                 if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
+                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category']) $item->vehicle_category = $odooRow['vehicle_category'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
@@ -468,6 +564,7 @@ class SuratKuasaController extends Controller
                     $item->engine_number = $odooRow['engine_number'];
                 }
                 if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
+                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category']) $item->vehicle_category = $odooRow['vehicle_category'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
@@ -563,13 +660,15 @@ class SuratKuasaController extends Controller
             $noMesin = '[EMPTY - IT ADMIN TEST]';
 
         // Printable inputs from query string or modal
-        $docNo = $request->query('doc_no', '1545/HRCJ/FOD/' . \Carbon\Carbon::now()->format('m/Y'));
+        $docNo = $request->query('doc_no', self::generateNextDocNo());
         $penerimaNama = $request->query('penerima_nama', '');
         $penerimaAlamat = $request->query('penerima_alamat', '');
-        $jenisModel = $request->query('jenis_model', 'Mobil Barang');
+        $jenisModel = $request->query('jenis_model') ?: ($item->vehicle_category ?: 'Mobil Barang');
         $warna = $item->color ?: 'Putih';
         $tahun = $item->year ?: date('Y');
-        $printDate = $request->query('date', \Carbon\Carbon::now()->translatedFormat('d F Y'));
+        $rawDate = $request->query('date');
+        $printDate = self::formatIndonesianDate($rawDate);
+        $cleanProduct = self::cleanProductName($item->product);
 
         // Dynamic settings
         $settings = [
@@ -584,6 +683,7 @@ class SuratKuasaController extends Controller
 
         return view('surat_kuasa.print', [
             'item' => $item,
+            'cleanProduct' => $cleanProduct,
             'noRangka' => $noRangka,
             'noMesin' => $noMesin,
             'docNo' => $docNo,
@@ -620,13 +720,15 @@ class SuratKuasaController extends Controller
         if (empty($noMesin))
             $noMesin = '[EMPTY - IT ADMIN TEST]';
 
-        $docNo = $request->query('doc_no', '1545/HRCJ/FOD/' . \Carbon\Carbon::now()->format('m/Y'));
+        $docNo = $request->query('doc_no', self::generateNextDocNo());
         $penerimaNama = $request->query('penerima_nama', '');
         $penerimaAlamat = $request->query('penerima_alamat', '');
-        $jenisModel = $request->query('jenis_model', 'Mobil Barang');
+        $jenisModel = $request->query('jenis_model') ?: ($item->vehicle_category ?: 'Mobil Barang');
         $warna = $item->color ?: 'Putih';
         $tahun = $item->year ?: date('Y');
-        $printDate = $request->query('date', \Carbon\Carbon::now()->translatedFormat('d F Y'));
+        $rawDate = $request->query('date');
+        $printDate = self::formatIndonesianDate($rawDate);
+        $cleanProduct = self::cleanProductName($item->product);
 
         $settings = [
             'pemberi_1_nama' => Setting::get('surat_kuasa_pemberi_1_nama', 'Suzanna Caroline'),
@@ -726,7 +828,7 @@ class SuratKuasaController extends Controller
         $table3->addRow();
         $table3->addCell(2200)->addText('Merk/Type', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
         $table3->addCell(300)->addText(':', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
-        $table3->addCell(6500)->addText($item->product, ['name' => 'Times New Roman', 'size' => 12], $pStyle);
+        $table3->addCell(6500)->addText($cleanProduct, ['name' => 'Times New Roman', 'size' => 12], $pStyle);
 
         $table3->addRow();
         $table3->addCell(2200)->addText('Jenis / Model', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
@@ -789,7 +891,9 @@ class SuratKuasaController extends Controller
             $c3->addText('(                                          )', ['name' => 'Times New Roman', 'size' => 12], ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER, 'spaceAfter' => 0]);
         }
 
-        $filename = 'Surat_Kuasa_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number) . '.docx';
+        $cleanDoc = preg_replace('/[^A-Za-z0-9_\-]/', '_', $docNo);
+        $cleanLot = preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number);
+        $filename = "Surat_Kuasa_{$cleanDoc}_{$cleanLot}.docx";
 
         $tempPath = storage_path('app/temp_documents');
         if (!file_exists($tempPath)) {
@@ -802,25 +906,30 @@ class SuratKuasaController extends Controller
 
         $fileSize = filesize($tempFile);
 
-        // Log Surat Kuasa generation
-        SuratKuasaLog::create([
-            'item_id' => $item->id,
-            'doc_no' => $docNo,
-            'lot_number' => $item->lot_number,
-            'product' => $item->product,
-            'customer' => $item->current_customer,
-            'penerima_nama' => $penerimaNama,
-            'penerima_alamat' => $penerimaAlamat,
-            'jenis_model' => $jenisModel,
-            'warna' => $warna,
-            'tahun' => $tahun,
-            'no_rangka' => $noRangka,
-            'no_mesin' => $noMesin,
-            'print_date' => $printDate,
-            'action_type' => 'word',
-            'generated_by_id' => auth()->id(),
-            'generated_by_name' => auth()->check() ? auth()->user()->name : 'System',
-        ]);
+        $isReprint = $request->boolean('reprint') || SuratKuasaLog::where('item_id', $item->id)->where('doc_no', $docNo)->exists();
+
+        if (!$isReprint) {
+            // Log Surat Kuasa generation
+            SuratKuasaLog::create([
+                'item_id' => $item->id,
+                'doc_no' => $docNo,
+                'lot_number' => $item->lot_number,
+                'product' => $cleanProduct,
+                'customer' => $item->current_customer,
+                'penerima_nama' => $penerimaNama,
+                'penerima_alamat' => $penerimaAlamat,
+                'jenis_model' => $jenisModel,
+                'warna' => $warna,
+                'tahun' => $tahun,
+                'no_rangka' => $noRangka,
+                'no_mesin' => $noMesin,
+                'print_date' => $printDate,
+                'action_type' => 'word',
+                'generated_by_id' => auth()->id(),
+                'generated_by_name' => auth()->check() ? auth()->user()->name : 'System',
+            ]);
+            self::advanceDocSequence($docNo);
+        }
 
         return response()->download($tempFile, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -854,13 +963,15 @@ class SuratKuasaController extends Controller
         if (empty($noMesin))
             $noMesin = '[EMPTY - IT ADMIN TEST]';
 
-        $docNo = $request->query('doc_no', '1545/HRCJ/FOD/' . \Carbon\Carbon::now()->format('m/Y'));
+        $docNo = $request->query('doc_no', self::generateNextDocNo());
         $penerimaNama = $request->query('penerima_nama', '');
         $penerimaAlamat = $request->query('penerima_alamat', '');
-        $jenisModel = $request->query('jenis_model', 'Mobil Barang');
+        $jenisModel = $request->query('jenis_model') ?: ($item->vehicle_category ?: 'Mobil Barang');
         $warna = $item->color ?: 'Putih';
         $tahun = $item->year ?: date('Y');
-        $printDate = $request->query('date', \Carbon\Carbon::now()->translatedFormat('d F Y'));
+        $rawDate = $request->query('date');
+        $printDate = self::formatIndonesianDate($rawDate);
+        $cleanProduct = self::cleanProductName($item->product);
 
         $settings = [
             'pemberi_1_nama' => Setting::get('surat_kuasa_pemberi_1_nama', 'Suzanna Caroline'),
@@ -874,6 +985,7 @@ class SuratKuasaController extends Controller
 
         $html = view('surat_kuasa.print', [
             'item' => $item,
+            'cleanProduct' => $cleanProduct,
             'noRangka' => $noRangka,
             'noMesin' => $noMesin,
             'docNo' => $docNo,
@@ -891,7 +1003,9 @@ class SuratKuasaController extends Controller
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $filename = 'Surat_Kuasa_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number) . '.pdf';
+        $cleanDoc = preg_replace('/[^A-Za-z0-9_\-]/', '_', $docNo);
+        $cleanLot = preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number);
+        $filename = "Surat_Kuasa_{$cleanDoc}_{$cleanLot}.pdf";
         return response()->streamDownload(function () use ($dompdf) {
             echo $dompdf->output();
         }, $filename, ['Content-Type' => 'application/pdf']);
@@ -925,19 +1039,19 @@ class SuratKuasaController extends Controller
         if (empty($noMesin))
             $noMesin = '[EMPTY - IT ADMIN TEST]';
 
-        $recipientEmail = $request->input('recipient_email');
-        $customSubject = $request->input('subject', 'Surat Kuasa Document - ' . $item->lot_number);
-        $customMessage = $request->input('message', 'Please find attached the Surat Kuasa document for vehicle unit ' . $item->lot_number . '.');
         $format = $request->input('file_format', 'pdf');
-
-        $docNo = $request->input('doc_no', '1545/HRCJ/FOD/' . \Carbon\Carbon::now()->format('m/Y'));
-        $penerimaNama = $request->input('penerima_nama', '');
-        $penerimaAlamat = $request->input('penerima_alamat', '');
-        $jenisModel = $request->input('jenis_model', 'Mobil Barang');
+        $recipientEmail = trim($request->input('recipient_email'));
+        $penerimaNama = trim((string) $request->input('penerima_nama'));
+        $penerimaAlamat = trim((string) $request->input('penerima_alamat'));
+        $docNo = $request->input('doc_no') ?: self::generateNextDocNo();
+        $jenisModel = $request->input('jenis_model') ?: ($item->vehicle_category ?: 'Mobil Barang');
         $warna = $item->color ?: 'Putih';
         $tahun = $item->year ?: date('Y');
-        $printDate = $request->input('date', \Carbon\Carbon::now()->translatedFormat('d F Y'));
-        $printDate = $request->input('date', \Carbon\Carbon::now()->translatedFormat('d F Y'));
+        $rawDate = $request->input('date');
+        $printDate = self::formatIndonesianDate($rawDate);
+        $cleanProduct = self::cleanProductName($item->product);
+        $customSubject = $request->input('subject', 'Surat Kuasa Document - ' . $item->lot_number);
+        $customMessage = $request->input('message', 'Please find attached the Surat Kuasa document for vehicle unit ' . $item->lot_number . '.');
 
         $settings = [
             'pemberi_1_nama' => Setting::get('surat_kuasa_pemberi_1_nama', 'Suzanna Caroline'),
@@ -955,8 +1069,11 @@ class SuratKuasaController extends Controller
                 mkdir($tempDir, 0777, true);
             }
 
+            $cleanDoc = preg_replace('/[^A-Za-z0-9_\-]/', '_', $docNo);
+            $cleanLot = preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number);
+
             if ($format === 'docx') {
-                $filename = 'Surat_Kuasa_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', $item->lot_number) . '.docx';
+                $filename = "Surat_Kuasa_{$cleanDoc}_{$cleanLot}.docx";
                 $filePath = $tempDir . '/' . $filename;
 
                 $phpWord = new \PhpOffice\PhpWord\PhpWord();
@@ -1032,7 +1149,7 @@ class SuratKuasaController extends Controller
                 $table3->addRow();
                 $table3->addCell(2200)->addText('Merk/Type', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
                 $table3->addCell(300)->addText(':', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
-                $table3->addCell(6500)->addText($item->product, ['name' => 'Times New Roman', 'size' => 12], $pStyle);
+                $table3->addCell(6500)->addText($cleanProduct, ['name' => 'Times New Roman', 'size' => 12], $pStyle);
                 $table3->addRow();
                 $table3->addCell(2200)->addText('Jenis / Model', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
                 $table3->addCell(300)->addText(':', ['name' => 'Times New Roman', 'size' => 12], $pStyle);
@@ -1097,6 +1214,7 @@ class SuratKuasaController extends Controller
 
                 $html = view('surat_kuasa.print', [
                     'item' => $item,
+                    'cleanProduct' => $cleanProduct,
                     'noRangka' => $noRangka,
                     'noMesin' => $noMesin,
                     'docNo' => $docNo,
@@ -1142,7 +1260,7 @@ class SuratKuasaController extends Controller
                 'item_id' => $item->id,
                 'doc_no' => $docNo,
                 'lot_number' => $item->lot_number,
-                'product' => $item->product,
+                'product' => $cleanProduct,
                 'customer' => $item->current_customer,
                 'penerima_nama' => $penerimaNama,
                 'penerima_alamat' => $penerimaAlamat,
@@ -1157,6 +1275,7 @@ class SuratKuasaController extends Controller
                 'generated_by_id' => auth()->id(),
                 'generated_by_name' => auth()->check() ? auth()->user()->name : 'System',
             ]);
+            self::advanceDocSequence($docNo);
 
             return response()->json(['success' => true, 'message' => "Surat Kuasa document successfully emailed to {$recipientEmail}."]);
         } catch (\Exception $e) {
@@ -1195,11 +1314,59 @@ class SuratKuasaController extends Controller
 
         $logs = $query->paginate(20)->withQueryString();
 
+        $settings = [
+            'pemberi_1_nama' => Setting::get('surat_kuasa_pemberi_1_nama', 'Suzanna Caroline'),
+            'pemberi_1_jabatan' => Setting::get('surat_kuasa_pemberi_1_jabatan', 'General Manager'),
+            'pemberi_2_nama' => Setting::get('surat_kuasa_pemberi_2_nama', 'Aldian Prayoga Darwis'),
+            'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
+            'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
+            'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
+            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+        ];
+
         return view('surat_kuasa.report', [
             'authenticated' => true,
             'logs' => $logs,
+            'settings' => $settings,
             'search' => $search
         ]);
+    }
+
+    /**
+     * Delete a single Surat Kuasa generation log (IT Admin only)
+     */
+    public function deleteLog(Request $request, $id)
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only IT Admin can delete logs.'], 403);
+        }
+
+        if (!$this->checkSuratKuasaSession()) {
+            return response()->json(['success' => false, 'message' => 'Session expired.'], 401);
+        }
+
+        $log = SuratKuasaLog::findOrFail($id);
+        $log->delete();
+
+        return response()->json(['success' => true, 'message' => 'Log record deleted successfully.']);
+    }
+
+    /**
+     * Clear all Surat Kuasa generation logs (IT Admin only)
+     */
+    public function clearAllLogs(Request $request)
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized: Only IT Admin can clear logs.'], 403);
+        }
+
+        if (!$this->checkSuratKuasaSession()) {
+            return response()->json(['success' => false, 'message' => 'Session expired.'], 401);
+        }
+
+        SuratKuasaLog::truncate();
+
+        return response()->json(['success' => true, 'message' => 'All Surat Kuasa logs cleared successfully.']);
     }
 
     /**
@@ -1310,6 +1477,101 @@ class SuratKuasaController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to send test email: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Reset the auto_sk_sent flag for an item (IT Admin only)
+     * Allows the auto-scheduler to re-process this unit on the next run.
+     */
+    public function resetAutoFlag(Request $request, $id)
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $item = Item::findOrFail($id);
+        $item->auto_sk_sent = null;
+        $item->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Auto SK flag reset for unit {$item->lot_number}. It will be re-processed on the next auto-generate run.",
+        ]);
+    }
+
+    /**
+     * Show Surat Kuasa System & Automation Logs (IT Admin only)
+     */
+    public function systemLogs(Request $request)
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            abort(403, 'Unauthorized access. IT Admin role required.');
+        }
+
+        $authenticated = $this->checkSuratKuasaSession();
+
+        $search    = trim((string) $request->input('search', ''));
+        $level     = trim((string) $request->input('level', ''));
+        $eventType = trim((string) $request->input('event_type', ''));
+
+        $query = SuratKuasaSystemLog::orderBy('created_at', 'desc');
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('message', 'like', "%{$search}%")
+                  ->orWhere('lot_number', 'like', "%{$search}%")
+                  ->orWhere('doc_no', 'like', "%{$search}%");
+            });
+        }
+
+        if (!empty($level) && in_array($level, ['error', 'warning', 'success', 'info'])) {
+            $query->where('level', $level);
+        }
+
+        if (!empty($eventType)) {
+            $query->where('event_type', $eventType);
+        }
+
+        $logs = $query->paginate(30)->appends($request->query());
+
+        $stats = [
+            'total'   => SuratKuasaSystemLog::count(),
+            'error'   => SuratKuasaSystemLog::where('level', 'error')->count(),
+            'warning' => SuratKuasaSystemLog::where('level', 'warning')->count(),
+            'success' => SuratKuasaSystemLog::where('level', 'success')->count(),
+            'info'    => SuratKuasaSystemLog::where('level', 'info')->count(),
+        ];
+
+        return view('surat_kuasa.logs', compact('logs', 'stats', 'search', 'level', 'eventType', 'authenticated'));
+    }
+
+    /**
+     * Delete a single system log entry (IT Admin only)
+     */
+    public function deleteSystemLog($id)
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $log = SuratKuasaSystemLog::findOrFail($id);
+        $log->delete();
+
+        return response()->json(['success' => true, 'message' => 'Log entry deleted successfully.']);
+    }
+
+    /**
+     * Clear all system logs (IT Admin only)
+     */
+    public function clearSystemLogs()
+    {
+        if (!auth()->check() || !auth()->user()->isItAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        SuratKuasaSystemLog::truncate();
+
+        return response()->json(['success' => true, 'message' => 'All system logs cleared successfully.']);
     }
 
     /**

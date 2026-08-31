@@ -225,7 +225,7 @@
             <tr>
                 <td class="label">Merk/Type</td>
                 <td class="colon">:</td>
-                <td>{{ $item->product }}</td>
+                <td>{{ $cleanProduct ?? \App\Http\Controllers\SuratKuasaController::cleanProductName($item->product) }}</td>
             </tr>
             <tr>
                 <td class="label">Jenis / Model</td>

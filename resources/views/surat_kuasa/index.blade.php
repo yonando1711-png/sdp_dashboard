@@ -194,6 +194,7 @@
                         <th class="py-4 px-5">WARNA & TAHUN</th>
                         <th class="py-4 px-5">LOCATION</th>
                         <th class="py-4 px-5 text-center">STATUS</th>
+                        <th class="py-4 px-5 text-center">AUTO SK</th>
                         <th class="py-4 px-5 text-right">ACTION</th>
                     </tr>
                 </thead>
@@ -208,6 +209,7 @@
                             $isReadyToPrint = !empty($noRangka) && !empty($noMesin);
                             $canGenerate = $isReadyToPrint || $isItAdmin;
                             $hasGeneratedLog = in_array($item->id, $generatedItemIds);
+                            $existingLog = $generatedLogsByItemId[$item->id] ?? null;
                         @endphp
                         <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                             <td class="py-4 px-5 text-slate-400 font-mono">{{ $items->firstItem() + $index }}</td>
@@ -215,8 +217,17 @@
                                 {{ $item->lot_number }}
                             </td>
                             <td class="py-4 px-5">
-                                <div class="font-semibold text-slate-900 dark:text-slate-100 max-w-xs truncate">{{ $item->product }}</div>
-                                <div class="text-[10px] text-slate-400">Rental: {{ $item->rental_id ?: '-' }}</div>
+                                <div class="font-semibold text-slate-900 dark:text-slate-100 max-w-xs truncate" title="{{ $item->product }}">
+                                    {{ \App\Http\Controllers\SuratKuasaController::cleanProductName($item->product) }}
+                                </div>
+                                <div class="flex items-center gap-2 mt-0.5">
+                                    @if(!empty($item->vehicle_category))
+                                        <span class="px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 uppercase">
+                                            {{ $item->vehicle_category }}
+                                        </span>
+                                    @endif
+                                    <span class="text-[10px] text-slate-400">Rental: {{ $item->rental_id ?: '-' }}</span>
+                                </div>
                             </td>
                             <td class="py-4 px-5">
                                 @if(!empty($noRangka))
@@ -269,6 +280,26 @@
                                     </span>
                                 @endif
                             </td>
+                            {{-- AUTO SK badge column --}}
+                            <td class="py-4 px-5 text-center">
+                                @if($item->auto_sk_sent)
+                                    <div class="flex flex-col items-center gap-1">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 text-[10px] font-bold border border-violet-300 dark:border-violet-700/40">
+                                            🤖 Auto-Sent
+                                        </span>
+                                        <span class="text-[9px] text-slate-400 font-mono">{{ \Carbon\Carbon::parse($item->auto_sk_sent)->format('d/m/y H:i') }}</span>
+                                        @if($isItAdmin)
+                                            <button type="button"
+                                                onclick="if(confirm('Reset auto-SK flag for {{ addslashes($item->lot_number) }}? The scheduler will re-process this unit on the next run.')) { fetch('{{ route('surat-kuasa.reset-auto-flag', $item->id) }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/json', 'Accept': 'application/json' } }).then(r => r.json()).then(d => { alert(d.message); if(d.success) location.reload(); }); }"
+                                                class="text-[9px] px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-700/40 hover:bg-rose-200 transition-colors cursor-pointer font-bold" title="Reset auto flag — allows re-processing">
+                                                ↺ Reset
+                                            </button>
+                                        @endif
+                                    </div>
+                                @else
+                                    <span class="text-[10px] text-slate-300 dark:text-slate-600 font-mono">—</span>
+                                @endif
+                            </td>
                             <td class="py-4 px-5 align-middle text-right whitespace-nowrap">
                                 @if($hasGeneratedLog && !$isItAdmin)
                                     <!-- Standard User Lock: SK already generated -->
@@ -280,11 +311,16 @@
                                     <button type="button" @click="openGeneratorModal({{ json_encode([
                                         'id' => $item->id,
                                         'product' => $item->product,
+                                        'clean_product' => \App\Http\Controllers\SuratKuasaController::cleanProductName($item->product),
+                                        'vehicle_category' => $item->vehicle_category ?: '',
                                         'noRangka' => !empty($noRangka) ? $noRangka : '[EMPTY - IT ADMIN TEST]',
                                         'noMesin' => !empty($noMesin) ? $noMesin : '[EMPTY - IT ADMIN TEST]',
                                         'color' => $item->color ?: 'Putih',
                                         'year' => $item->year ?: date('Y'),
-                                        'customer' => $item->current_customer
+                                        'customer' => $item->current_customer,
+                                        'existing_doc_no' => $existingLog ? $existingLog->doc_no : null,
+                                        'existing_penerima_nama' => $existingLog ? $existingLog->penerima_nama : '',
+                                        'existing_penerima_alamat' => $existingLog ? $existingLog->penerima_alamat : ''
                                     ]) }})" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-1.5 ml-auto">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                         @if($hasGeneratedLog)
@@ -306,7 +342,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="py-12 text-center text-slate-400">
+                            <td colspan="9" class="py-12 text-center text-slate-400">
                                 <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                 <p class="text-sm font-bold">No vehicles matching Surat Kuasa criteria (qty = 0)</p>
                                 <p class="text-xs text-slate-500 mt-1">Try running Fast Sync Odoo or clear search filter.</p>
@@ -346,10 +382,16 @@
             <!-- Form -->
             <div class="space-y-4">
                 
-                <!-- Document Number -->
+                <!-- Document Number (Auto-Generated) -->
                 <div class="space-y-1">
-                    <label class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nomor Surat Kuasa</label>
-                    <input type="text" x-model="modalData.docNo" required class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                    <div class="flex items-center justify-between">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nomor Surat Kuasa (Auto-Generated)</label>
+                        <span class="text-[9px] px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold uppercase border border-indigo-200 dark:border-indigo-800/60">Auto-increment on generate</span>
+                    </div>
+                    <div class="w-full px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between shadow-inner">
+                        <span x-text="modalData.docNo"></span>
+                        <svg class="w-4 h-4 text-indigo-500/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v4a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
                 </div>
 
                 <!-- Penerima Kuasa Details -->
@@ -365,34 +407,29 @@
                 </div>
 
                 <!-- Vehicle Auto-filled parameters -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                     <div class="space-y-1">
-                        <label class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Jenis / Model</label>
-                        <select x-model="modalData.jenisModel" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700 text-xs font-semibold">
-                            <option value="Mobil Barang">Mobil Barang</option>
-                            <option value="Mobil Penumpang">Mobil Penumpang</option>
-                            <option value="Mobil Bus">Mobil Bus</option>
-                            <option value="Sepeda Motor">Sepeda Motor</option>
-                        </select>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate" title="Jenis / Model (Odoo Category)">Jenis / Model (Odoo)</label>
+                        <div class="px-3 py-2 h-[38px] flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 uppercase" x-text="modalData.jenisModel || '-'"></div>
                     </div>
                     <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warna (Auto-filled from Odoo)</label>
-                        <div class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.color || 'Putih'"></div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate" title="Warna (Odoo)">Warna (Odoo)</label>
+                        <div class="px-3 py-2 h-[38px] flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.color || 'Putih'"></div>
                     </div>
                     <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tahun (Auto-filled from Odoo)</label>
-                        <div class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.year || '-'"></div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate" title="Tahun (Odoo)">Tahun (Odoo)</label>
+                        <div class="px-3 py-2 h-[38px] flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.year || '-'"></div>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">No. Rangka (Auto-filled from Odoo)</label>
-                        <div class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.noRangka"></div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">No. Rangka (Odoo)</label>
+                        <div class="px-3 py-2 h-[38px] flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.noRangka"></div>
                     </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase">No. Mesin (Auto-filled from Odoo)</label>
-                        <div class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.noMesin"></div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">No. Mesin (Odoo)</label>
+                        <div class="px-3 py-2 h-[38px] flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80" x-text="modalData.noMesin"></div>
                     </div>
                 </div>
 
@@ -441,11 +478,11 @@
 
                 <div class="pt-2">Yang bertanda tangan dibawah ini:</div>
                 <table class="w-full text-xs">
-                    <tr><td class="w-32 py-0.5">Nama</td><td class="w-4">:</td><td>Suzanna Caroline</td></tr>
-                    <tr><td class="py-0.5">Jabatan</td><td>:</td><td>General Manager</td></tr>
-                    <tr><td class="py-0.5">Nama</td><td>:</td><td>Aldian Prayoga Darwis</td></tr>
-                    <tr><td class="py-0.5">Jabatan</td><td>:</td><td>Fleet Operation Manager</td></tr>
-                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510</td></tr>
+                    <tr><td class="w-32 py-0.5">Nama</td><td class="w-4">:</td><td>{{ $settings['pemberi_1_nama'] ?? 'Suzanna Caroline' }}</td></tr>
+                    <tr><td class="py-0.5">Jabatan</td><td>:</td><td>{{ $settings['pemberi_1_jabatan'] ?? 'General Manager' }}</td></tr>
+                    <tr><td class="py-0.5">Nama</td><td>:</td><td>{{ $settings['pemberi_2_nama'] ?? 'Aldian Prayoga Darwis' }}</td></tr>
+                    <tr><td class="py-0.5">Jabatan</td><td>:</td><td>{{ $settings['pemberi_2_jabatan'] ?? 'Fleet Operation Manager' }}</td></tr>
+                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>{{ $settings['pemberi_alamat'] ?? 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510' }}</td></tr>
                 </table>
 
                 <div class="pt-4">Dengan ini memberi kuasa kepada :</div>
@@ -454,12 +491,14 @@
                     <tr><td class="py-0.5">Alamat</td><td>:</td><td x-text="modalData.penerimaAlamat || '....................................................................................'"></td></tr>
                 </table>
 
-                <div class="pt-4 font-bold">Untuk mengurus Surat Tanda Nomor Kendaraan ( STNK ) & BPKB</div>
+                <div class="pt-4 font-bold">Untuk mengurus Surat Tanda Nomor Kendaraan ( STNK ) &amp; BPKB</div>
 
                 <table class="w-full text-xs">
-                    <tr><td class="w-32 py-0.5 font-bold">Nama Pemilik</td><td class="w-4">:</td><td class="font-bold">PT Surya Darma Perkasa</td></tr>
-                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat</td></tr>
-                    <tr><td class="py-0.5">Merk/Type</td><td>:</td><td x-text="modalData.product"></td></tr>
+                    <tr><td class="w-32 py-0.5 font-bold">Nama Pemilik</td><td class="w-4">:</td><td class="font-bold">{{ $settings['pemilik_nama'] ?? 'PT Surya Darma Perkasa' }}</td></tr>
+                    @if(!empty($settings['pemilik_alamat']))
+                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>{{ $settings['pemilik_alamat'] }}</td></tr>
+                    @endif
+                    <tr><td class="py-0.5">Merk/Type</td><td>:</td><td x-text="modalData.cleanProduct || modalData.product"></td></tr>
                     <tr><td class="py-0.5">Jenis / Model</td><td>:</td><td x-text="modalData.jenisModel"></td></tr>
                     <tr><td class="py-0.5">Tahun</td><td>:</td><td x-text="modalData.year"></td></tr>
                     <tr><td class="py-0.5">No. Rangka</td><td>:</td><td x-text="modalData.noRangka"></td></tr>
@@ -472,16 +511,16 @@
                 <div class="pt-6 font-sans">
                     <div class="flex justify-between">
                         <div>
-                            <div>Jakarta , {{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</div>
+                            <div>Jakarta , {{ $defaultDate ?? \App\Http\Controllers\SuratKuasaController::formatIndonesianDate() }}</div>
                             <div class="font-bold mt-1">Pemberi Kuasa</div>
                             <div class="mt-20 flex gap-8">
                                 <div>
-                                    <div class="font-bold underline">Suzanna Caroline</div>
-                                    <div class="text-[10px]">General Manager</div>
+                                    <div class="font-bold underline">{{ $settings['pemberi_1_nama'] ?? 'Suzanna Caroline' }}</div>
+                                    <div class="text-[10px]">{{ $settings['pemberi_1_jabatan'] ?? 'General Manager' }}</div>
                                 </div>
                                 <div>
-                                    <div class="font-bold underline">Aldian Prayoga Darwis</div>
-                                    <div class="text-[10px]">Fleet Operation Manager</div>
+                                    <div class="font-bold underline">{{ $settings['pemberi_2_nama'] ?? 'Aldian Prayoga Darwis' }}</div>
+                                    <div class="text-[10px]">{{ $settings['pemberi_2_jabatan'] ?? 'Fleet Operation Manager' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -630,6 +669,9 @@ function suratKuasaApp() {
             window.location.reload();
         },
 
+        nextDocNo: {!! json_encode($nextDocNo ?? '') !!},
+        defaultDate: {!! json_encode($defaultDate ?? '') !!},
+
         emailForm: {
             recipientEmail: {!! json_encode($settings['default_recipient_email'] ?? '') !!},
             subject: '',
@@ -640,30 +682,32 @@ function suratKuasaApp() {
         modalData: {
             id: null,
             product: '',
+            cleanProduct: '',
             noRangka: '',
             noMesin: '',
             color: 'Putih',
             year: '{{ date('Y') }}',
-            docNo: '1545/HRCJ/FOD/{{ date('m/Y') }}',
+            docNo: '{{ $nextDocNo ?? '' }}',
             penerimaNama: '',
             penerimaAlamat: '',
-            jenisModel: 'Mobil Barang'
+            jenisModel: ''
         },
 
         openGeneratorModal(data) {
             this.modalData = {
                 id: data.id,
                 product: data.product,
+                cleanProduct: data.clean_product || data.product,
                 noRangka: data.noRangka,
                 noMesin: data.noMesin,
                 color: data.color || 'Putih',
                 year: data.year || '{{ date('Y') }}',
-                docNo: '1545/HRCJ/FOD/' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
-                penerimaNama: '',
-                penerimaAlamat: '',
-                jenisModel: 'Mobil Barang'
+                docNo: data.existing_doc_no || this.nextDocNo || ('1546/HRCJ/FOD/' + '{{ \App\Http\Controllers\SuratKuasaController::getRomanMonth((int)date('n')) }}' + '/{{ date('y') }}'),
+                penerimaNama: data.existing_penerima_nama || '',
+                penerimaAlamat: data.existing_penerima_alamat || '',
+                jenisModel: data.vehicle_category || ''
             };
-            this.emailForm.subject = 'Surat Kuasa Document - ' + (data.product || 'Vehicle');
+            this.emailForm.subject = 'Surat Kuasa Document - ' + (this.modalData.cleanProduct || 'Vehicle');
             this.emailForm.message = 'Please find attached the Surat Kuasa document for vehicle unit (' + data.noRangka + ').';
             this.showGeneratorModal = true;
             this.showPreviewModal = false;
