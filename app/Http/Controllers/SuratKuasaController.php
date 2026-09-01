@@ -29,8 +29,18 @@ class SuratKuasaController extends Controller
     public static function getRomanMonth(int $month): string
     {
         $romanMonths = [
-            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI',
-            7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'
+            1 => 'I',
+            2 => 'II',
+            3 => 'III',
+            4 => 'IV',
+            5 => 'V',
+            6 => 'VI',
+            7 => 'VII',
+            8 => 'VIII',
+            9 => 'IX',
+            10 => 'X',
+            11 => 'XI',
+            12 => 'XII'
         ];
         return $romanMonths[$month] ?? 'I';
     }
@@ -47,9 +57,18 @@ class SuratKuasaController extends Controller
         }
 
         $months = [
-            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember'
         ];
 
         $day = $carbon->format('d');
@@ -92,7 +111,8 @@ class SuratKuasaController extends Controller
      */
     public static function advanceDocSequence(?string $docNo): void
     {
-        if (empty($docNo)) return;
+        if (empty($docNo))
+            return;
 
         if (preg_match('/^(\d+)/', trim($docNo), $matches)) {
             $usedSeq = (int) $matches[1];
@@ -177,8 +197,10 @@ class SuratKuasaController extends Controller
             ->map(function ($item) {
                 $isReady = !empty($item->internal_reference) && !empty($item->engine_number);
                 $changes = [];
-                if (!empty($item->internal_reference)) $changes[] = "No. Rangka: " . $item->internal_reference;
-                if (!empty($item->engine_number)) $changes[] = "No. Mesin: " . $item->engine_number;
+                if (!empty($item->internal_reference))
+                    $changes[] = "No. Rangka: " . $item->internal_reference;
+                if (!empty($item->engine_number))
+                    $changes[] = "No. Mesin: " . $item->engine_number;
                 return [
                     'key' => 'sk_' . $item->id . '_' . strtotime($item->updated_at),
                     'lot_number' => $item->lot_number,
@@ -280,7 +302,8 @@ class SuratKuasaController extends Controller
             $activeOdooIds = [];
 
             foreach ($records as $itemData) {
-                if (empty($itemData['lot_number'])) continue;
+                if (empty($itemData['lot_number']))
+                    continue;
 
                 $odooLotId = $itemData['odoo_lot_id'] ?? null;
 
@@ -316,26 +339,32 @@ class SuratKuasaController extends Controller
                     $existing->is_on_hand = true;
                     $existing->is_order_only = false;
 
-                    if (!empty($itemData['product']) && $existing->product !== $itemData['product']) $existing->product = $itemData['product'];
-                    if (isset($itemData['vehicle_category']) && $existing->vehicle_category !== $itemData['vehicle_category']) $existing->vehicle_category = $itemData['vehicle_category'];
-                    if (!empty($itemData['year']) && $existing->year !== $itemData['year']) $existing->year = $itemData['year'];
-                    if (!empty($itemData['location'])) $existing->location = $itemData['location'];
-                    if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn']) $existing->bbn = $itemData['bbn'];
-                    if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer']) $existing->current_customer = $itemData['current_customer'];
+                    if (!empty($itemData['product']) && $existing->product !== $itemData['product'])
+                        $existing->product = $itemData['product'];
+                    if (isset($itemData['vehicle_category']) && $existing->vehicle_category !== $itemData['vehicle_category'])
+                        $existing->vehicle_category = $itemData['vehicle_category'];
+                    if (!empty($itemData['year']) && $existing->year !== $itemData['year'])
+                        $existing->year = $itemData['year'];
+                    if (!empty($itemData['location']))
+                        $existing->location = $itemData['location'];
+                    if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn'])
+                        $existing->bbn = $itemData['bbn'];
+                    if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer'])
+                        $existing->current_customer = $itemData['current_customer'];
 
                     if ($existing->isDirty()) {
                         $existing->save();
                         if ($existing->surat_kuasa_tracked && !$wasTracked) {
                             $syncedCount++;
                             $changedDetails[] = [
-                                'lot_number'         => $existing->lot_number,
-                                'product'            => $existing->product,
+                                'lot_number' => $existing->lot_number,
+                                'product' => $existing->product,
                                 'internal_reference' => null,
-                                'engine_number'      => null,
-                                'changes'            => ['Tracking confirmed (awaiting No. Rangka & Mesin)'],
-                                'is_ready'           => false,
-                                'status_label'       => 'Awaiting Data',
-                                'is_new'             => false,
+                                'engine_number' => null,
+                                'changes' => ['Tracking confirmed (awaiting No. Rangka & Mesin)'],
+                                'is_ready' => false,
+                                'status_label' => 'Awaiting Data',
+                                'is_new' => false,
                             ];
                         }
                     }
@@ -343,32 +372,32 @@ class SuratKuasaController extends Controller
                     // Brand new lot not in DB. Only track if BOTH are empty (rule 1).
                     if ($bothEmpty) {
                         $newItem = Item::create([
-                            'odoo_lot_id'         => $odooLotId,
-                            'lot_number'          => $itemData['lot_number'],
-                            'product'             => $itemData['product'] ?? '',
-                            'vehicle_category'    => $itemData['vehicle_category'] ?? null,
-                            'year'                => $itemData['year'] ?? date('Y'),
-                            'location'            => $itemData['location'] ?? '',
-                            'bbn'                 => $itemData['bbn'] ?? null,
-                            'current_customer'    => $itemData['current_customer'] ?? null,
-                            'internal_reference'  => null,
-                            'engine_number'       => null,
-                            'on_hand_quantity'    => 0,
-                            'is_on_hand'          => true,
-                            'is_order_only'       => false,
-                            'is_vendor_rent'      => false,
+                            'odoo_lot_id' => $odooLotId,
+                            'lot_number' => $itemData['lot_number'],
+                            'product' => $itemData['product'] ?? '',
+                            'vehicle_category' => $itemData['vehicle_category'] ?? null,
+                            'year' => $itemData['year'] ?? date('Y'),
+                            'location' => $itemData['location'] ?? '',
+                            'bbn' => $itemData['bbn'] ?? null,
+                            'current_customer' => $itemData['current_customer'] ?? null,
+                            'internal_reference' => null,
+                            'engine_number' => null,
+                            'on_hand_quantity' => 0,
+                            'is_on_hand' => true,
+                            'is_order_only' => false,
+                            'is_vendor_rent' => false,
                             'surat_kuasa_tracked' => true,
                         ]);
                         $syncedCount++;
                         $changedDetails[] = [
-                            'lot_number'         => $newItem->lot_number,
-                            'product'            => $newItem->product,
+                            'lot_number' => $newItem->lot_number,
+                            'product' => $newItem->product,
                             'internal_reference' => null,
-                            'engine_number'      => null,
-                            'changes'            => ['New staging unit tracked (awaiting No. Rangka & Mesin)'],
-                            'is_ready'           => false,
-                            'status_label'       => 'Awaiting Data',
-                            'is_new'             => true,
+                            'engine_number' => null,
+                            'changes' => ['New staging unit tracked (awaiting No. Rangka & Mesin)'],
+                            'is_ready' => false,
+                            'status_label' => 'Awaiting Data',
+                            'is_new' => true,
                         ];
                     }
                 }
@@ -400,8 +429,8 @@ class SuratKuasaController extends Controller
                     ->update(['surat_kuasa_tracked' => false]);
             }
 
-            $totalSK  = $this->countTrackedSK();
-            $readySK  = $this->countReadySK();
+            $totalSK = $this->countTrackedSK();
+            $readySK = $this->countReadySK();
             $pendingSK = $totalSK - $readySK;
 
             $msg = ($syncedCount > 0)
@@ -409,13 +438,13 @@ class SuratKuasaController extends Controller
                 : "Sync completed! No new pending units found in Odoo. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)";
 
             return response()->json([
-                'success'       => true,
-                'message'       => $msg,
+                'success' => true,
+                'message' => $msg,
                 'updated_count' => $syncedCount,
-                'total_sk'      => $totalSK,
-                'ready_sk'      => $readySK,
-                'pending_sk'    => $pendingSK,
-                'changes'       => $changedDetails,
+                'total_sk' => $totalSK,
+                'ready_sk' => $readySK,
+                'pending_sk' => $pendingSK,
+                'changes' => $changedDetails,
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Surat Kuasa Sync failed: ' . $e->getMessage()], 500);
@@ -447,17 +476,17 @@ class SuratKuasaController extends Controller
 
             if ($trackedItems->isEmpty()) {
                 return response()->json([
-                    'success'       => true,
-                    'message'       => 'Fast Sync: No tracked Surat Kuasa units found. Run "Sync Odoo Data" first to discover units.',
+                    'success' => true,
+                    'message' => 'Fast Sync: No tracked Surat Kuasa units found. Run "Sync Odoo Data" first to discover units.',
                     'updated_count' => 0,
-                    'total_sk'      => 0,
-                    'ready_sk'      => 0,
-                    'pending_sk'    => 0,
-                    'changes'       => [],
+                    'total_sk' => 0,
+                    'ready_sk' => 0,
+                    'pending_sk' => 0,
+                    'changes' => [],
                 ]);
             }
 
-            $itemsWithOdooId    = $trackedItems->filter(fn($i) => !empty($i->odoo_lot_id));
+            $itemsWithOdooId = $trackedItems->filter(fn($i) => !empty($i->odoo_lot_id));
             $itemsWithoutOdooId = $trackedItems->filter(fn($i) => empty($i->odoo_lot_id));
 
             $odooIds = $itemsWithOdooId->pluck('odoo_lot_id')->unique()->values()->toArray();
@@ -491,13 +520,14 @@ class SuratKuasaController extends Controller
                 }
             }
 
-            $updatedCount   = 0;
+            $updatedCount = 0;
             $changedDetails = [];
 
             // --- Process items WITH odoo_lot_id (primary rename-safe path) ---
             foreach ($itemsWithOdooId as $item) {
                 $odooRow = $odooData[$item->odoo_lot_id] ?? null;
-                if (!$odooRow) continue;
+                if (!$odooRow)
+                    continue;
 
                 $lotChanges = [];
                 $wasReady = !empty($item->internal_reference) && !empty($item->engine_number);
@@ -520,14 +550,18 @@ class SuratKuasaController extends Controller
                     $item->engine_number = $odooRow['engine_number'];
                 }
 
-                if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
-                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category']) $item->vehicle_category = $odooRow['vehicle_category'];
-                if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
+                if (!empty($odooRow['product']) && $item->product !== $odooRow['product'])
+                    $item->product = $odooRow['product'];
+                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category'])
+                    $item->vehicle_category = $odooRow['vehicle_category'];
+                if (!empty($odooRow['year']) && $item->year !== $odooRow['year'])
+                    $item->year = $odooRow['year'];
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
                 }
-                if (!empty($odooRow['current_customer']) && $item->current_customer !== $odooRow['current_customer']) $item->current_customer = $odooRow['current_customer'];
+                if (!empty($odooRow['current_customer']) && $item->current_customer !== $odooRow['current_customer'])
+                    $item->current_customer = $odooRow['current_customer'];
 
                 if ($item->isDirty()) {
                     $item->save();
@@ -535,14 +569,14 @@ class SuratKuasaController extends Controller
                         $updatedCount++;
                         $isNowReady = !empty($item->internal_reference) && !empty($item->engine_number);
                         $changedDetails[] = [
-                            'lot_number'         => $item->lot_number,
-                            'product'            => $item->product,
+                            'lot_number' => $item->lot_number,
+                            'product' => $item->product,
                             'internal_reference' => $item->internal_reference,
-                            'engine_number'      => $item->engine_number,
-                            'changes'            => $lotChanges,
-                            'is_ready'           => $isNowReady,
-                            'status_label'       => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
-                            'is_new'             => false,
+                            'engine_number' => $item->engine_number,
+                            'changes' => $lotChanges,
+                            'is_ready' => $isNowReady,
+                            'status_label' => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
+                            'is_new' => false,
                         ];
                     }
                 }
@@ -551,7 +585,8 @@ class SuratKuasaController extends Controller
             // --- Process legacy items WITHOUT odoo_lot_id ---
             foreach ($itemsWithoutOdooId as $item) {
                 $odooRow = $legacyOdooData[$item->lot_number] ?? null;
-                if (!$odooRow) continue;
+                if (!$odooRow)
+                    continue;
 
                 $lotChanges = [];
 
@@ -568,9 +603,12 @@ class SuratKuasaController extends Controller
                     $lotChanges[] = 'No. Mesin: ' . $odooRow['engine_number'];
                     $item->engine_number = $odooRow['engine_number'];
                 }
-                if (!empty($odooRow['product']) && $item->product !== $odooRow['product']) $item->product = $odooRow['product'];
-                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category']) $item->vehicle_category = $odooRow['vehicle_category'];
-                if (!empty($odooRow['year']) && $item->year !== $odooRow['year']) $item->year = $odooRow['year'];
+                if (!empty($odooRow['product']) && $item->product !== $odooRow['product'])
+                    $item->product = $odooRow['product'];
+                if (isset($odooRow['vehicle_category']) && $item->vehicle_category !== $odooRow['vehicle_category'])
+                    $item->vehicle_category = $odooRow['vehicle_category'];
+                if (!empty($odooRow['year']) && $item->year !== $odooRow['year'])
+                    $item->year = $odooRow['year'];
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
@@ -582,21 +620,21 @@ class SuratKuasaController extends Controller
                         $updatedCount++;
                         $isNowReady = !empty($item->internal_reference) && !empty($item->engine_number);
                         $changedDetails[] = [
-                            'lot_number'         => $item->lot_number,
-                            'product'            => $item->product,
+                            'lot_number' => $item->lot_number,
+                            'product' => $item->product,
                             'internal_reference' => $item->internal_reference,
-                            'engine_number'      => $item->engine_number,
-                            'changes'            => $lotChanges,
-                            'is_ready'           => $isNowReady,
-                            'status_label'       => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
-                            'is_new'             => false,
+                            'engine_number' => $item->engine_number,
+                            'changes' => $lotChanges,
+                            'is_ready' => $isNowReady,
+                            'status_label' => $isNowReady ? 'Ready to Generate' : 'Awaiting Data',
+                            'is_new' => false,
                         ];
                     }
                 }
             }
 
-            $totalSK   = $this->countTrackedSK();
-            $readySK   = $this->countReadySK();
+            $totalSK = $this->countTrackedSK();
+            $readySK = $this->countReadySK();
             $pendingSK = $totalSK - $readySK;
 
             $msg = ($updatedCount > 0)
@@ -604,13 +642,13 @@ class SuratKuasaController extends Controller
                 : "Fast Sync completed! No new No. Rangka/Mesin updates in Odoo. ({$readySK}/{$totalSK} units ready to generate Surat Kuasa)";
 
             return response()->json([
-                'success'       => true,
-                'message'       => $msg,
+                'success' => true,
+                'message' => $msg,
                 'updated_count' => $updatedCount,
-                'total_sk'      => $totalSK,
-                'ready_sk'      => $readySK,
-                'pending_sk'    => $pendingSK,
-                'changes'       => $changedDetails,
+                'total_sk' => $totalSK,
+                'ready_sk' => $readySK,
+                'pending_sk' => $pendingSK,
+                'changes' => $changedDetails,
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Fast Sync failed: ' . $e->getMessage()], 500);
@@ -623,7 +661,8 @@ class SuratKuasaController extends Controller
         return Item::forUserBranch()
             ->where('on_hand_quantity', 0)
             ->where('surat_kuasa_tracked', true)
-            ->where(function ($q) { $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false); })
+            ->where(function ($q) {
+                $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false); })
             ->count();
     }
 
@@ -633,7 +672,8 @@ class SuratKuasaController extends Controller
         return Item::forUserBranch()
             ->where('on_hand_quantity', 0)
             ->where('surat_kuasa_tracked', true)
-            ->where(function ($q) { $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false); })
+            ->where(function ($q) {
+                $q->whereNull('is_vendor_rent')->orWhere('is_vendor_rent', false); })
             ->whereNotNull('internal_reference')->where('internal_reference', '!=', '')
             ->whereNotNull('engine_number')->where('engine_number', '!=', '')
             ->count();
@@ -1518,8 +1558,8 @@ class SuratKuasaController extends Controller
 
         $authenticated = $this->checkSuratKuasaSession();
 
-        $search    = trim((string) $request->input('search', ''));
-        $level     = trim((string) $request->input('level', ''));
+        $search = trim((string) $request->input('search', ''));
+        $level = trim((string) $request->input('level', ''));
         $eventType = trim((string) $request->input('event_type', ''));
 
         $query = SuratKuasaSystemLog::orderBy('created_at', 'desc');
@@ -1527,8 +1567,8 @@ class SuratKuasaController extends Controller
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('message', 'like', "%{$search}%")
-                  ->orWhere('lot_number', 'like', "%{$search}%")
-                  ->orWhere('doc_no', 'like', "%{$search}%");
+                    ->orWhere('lot_number', 'like', "%{$search}%")
+                    ->orWhere('doc_no', 'like', "%{$search}%");
             });
         }
 
@@ -1543,11 +1583,11 @@ class SuratKuasaController extends Controller
         $logs = $query->paginate(30)->appends($request->query());
 
         $stats = [
-            'total'   => SuratKuasaSystemLog::count(),
-            'error'   => SuratKuasaSystemLog::where('level', 'error')->count(),
+            'total' => SuratKuasaSystemLog::count(),
+            'error' => SuratKuasaSystemLog::where('level', 'error')->count(),
             'warning' => SuratKuasaSystemLog::where('level', 'warning')->count(),
             'success' => SuratKuasaSystemLog::where('level', 'success')->count(),
-            'info'    => SuratKuasaSystemLog::where('level', 'info')->count(),
+            'info' => SuratKuasaSystemLog::where('level', 'info')->count(),
         ];
 
         return view('surat_kuasa.logs', compact('logs', 'stats', 'search', 'level', 'eventType', 'authenticated'));
