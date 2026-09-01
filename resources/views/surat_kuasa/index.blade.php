@@ -702,7 +702,7 @@ function suratKuasaApp() {
                 noMesin: data.noMesin,
                 color: data.color || 'Putih',
                 year: data.year || '{{ date('Y') }}',
-                docNo: data.existing_doc_no || this.nextDocNo || ('1546/HRCJ/FOD/' + '{{ \App\Http\Controllers\SuratKuasaController::getRomanMonth((int)date('n')) }}' + '/{{ date('y') }}'),
+                docNo: data.existing_doc_no || this.nextDocNo || ('0001/HRCJ/FOD/' + '{{ \App\Http\Controllers\SuratKuasaController::getRomanMonth((int)date('n')) }}' + '/{{ date('y') }}'),
                 penerimaNama: data.existing_penerima_nama || '',
                 penerimaAlamat: data.existing_penerima_alamat || '',
                 jenisModel: data.vehicle_category || ''

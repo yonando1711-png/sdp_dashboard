@@ -71,15 +71,20 @@ class SuratKuasaController extends Controller
             $sequence = $lastSeq + 1;
 
             // Automatically check and skip any sequence numbers already taken in SuratKuasaLog
-            while (SuratKuasaLog::where('doc_no', 'like', "{$sequence}/%")->exists()) {
+            while (
+                SuratKuasaLog::where('doc_no', 'like', "{$sequence}/%")
+                    ->orWhere('doc_no', 'like', str_pad((string) $sequence, 4, '0', STR_PAD_LEFT) . "/%")
+                    ->exists()
+            ) {
                 $sequence++;
             }
         }
 
+        $paddedSequence = str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
         $romanMonth = self::getRomanMonth((int) date('n'));
         $twoDigitYear = date('y');
 
-        return "{$sequence}/{$prefix}/{$romanMonth}/{$twoDigitYear}";
+        return "{$paddedSequence}/{$prefix}/{$romanMonth}/{$twoDigitYear}";
     }
 
     /**
