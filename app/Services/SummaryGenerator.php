@@ -855,17 +855,39 @@ class SummaryGenerator
             // Primary criterion: surat_kuasa_tracked = true (set by SK sync operations)
             // Also includes broad SK candidates (qty=0, not vendor_rent, not in incoming data) for safety
             $incomingLotNumbers = collect($items)->pluck('lot_number')->filter()->flip()->toArray();
+            // Build a set of internal_references (No. Rangka) already covered by the incoming sync data.
+            // When Odoo renames a lot (e.g. staging name → license plate), the old staging lot_number
+            // is no longer in the incoming data, but the same No. Rangka IS present under the new name.
+            // We must NOT restore the old ghost row in that case — the vehicle is already imported.
+            $incomingRefs = collect($items)->pluck('internal_reference')->filter()->flip()->toArray();
 
             $suratKuasaBackup = \App\Models\Item::where(function ($q) use ($incomingLotNumbers) {
                     $q->where('surat_kuasa_tracked', true)
                       ->whereNotIn('lot_number', array_keys($incomingLotNumbers));
                 })
                 ->get()
+                ->filter(function ($row) use ($incomingRefs) {
+                    // Skip restore if this unit's No. Rangka is already present in the incoming
+                    // sync data — it means the lot was renamed in Odoo and the vehicle is already
+                    // being imported under a new lot name. Restoring the ghost would create a duplicate.
+                    if (!empty($row['internal_reference']) && isset($incomingRefs[$row['internal_reference']])) {
+                        \Log::info('SK Backup: Skipping ghost restore for lot=' . $row['lot_number']
+                            . ' — No. Rangka ' . $row['internal_reference'] . ' already in incoming sync data (lot renamed in Odoo).');
+                        return false;
+                    }
+                    return true;
+                })
                 ->toArray();
 
             // -----------------------------------------------------------------------
 
-            $trackedLotNumbers = \App\Models\Item::where('surat_kuasa_tracked', true)->pluck('lot_number')->filter()->flip()->toArray();
+            // Build BOTH lot-name and internal_reference (No. Rangka) maps for surat_kuasa_tracked transfer.
+            // When Odoo renames a lot, the new lot_name won't be in $trackedLotNumbers.
+            // Using $trackedRefs ensures the renamed record re-gains surat_kuasa_tracked = true
+            // via its stable No. Rangka, preventing tracking loss across main syncs.
+            $trackedItems       = \App\Models\Item::where('surat_kuasa_tracked', true)->get();
+            $trackedLotNumbers  = $trackedItems->pluck('lot_number')->filter()->flip()->toArray();
+            $trackedRefs        = $trackedItems->pluck('internal_reference')->filter()->flip()->toArray();
 
             \App\Models\Item::truncate();
 
@@ -918,7 +940,10 @@ class SummaryGenerator
                         'sales_team' => $item['sales_team'] ?? null,
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
-                        'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']]),
+                        // Re-flag surat_kuasa_tracked if the lot_number matches a previously tracked
+                        // lot OR if the No. Rangka matches (handles Odoo lot renames transparently).
+                        'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']])
+                            || (!empty($item['internal_reference']) && isset($trackedRefs[$item['internal_reference']])),
                         // odoo_lot_id intentionally left null for main-sync items; SK sync populates this
                         'odoo_lot_id' => null,
                         'created_at' => now(),
