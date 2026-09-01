@@ -23,6 +23,21 @@
     </div>
     @endif
 
+    <!-- Error Message -->
+    @if($errors->any())
+    <div class="mb-6 p-4 bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-700 dark:text-rose-400 text-sm font-medium">
+        <div class="flex items-center gap-2 font-bold mb-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Terdapat kesalahan saat menyimpan pengaturan:
+        </div>
+        <ul class="list-disc list-inside space-y-0.5 text-xs">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     <div class="space-y-8">
         <!-- KPI Percentage Targets -->
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -245,7 +260,8 @@
                          year2: '{{ date('y') }}',
                          get nextPreview() {
                              const next = (parseInt(this.lastSeq) || 0) + 1;
-                             return next + '/' + (this.prefix || 'HRCJ/FOD') + '/' + this.romanMonth + '/' + this.year2;
+                             const padded = String(next).padStart(4, '0');
+                             return padded + '/' + (this.prefix || 'HRCJ/FOD') + '/' + this.romanMonth + '/' + this.year2;
                          }
                      }">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 dark:border-indigo-800/40 pb-3">
@@ -254,7 +270,7 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
                                 Penomoran Otomatis Surat Kuasa
                             </h3>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Format: [Nomor Urut]/[Prefix]/[Bulan Romawi]/[2 Digit Tahun]</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Format: [Nomor Urut 4-Digit]/[Prefix]/[Bulan Romawi]/[2 Digit Tahun]</p>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Preview Next:</span>
@@ -270,6 +286,7 @@
                         <div>
                             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Nomor Urut Terakhir (Last Sequence)</label>
                             <input type="number" name="last_sequence" x-model="lastSeq" min="0" required class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 font-mono">
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Masukkan <strong>0</strong> jika ingin nomor SK berikutnya mulai dari <strong>0001</strong>.</p>
                         </div>
                     </div>
                 </div>
