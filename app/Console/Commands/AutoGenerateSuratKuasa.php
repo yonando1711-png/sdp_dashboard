@@ -145,6 +145,11 @@ class AutoGenerateSuratKuasa extends Command
             Log::warning('[Auto SK] Fast sync failed.', ['error' => $e->getMessage()]);
         }
 
+        // Block units that were explicitly manually generated (IT Admin Word download or email).
+        // Auto-generated units that were reset (auto_sk_sent=null, log action_type='auto') are allowed through.
+        $manuallyGeneratedIds = SuratKuasaLog::whereIn('action_type', ['word', 'email'])
+            ->pluck('item_id')->unique()->toArray();
+
         $readyItems = Item::where('surat_kuasa_tracked', true)
             ->where('on_hand_quantity', 0)
             ->where('is_vendor_rent', false)
@@ -153,6 +158,7 @@ class AutoGenerateSuratKuasa extends Command
             ->whereNotNull('engine_number')
             ->where('engine_number', '!=', '')
             ->whereNull('auto_sk_sent')
+            ->whereNotIn('id', $manuallyGeneratedIds)
             ->get();
 
         $totalReady = $readyItems->count();
