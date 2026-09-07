@@ -145,9 +145,6 @@ class AutoGenerateSuratKuasa extends Command
             Log::warning('[Auto SK] Fast sync failed.', ['error' => $e->getMessage()]);
         }
 
-        // 5. Query qualifying units: tracked, delivered, both rangka+mesin filled, not yet auto-sent and not yet generated in logs
-        $existingLogItemIds = SuratKuasaLog::pluck('item_id')->unique()->toArray();
-
         $readyItems = Item::where('surat_kuasa_tracked', true)
             ->where('on_hand_quantity', 0)
             ->where('is_vendor_rent', false)
@@ -156,7 +153,6 @@ class AutoGenerateSuratKuasa extends Command
             ->whereNotNull('engine_number')
             ->where('engine_number', '!=', '')
             ->whereNull('auto_sk_sent')
-            ->whereNotIn('id', $existingLogItemIds)
             ->get();
 
         $totalReady = $readyItems->count();
@@ -216,12 +212,14 @@ class AutoGenerateSuratKuasa extends Command
             $tahun        = $item->year ?: date('Y');
             $jenisModel   = $item->vehicle_category ?: 'Mobil Barang';
             $printDate    = SuratKuasaController::formatIndonesianDate();
-            $docNo        = SuratKuasaController::generateNextDocNo();
-
-            $this->line("  → Processing: {$lotNumber} | Doc: {$docNo}");
 
             try {
-                // Generate document file
+                // Reuse previously assigned doc_no if this unit already has one (e.g. after a reset).
+                // This preserves the permanent document number identity for each vehicle.
+                $existingLog = SuratKuasaLog::where('item_id', $item->id)->latest('id')->first();
+                $docNo = $existingLog ? $existingLog->doc_no : SuratKuasaController::generateNextDocNo();
+
+                $this->line("  → Processing: {$lotNumber} | Doc: {$docNo}");
                 $filePath = $this->buildDocument(
                     format: $format,
                     tempDir: $tempDir,
