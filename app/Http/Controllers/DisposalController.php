@@ -368,7 +368,7 @@ class DisposalController extends Controller
         }
 
         $lastAuth = session('disposal_authenticated_at');
-        $timeoutSeconds = 8 * 3600; // 8 hours TTL per implementation plan
+        $timeoutSeconds = 15 * 60; // 15 minutes of inactivity limit (matching Surat Kuasa & LoR)
 
         if (!$lastAuth || (now()->timestamp - (int) $lastAuth) > $timeoutSeconds) {
             session()->forget(['disposal_authenticated', 'disposal_authenticated_at']);

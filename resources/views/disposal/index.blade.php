@@ -645,4 +645,29 @@ function disposalApp() {
     };
 }
 </script>
+
+@if($authenticated)
+<script>
+// 15-Minute Auto-Prompt Inactivity Watchdog (matches Surat Kuasa & LoR security standards)
+(function() {
+    const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+    let timeoutId;
+
+    function resetTimer() {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(function() {
+            // When 15 minutes of inactivity passes, reload to trigger password prompt
+            window.location.reload();
+        }, INACTIVITY_TIMEOUT);
+    }
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach(function(evt) {
+        window.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    resetTimer();
+})();
+</script>
+@endif
 @endsection
