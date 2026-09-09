@@ -25,6 +25,7 @@ class User extends Authenticatable
         'can_view_lor_smd',
         'can_view_smd_last_invoice_date',
         'can_export_lor_smd',
+        'can_export_disposal',
         'allowed_salespersons',
         'allowed_sales_teams',
     ];
@@ -53,6 +54,7 @@ class User extends Authenticatable
             'can_view_lor_smd' => 'boolean',
             'can_view_smd_last_invoice_date' => 'boolean',
             'can_export_lor_smd' => 'boolean',
+            'can_export_disposal' => 'boolean',
             'allowed_salespersons' => 'array',
             'allowed_sales_teams' => 'array',
         ];
@@ -88,6 +90,14 @@ class User extends Authenticatable
     public function canExportSmd(): bool
     {
         return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_export_lor_smd);
+    }
+
+    /**
+     * Check if user can export data on Disposal
+     */
+    public function canExportDisposal(): bool
+    {
+        return $this->isItAdmin() || ($this->hasMenuPermission('disposal') && (bool) $this->can_export_disposal);
     }
 
     /**

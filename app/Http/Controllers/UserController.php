@@ -112,11 +112,13 @@ class UserController extends Controller
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
+            'can_export_disposal' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
 
         $canViewSmd = $request->has('can_view_lor_smd');
+        $canAccessDisposal = in_array('disposal', (array) $request->input('menu_permissions', []));
 
         User::create([
             'name' => $validated['name'],
@@ -128,6 +130,7 @@ class UserController extends Controller
             'can_view_lor_smd' => $canViewSmd,
             'can_view_smd_last_invoice_date' => $canViewSmd && $request->has('can_view_smd_last_invoice_date'),
             'can_export_lor_smd' => $canViewSmd && $request->has('can_export_lor_smd'),
+            'can_export_disposal' => $canAccessDisposal && $request->has('can_export_disposal'),
             'allowed_salespersons' => $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [],
             'allowed_sales_teams' => $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [],
         ]);
@@ -152,11 +155,13 @@ class UserController extends Controller
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
+            'can_export_disposal' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
 
         $canViewSmd = $request->has('can_view_lor_smd');
+        $canAccessDisposal = in_array('disposal', (array) $request->input('menu_permissions', []));
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
@@ -166,6 +171,7 @@ class UserController extends Controller
         $user->can_view_lor_smd = $canViewSmd;
         $user->can_view_smd_last_invoice_date = $canViewSmd && $request->has('can_view_smd_last_invoice_date');
         $user->can_export_lor_smd = $canViewSmd && $request->has('can_export_lor_smd');
+        $user->can_export_disposal = $canAccessDisposal && $request->has('can_export_disposal');
         $user->allowed_salespersons = $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [];
         $user->allowed_sales_teams = $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [];
 

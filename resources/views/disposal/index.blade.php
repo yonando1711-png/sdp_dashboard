@@ -96,10 +96,12 @@
                 @endif
             </button>
 
+            @if(auth()->user()->canExportDisposal())
             <a href="{{ route('disposal.export', request()->query()) }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition-all transform hover:scale-[1.02] active:scale-[0.98]">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 <span>Export Excel</span>
             </a>
+            @endif
         </div>
     </div>
 
@@ -416,7 +418,7 @@
                 </div>
 
                 <div class="pt-2 border-t border-slate-200 dark:border-slate-800/60 flex items-center gap-2">
-                    <input type="checkbox" id="forceModeCheck" x-model="forceMode" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/20">
+                    <input type="checkbox" id="forceModeCheck" x-model="forceMode" @change="onToggleForceMode()" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500/20">
                     <label for="forceModeCheck" class="text-xs text-slate-600 dark:text-slate-400 font-medium cursor-pointer">
                         Force re-evaluate all vehicles (including previously synced units)
                     </label>
@@ -513,6 +515,8 @@ function disposalApp() {
         syncComplete: false,
         batchSize: 100,
         forceMode: false,
+        totalFleetCount: {{ (int) ($kpis['total'] ?? 0) }},
+        pendingCount: {{ (int) ($pendingSyncCount ?? 0) }},
         totalInitial: {{ (int) ($pendingSyncCount ?? 0) }},
         statusMessage: 'Ready to start continuous synchronization.',
         logs: [],
@@ -523,6 +527,15 @@ function disposalApp() {
             neverRented: 0,
             remaining: {{ (int) ($pendingSyncCount ?? 0) }},
         },
+        onToggleForceMode() {
+            if (this.forceMode) {
+                this.totalInitial = this.totalFleetCount;
+                this.stats.remaining = this.totalFleetCount;
+            } else {
+                this.totalInitial = this.pendingCount;
+                this.stats.remaining = this.pendingCount;
+            }
+        },
         get progressPercent() {
             if (!this.totalInitial || this.totalInitial === 0) return 100;
             const pct = Math.min(100, Math.round((this.stats.processed / this.totalInitial) * 100));
@@ -530,6 +543,7 @@ function disposalApp() {
         },
         openSyncModal() {
             this.showSyncModal = true;
+            this.onToggleForceMode();
         },
         addLog(msg, isError = false, isComplete = false) {
             const time = new Date().toLocaleTimeString('en-GB');
@@ -541,8 +555,14 @@ function disposalApp() {
             this.shouldStop = false;
             this.syncComplete = false;
             let batch = 0;
+            let currentOffset = 0;
 
-            this.addLog(`Started auto-sync with batch size ${this.batchSize}` + (this.forceMode ? ' (Force Mode)' : ''));
+            if (this.forceMode) {
+                this.totalInitial = this.totalFleetCount;
+                this.stats.remaining = this.totalFleetCount;
+            }
+
+            this.addLog(`Started auto-sync with batch size ${this.batchSize}` + (this.forceMode ? ' (Force Mode - Entire Fleet)' : ''));
 
             while (!this.shouldStop) {
                 batch++;
@@ -558,7 +578,8 @@ function disposalApp() {
                         },
                         body: JSON.stringify({
                             batch_size: parseInt(this.batchSize),
-                            force: this.forceMode && batch === 1 ? true : false
+                            force: this.forceMode,
+                            offset: this.forceMode ? currentOffset : 0
                         })
                     });
 
@@ -583,12 +604,15 @@ function disposalApp() {
                     this.stats.rentedFound += rentedInBatch;
                     this.stats.neverRented += neverRentedInBatch;
                     this.stats.remaining = data.remaining;
+                    if (this.forceMode) {
+                        currentOffset = data.next_offset || (currentOffset + batchUpdated);
+                    }
 
                     this.addLog(`Batch #${batch} finished: ${batchUpdated} evaluated (${rentedInBatch} rented, ${neverRentedInBatch} in stock). ${data.remaining} remaining.`);
 
                     if (data.done || data.remaining === 0 || batchUpdated === 0) {
                         this.syncComplete = true;
-                        this.statusMessage = `Completed! All pending vehicles successfully synchronized.`;
+                        this.statusMessage = `Completed! All fleet vehicles successfully synchronized.`;
                         this.addLog(`Synchronization complete! Total units processed: ${this.stats.processed}`, false, true);
                         break;
                     }

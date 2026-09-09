@@ -1107,19 +1107,37 @@ class OdooService
             }
         }
 
-        // 6. Query sale.order and sale.order.line to find reserved lots for each SO
+        // 6. Query sale.order and sale.order.line to find reserved lots and actual start rental date for each SO
         $soReservedLots = [];
+        $soActualStartDates = [];
         if (!empty($rentalIds)) {
             try {
                 $saleOrders = $this->execute(
                     'sale.order',
                     'search_read',
                     [[['name', 'in', array_values(array_unique($rentalIds))]]],
-                    ['fields' => ['name', 'order_line']]
+                    ['fields' => ['name', 'order_line', 'actual_start_rental', 'rental_start_date']]
                 );
 
                 $orderLineIds = [];
                 foreach ($saleOrders as $so) {
+                    $soName = $so['name'] ?? null;
+                    if ($soName) {
+                        // Prioritize actual_start_rental from Odoo contract, fallback to rental_start_date
+                        $rawDate = !empty($so['actual_start_rental'])
+                            ? $so['actual_start_rental']
+                            : (!empty($so['rental_start_date']) ? $so['rental_start_date'] : null);
+                        if ($rawDate) {
+                            try {
+                                $soActualStartDates[$soName] = \Carbon\Carbon::parse($rawDate, 'UTC')
+                                    ->setTimezone('Asia/Jakarta')
+                                    ->format('Y-m-d');
+                            } catch (\Exception $e) {
+                                $soActualStartDates[$soName] = substr($rawDate, 0, 10);
+                            }
+                        }
+                    }
+
                     if (!empty($so['order_line'])) {
                         $orderLineIds = array_merge($orderLineIds, (array) $so['order_line']);
                     }
@@ -1178,9 +1196,16 @@ class OdooService
                 }
             }
 
+            // Date hierarchy:
+            // 1. actual_start_rental from the first sale.order (the actual contracted start date)
+            // 2. Physical dispatch date from stock.move.line ($info['date'])
+            $startDate = ($origin && !empty($soActualStartDates[$origin]))
+                ? $soActualStartDates[$origin]
+                : $info['date'];
+
             $results[$lotName] = [
                 'rental_id' => $origin,
-                'date' => $info['date'],
+                'date' => $startDate,
                 'customer' => $customer,
                 'sent_as' => $sentAs,
             ];
