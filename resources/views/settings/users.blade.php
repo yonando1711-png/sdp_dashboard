@@ -4,7 +4,7 @@
 <div class="space-y-6" x-data="{ 
     showModal: false, 
     editMode: false, 
-    form: { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, allowed_salespersons: [], allowed_sales_teams: [] }, 
+    form: { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, can_export_disposal: false, allowed_salespersons: [], allowed_sales_teams: [] }, 
     salespersonTeamsMap: {{ json_encode($salespersonTeamsMap ?? []) }}, 
     allSalesTeams: {{ json_encode($allSalesTeams ?? []) }},
     get availableTeams() {
@@ -35,7 +35,7 @@
             </div>
         </div>
 
-        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, allowed_salespersons: [], allowed_sales_teams: [] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, can_export_disposal: false, allowed_salespersons: [], allowed_sales_teams: [] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
             <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -114,7 +114,7 @@
                             </td>
                             <td class="py-4 px-6 text-right">
                                 <div class="inline-flex items-center gap-2">
-                                    <button type="button" @click="editMode = true; form = { id: {{ $u->id }}, name: '{{ addslashes($u->name) }}', email: '{{ addslashes($u->email) }}', password: '', branch: '{{ addslashes($u->branch) }}', role: '{{ addslashes($u->role) }}', menu_permissions: {{ json_encode($u->menu_permissions ?? ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service']) }}, can_view_lor_smd: {{ $u->can_view_lor_smd ? 'true' : 'false' }}, can_view_smd_last_invoice_date: {{ $u->can_view_smd_last_invoice_date ? 'true' : 'false' }}, can_export_lor_smd: {{ $u->can_export_lor_smd ? 'true' : 'false' }}, allowed_salespersons: {{ json_encode($u->getAllowedSalespersons()) }}, allowed_sales_teams: {{ json_encode($u->getAllowedSalesTeams()) }} }; showModal = true" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
+                                    <button type="button" @click="editMode = true; form = { id: {{ $u->id }}, name: '{{ addslashes($u->name) }}', email: '{{ addslashes($u->email) }}', password: '', branch: '{{ addslashes($u->branch) }}', role: '{{ addslashes($u->role) }}', menu_permissions: {{ json_encode($u->menu_permissions ?? ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service']) }}, can_view_lor_smd: {{ $u->can_view_lor_smd ? 'true' : 'false' }}, can_view_smd_last_invoice_date: {{ $u->can_view_smd_last_invoice_date ? 'true' : 'false' }}, can_export_lor_smd: {{ $u->can_export_lor_smd ? 'true' : 'false' }}, can_export_disposal: {{ $u->can_export_disposal ? 'true' : 'false' }}, allowed_salespersons: {{ json_encode($u->getAllowedSalespersons()) }}, allowed_sales_teams: {{ json_encode($u->getAllowedSalesTeams()) }} }; showModal = true" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
                                         Edit
                                     </button>
                                     @if(auth()->id() != $u->id)
@@ -317,6 +317,24 @@
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-200">Can Export Data</span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows downloading Excel / PDF exports for LoR (SMD)</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Disposal Sub-Permissions (Shown when Disposal is checked) -->
+                    <div x-show="form.menu_permissions && form.menu_permissions.includes('disposal')" x-transition class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-2 mt-2">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <span>Disposal Granular Permissions</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <div class="hidden sm:block"></div>
+                            <label class="sm:col-start-2 flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-rose-500/50 transition-colors">
+                                <input type="checkbox" name="can_export_disposal" value="1" x-model="form.can_export_disposal" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-rose-600 focus:ring-rose-500">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">Can Export Data</span>
+                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows downloading Excel exports for Fleet Lifecycle & Disposal</span>
                                 </div>
                             </label>
                         </div>

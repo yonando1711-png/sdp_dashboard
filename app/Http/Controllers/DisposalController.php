@@ -168,8 +168,8 @@ class DisposalController extends Controller
      */
     public function export(Request $request)
     {
-        if (!auth()->user()->hasMenuPermission('disposal')) {
-            abort(403, 'Unauthorized');
+        if (!auth()->user()->canExportDisposal()) {
+            abort(403, 'Unauthorized: You do not have permission to export Disposal data.');
         }
 
         if (!$this->checkDisposalSession()) {
@@ -269,6 +269,7 @@ class DisposalController extends Controller
             $force = (bool) $request->input('force', false);
             $lotNumber = $request->input('lot');
             $batchSize = max(10, min(200, (int) $request->input('batch_size', 100)));
+            $offset = max(0, (int) $request->input('offset', 0));
 
             if ($lotNumber) {
                 $lots = [$lotNumber];
@@ -286,10 +287,16 @@ class DisposalController extends Controller
                                  ->whereNotNull('actual_start_rental');
                           });
                     });
+                    $totalPending = (clone $query)->count();
+                    $lots = $query->limit($batchSize)->pluck('lot_number')->toArray();
+                } else {
+                    $totalPending = (clone $query)->count();
+                    $lots = $query->orderBy('id', 'asc')
+                        ->offset($offset)
+                        ->limit($batchSize)
+                        ->pluck('lot_number')
+                        ->toArray();
                 }
-
-                $totalPending = (clone $query)->count();
-                $lots = $query->limit($batchSize)->pluck('lot_number')->toArray();
             }
 
             if (empty($lots)) {
@@ -325,7 +332,9 @@ class DisposalController extends Controller
                 $updated++;
             }
 
-            $remainingCount = max(0, $totalPending - $updated);
+            $remainingCount = $force 
+                ? max(0, $totalPending - ($offset + count($lots))) 
+                : max(0, $totalPending - $updated);
 
             return response()->json([
                 'success' => true,
@@ -334,7 +343,8 @@ class DisposalController extends Controller
                 'rented_in_batch' => $rentedCount,
                 'remaining' => $remainingCount,
                 'total_pending' => $totalPending,
-                'done' => $remainingCount === 0,
+                'next_offset' => $offset + count($lots),
+                'done' => $remainingCount === 0 || empty($lots),
             ]);
         } catch (\Exception $e) {
             return response()->json([
