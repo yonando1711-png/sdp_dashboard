@@ -109,6 +109,7 @@
                                     @if($u->hasMenuPermission('crm')) <span class="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/80 text-[10px] font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/80">CRM</span> @endif
                                     @if($u->hasMenuPermission('surat-kuasa')) <span class="px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950/80 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700/80">Surat Kuasa</span> @endif
                                     @if($u->canAccessSmd()) <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700/80">LoR (SMD)</span> @endif
+                                    @if($u->hasMenuPermission('disposal')) <span class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/80 text-[10px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700/80">Disposal</span> @endif
                                 </div>
                             </td>
                             <td class="py-4 px-6 text-right">
@@ -286,6 +287,13 @@
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-semibold">Surat Kuasa</span>
                                 <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">JKT/IT</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300">
+                            <input type="checkbox" name="menu_permissions[]" value="disposal" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                            <div class="flex items-center justify-between w-full">
+                                <span class="font-semibold">Disposal</span>
+                                <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">JKT/IT</span>
                             </div>
                         </label>
                     </div>

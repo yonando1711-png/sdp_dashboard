@@ -889,6 +889,28 @@ class SummaryGenerator
             $trackedLotNumbers  = $trackedItems->pluck('lot_number')->filter()->flip()->toArray();
             $trackedRefs        = $trackedItems->pluck('internal_reference')->filter()->flip()->toArray();
 
+            // -- Preserve Disposal lifecycle data before wipe --
+            // Build BOTH lot_number and internal_reference (No. Rangka) maps.
+            // When Odoo renames a lot (e.g. temporary unit name like "00134-Puratama..." to real No. Polisi),
+            // matching on internal_reference ensures the vehicle seamlessly retains its disposal tracking data.
+            $disposalBackup = \App\Models\Item::where(function ($q) {
+                    $q->whereNotNull('first_start_sewa_date')
+                      ->orWhereNotNull('first_rental_id')
+                      ->orWhereNotNull('first_sent_as');
+                })
+                ->get(['lot_number', 'internal_reference', 'first_rental_id', 'first_start_sewa_date', 'first_customer_name', 'first_sent_as']);
+
+            $disposalByLot = [];
+            $disposalByRef = [];
+            foreach ($disposalBackup as $d) {
+                if (!empty($d->lot_number)) {
+                    $disposalByLot[trim($d->lot_number)] = $d;
+                }
+                if (!empty($d->internal_reference)) {
+                    $disposalByRef[trim($d->internal_reference)] = $d;
+                }
+            }
+
             \App\Models\Item::truncate();
 
             $chunkedItems = array_chunk($items, 500);
@@ -898,6 +920,12 @@ class SummaryGenerator
                     // Convert Dates
                     $start = $this->excelDateToCarbon($item['actual_start_rental']);
                     $end = $this->excelDateToCarbon($item['actual_end_rental']);
+
+                    $lotNum = trim($item['lot_number'] ?? '');
+                    $refNum = trim($item['internal_reference'] ?? '');
+                    $disposalData = ($lotNum && isset($disposalByLot[$lotNum]))
+                        ? $disposalByLot[$lotNum]
+                        : (($refNum && isset($disposalByRef[$refNum])) ? $disposalByRef[$refNum] : null);
 
                     $insertData[] = [
                         'product' => $item['product'],
@@ -940,6 +968,11 @@ class SummaryGenerator
                         'sales_team' => $item['sales_team'] ?? null,
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
+                        // Preserve Disposal lifecycle data
+                        'first_rental_id' => $disposalData ? $disposalData->first_rental_id : null,
+                        'first_start_sewa_date' => $disposalData ? $disposalData->first_start_sewa_date : null,
+                        'first_customer_name' => $disposalData ? $disposalData->first_customer_name : null,
+                        'first_sent_as' => $disposalData ? $disposalData->first_sent_as : null,
                         // Re-flag surat_kuasa_tracked if the lot_number matches a previously tracked
                         // lot OR if the No. Rangka matches (handles Odoo lot renames transparently).
                         'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']])

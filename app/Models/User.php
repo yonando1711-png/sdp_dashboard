@@ -130,8 +130,8 @@ class User extends Authenticatable
             return $this->canAccessSmd();
         }
 
-        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR, CRM, or Surat Kuasa unless explicitly permitted
-        if (!$this->isNationwide() && in_array($key, ['lor', 'crm', 'surat-kuasa'])) {
+        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR, CRM, Surat Kuasa, or Disposal unless explicitly permitted
+        if (!$this->isNationwide() && in_array($key, ['lor', 'crm', 'surat-kuasa', 'disposal'])) {
             return false;
         }
 
@@ -147,7 +147,7 @@ class User extends Authenticatable
 
         // Default fallbacks when menu_permissions is null
         if ($this->isNationwide()) {
-            return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm', 'surat-kuasa']);
+            return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm', 'surat-kuasa', 'disposal']);
         }
 
         return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details']);

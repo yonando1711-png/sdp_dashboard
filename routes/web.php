@@ -9,6 +9,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\LorController;
 use App\Http\Controllers\SuratKuasaController;
+use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\CheckItAdmin;
 use App\Http\Middleware\CheckMenuPermission;
@@ -92,6 +93,15 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/surat-kuasa/logs', [SuratKuasaController::class, 'systemLogs'])->name('surat-kuasa.logs');
         Route::delete('/surat-kuasa/logs/clear', [SuratKuasaController::class, 'clearSystemLogs'])->name('surat-kuasa.logs.clear');
         Route::delete('/surat-kuasa/logs/{id}', [SuratKuasaController::class, 'deleteSystemLog'])->name('surat-kuasa.logs.delete');
+    });
+
+    // Disposal Fleet Lifecycle Module Routes (Protected by permission and secondary auth)
+    Route::middleware([CheckMenuPermission::class . ':disposal'])->group(function () {
+        Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
+        Route::post('/disposal/auth', [DisposalController::class, 'authenticate'])->middleware('throttle:10,1')->name('disposal.auth');
+        Route::get('/disposal/export', [DisposalController::class, 'export'])->name('disposal.export');
+        Route::post('/disposal/sync', [DisposalController::class, 'sync'])->name('disposal.sync');
+        Route::post('/settings/disposal-password', [DisposalController::class, 'updatePassword'])->name('disposal.settings.update');
     });
 
     // IT Admin Only Routes (Utilities & User Management)
