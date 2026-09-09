@@ -889,6 +889,15 @@ class SummaryGenerator
             $trackedLotNumbers  = $trackedItems->pluck('lot_number')->filter()->flip()->toArray();
             $trackedRefs        = $trackedItems->pluck('internal_reference')->filter()->flip()->toArray();
 
+            // -- Preserve Disposal lifecycle data before wipe --
+            $disposalBackup = \App\Models\Item::where(function ($q) {
+                    $q->whereNotNull('first_start_sewa_date')
+                      ->orWhereNotNull('first_rental_id')
+                      ->orWhereNotNull('first_sent_as');
+                })
+                ->get(['lot_number', 'first_rental_id', 'first_start_sewa_date', 'first_customer_name', 'first_sent_as'])
+                ->keyBy('lot_number');
+
             \App\Models\Item::truncate();
 
             $chunkedItems = array_chunk($items, 500);
@@ -898,6 +907,9 @@ class SummaryGenerator
                     // Convert Dates
                     $start = $this->excelDateToCarbon($item['actual_start_rental']);
                     $end = $this->excelDateToCarbon($item['actual_end_rental']);
+
+                    $lotNum = $item['lot_number'] ?? '';
+                    $disposalData = $lotNum ? ($disposalBackup[$lotNum] ?? null) : null;
 
                     $insertData[] = [
                         'product' => $item['product'],
@@ -940,6 +952,11 @@ class SummaryGenerator
                         'sales_team' => $item['sales_team'] ?? null,
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
+                        // Preserve Disposal lifecycle data
+                        'first_rental_id' => $disposalData ? $disposalData->first_rental_id : null,
+                        'first_start_sewa_date' => $disposalData ? $disposalData->first_start_sewa_date : null,
+                        'first_customer_name' => $disposalData ? $disposalData->first_customer_name : null,
+                        'first_sent_as' => $disposalData ? $disposalData->first_sent_as : null,
                         // Re-flag surat_kuasa_tracked if the lot_number matches a previously tracked
                         // lot OR if the No. Rangka matches (handles Odoo lot renames transparently).
                         'surat_kuasa_tracked' => isset($trackedLotNumbers[$item['lot_number']])

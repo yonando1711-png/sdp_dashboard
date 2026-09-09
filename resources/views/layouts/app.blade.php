@@ -143,7 +143,7 @@
 
             <!-- Scrollable Nav -->
             <nav class="p-4 space-y-1 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-                @if(auth()->check() && (auth()->user()->hasMenuPermission('dashboard') || auth()->user()->hasMenuPermission('rental-pairs') || auth()->user()->hasMenuPermission('total-stock') || auth()->user()->hasMenuPermission('crm') || auth()->user()->hasMenuPermission('lor') || auth()->user()->hasMenuPermission('surat-kuasa')))
+                @if(auth()->check() && (auth()->user()->hasMenuPermission('dashboard') || auth()->user()->hasMenuPermission('rental-pairs') || auth()->user()->hasMenuPermission('total-stock') || auth()->user()->hasMenuPermission('crm') || auth()->user()->hasMenuPermission('lor') || auth()->user()->hasMenuPermission('surat-kuasa') || auth()->user()->hasMenuPermission('disposal')))
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2 whitespace-nowrap overflow-hidden transition-all duration-300"
                     :class="sidebarCollapsed ? 'text-center' : 'px-4'">
                     <span x-show="!sidebarCollapsed">Overview</span>
@@ -241,6 +241,22 @@
                     <span
                         class="font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
                         :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">LoR (SMD)</span>
+                </a>
+                @endif
+
+                @if(auth()->check() && auth()->user()->hasMenuPermission('disposal'))
+                <a href="{{ route('disposal.index') }}"
+                    class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ request()->routeIs('disposal.*') ? 'active' : '' }}"
+                    title="Disposal">
+                    <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                        </path>
+                    </svg>
+                    <span
+                        class="font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
+                        :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Disposal</span>
                 </a>
                 @endif
 
@@ -447,7 +463,7 @@
                     </form>
                 </div>
 
-                @if(auth()->check() && auth()->user()->isNationwide() && !request()->routeIs('lor.*') && !request()->routeIs('surat-kuasa.*'))
+                @if(auth()->check() && auth()->user()->isNationwide() && !request()->routeIs('lor.*') && !request()->routeIs('surat-kuasa.*') && !request()->routeIs('disposal.*'))
                 @php
                     $allOdooBranches = \App\Models\Item::withoutGlobalScope('exclude_order_only')
                         ->whereNotNull('warehouse')

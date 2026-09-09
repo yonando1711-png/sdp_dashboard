@@ -950,6 +950,246 @@ class OdooService
     }
 
     /**
+     * Fetch first rental dispatch movements and Sent As (ORIGINAL vs RBO) for given lot numbers.
+     *
+     * @param array $lotNumbers
+     * @return array [lot_number => ['rental_id' => ..., 'date' => ..., 'customer' => ..., 'sent_as' => ...]]
+     */
+    public function fetchFirstRentalMovements(array $lotNumbers = []): array
+    {
+        if (empty($lotNumbers)) {
+            return [];
+        }
+
+        // 1. Resolve lot names to Odoo integer IDs
+        $lotIdMap = $this->resolveLotIds($lotNumbers);
+        if (empty($lotIdMap)) {
+            return [];
+        }
+
+        // Map odoo_lot_id => lot_number string
+        $odooIdToLot = array_flip($lotIdMap);
+        $odooLotIds = array_values($lotIdMap);
+
+        // 2. Search stock.move.line for dispatch from STOCK CAR to Rental
+        // Order by date asc so the first record encountered is the earliest dispatch
+        $domain = [
+            ['lot_id', 'in', $odooLotIds],
+            ['state', '=', 'done'],
+            ['location_id.complete_name', 'ilike', 'STOCK CAR'],
+            ['location_dest_id.complete_name', 'ilike', 'Rental'],
+        ];
+
+        try {
+            $moveLines = $this->execute(
+                'stock.move.line',
+                'search_read',
+                [$domain],
+                [
+                    'fields' => ['lot_id', 'date', 'location_id', 'location_dest_id', 'origin', 'reference', 'picking_id'],
+                    'order' => 'date asc',
+                ]
+            );
+        } catch (\Exception $e) {
+            \Log::error('fetchFirstRentalMovements search_read failed: ' . $e->getMessage());
+            return [];
+        }
+
+        // Keep earliest movement per lot
+        $earliestPerLot = [];
+        $pickingIds = [];
+
+        foreach ($moveLines as $ml) {
+            $lotOdooId = is_array($ml['lot_id']) ? $ml['lot_id'][0] : $ml['lot_id'];
+            if (!isset($odooIdToLot[$lotOdooId])) {
+                continue;
+            }
+
+            $lotName = $odooIdToLot[$lotOdooId];
+
+            if (!isset($earliestPerLot[$lotName])) {
+                $pickingId = is_array($ml['picking_id'] ?? null) ? $ml['picking_id'][0] : ($ml['picking_id'] ?? null);
+                if ($pickingId) {
+                    $pickingIds[] = $pickingId;
+                }
+
+                $earliestPerLot[$lotName] = [
+                    'odoo_lot_id' => $lotOdooId,
+                    'date' => substr($ml['date'] ?? '', 0, 10),
+                    'origin' => $ml['origin'] ?: null,
+                    'picking_id' => $pickingId,
+                ];
+            }
+        }
+
+        // 3. For lots not found with 'Rental' destination, check 'Customers' destination
+        $missingLots = array_diff($lotNumbers, array_keys($earliestPerLot));
+        if (!empty($missingLots)) {
+            $missingOdooIds = [];
+            foreach ($missingLots as $mLot) {
+                if (isset($lotIdMap[$mLot])) {
+                    $missingOdooIds[] = $lotIdMap[$mLot];
+                }
+            }
+
+            if (!empty($missingOdooIds)) {
+                try {
+                    $domainCust = [
+                        ['lot_id', 'in', $missingOdooIds],
+                        ['state', '=', 'done'],
+                        ['location_id.complete_name', 'ilike', 'STOCK CAR'],
+                        ['location_dest_id.complete_name', 'ilike', 'Customers'],
+                    ];
+                    $moveLinesCust = $this->execute(
+                        'stock.move.line',
+                        'search_read',
+                        [$domainCust],
+                        [
+                            'fields' => ['lot_id', 'date', 'location_id', 'location_dest_id', 'origin', 'reference', 'picking_id'],
+                            'order' => 'date asc',
+                        ]
+                    );
+                    foreach ($moveLinesCust as $ml) {
+                        $lotOdooId = is_array($ml['lot_id']) ? $ml['lot_id'][0] : $ml['lot_id'];
+                        if (!isset($odooIdToLot[$lotOdooId])) {
+                            continue;
+                        }
+                        $lotName = $odooIdToLot[$lotOdooId];
+                        if (!isset($earliestPerLot[$lotName])) {
+                            $pickingId = is_array($ml['picking_id'] ?? null) ? $ml['picking_id'][0] : ($ml['picking_id'] ?? null);
+                            if ($pickingId) {
+                                $pickingIds[] = $pickingId;
+                            }
+                            $earliestPerLot[$lotName] = [
+                                'odoo_lot_id' => $lotOdooId,
+                                'date' => substr($ml['date'] ?? '', 0, 10),
+                                'origin' => $ml['origin'] ?: null,
+                                'picking_id' => $pickingId,
+                            ];
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('fetchFirstRentalMovements fallback Customers check failed: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // 4. Batch read stock.picking for partner and origin
+        $pickingMap = [];
+        if (!empty($pickingIds)) {
+            try {
+                $pickings = $this->execute(
+                    'stock.picking',
+                    'read',
+                    [array_values(array_unique($pickingIds)), ['origin', 'partner_id']]
+                );
+                foreach ($pickings as $p) {
+                    $pickingMap[$p['id']] = [
+                        'origin' => $p['origin'] ?: null,
+                        'customer' => is_array($p['partner_id']) ? $p['partner_id'][1] : ($p['partner_id'] ?: null),
+                    ];
+                }
+            } catch (\Exception $e) {
+                \Log::warning('fetchFirstRentalMovements read stock.picking failed: ' . $e->getMessage());
+            }
+        }
+
+        // 5. Collect Rental SO names to query sale.order for reserved lots
+        $rentalIds = [];
+        foreach ($earliestPerLot as $lotName => $info) {
+            $origin = $info['origin'];
+            if (!$origin && !empty($info['picking_id']) && isset($pickingMap[$info['picking_id']])) {
+                $origin = $pickingMap[$info['picking_id']]['origin'];
+                $earliestPerLot[$lotName]['origin'] = $origin;
+            }
+            if ($origin) {
+                $rentalIds[] = $origin;
+            }
+        }
+
+        // 6. Query sale.order and sale.order.line to find reserved lots for each SO
+        $soReservedLots = [];
+        if (!empty($rentalIds)) {
+            try {
+                $saleOrders = $this->execute(
+                    'sale.order',
+                    'search_read',
+                    [[['name', 'in', array_values(array_unique($rentalIds))]]],
+                    ['fields' => ['name', 'order_line']]
+                );
+
+                $orderLineIds = [];
+                foreach ($saleOrders as $so) {
+                    if (!empty($so['order_line'])) {
+                        $orderLineIds = array_merge($orderLineIds, (array) $so['order_line']);
+                    }
+                }
+
+                if (!empty($orderLineIds)) {
+                    $orderLines = $this->execute(
+                        'sale.order.line',
+                        'read',
+                        [array_values(array_unique($orderLineIds)), ['order_id', 'reserved_lot_ids']]
+                    );
+                    foreach ($orderLines as $sol) {
+                        $soName = is_array($sol['order_id']) ? $sol['order_id'][1] : null;
+                        if ($soName && !empty($sol['reserved_lot_ids'])) {
+                            if (!isset($soReservedLots[$soName])) {
+                                $soReservedLots[$soName] = [];
+                            }
+                            $soReservedLots[$soName] = array_merge(
+                                $soReservedLots[$soName],
+                                (array) $sol['reserved_lot_ids']
+                            );
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning('fetchFirstRentalMovements sale.order query failed: ' . $e->getMessage());
+            }
+        }
+
+        // 7. Compile final results
+        $results = [];
+        foreach ($earliestPerLot as $lotName => $info) {
+            $origin = $info['origin'];
+            $pickingId = $info['picking_id'];
+            $customer = null;
+            if ($pickingId && isset($pickingMap[$pickingId])) {
+                $customer = $pickingMap[$pickingId]['customer'];
+            }
+
+            // Determine Sent As (ORIGINAL vs RBO)
+            $sentAs = 'ORIGINAL';
+            $lotOdooId = $info['odoo_lot_id'];
+
+            if ($origin && isset($soReservedLots[$origin])) {
+                $reservedIds = $soReservedLots[$origin];
+                if (!empty($reservedIds)) {
+                    $sentAs = in_array($lotOdooId, $reservedIds) ? 'ORIGINAL' : 'RBO';
+                }
+            } else {
+                // Fallback to local DB reserved_lot comparison ONLY if the DB's recorded contract matches the FIRST rental_id
+                $dbItem = Item::where('lot_number', $lotName)->first(['rental_id', 'reserved_lot']);
+                if ($dbItem && $origin && $dbItem->rental_id === $origin && !empty($dbItem->reserved_lot)) {
+                    $sentAs = (strtoupper(trim($dbItem->reserved_lot)) === strtoupper(trim($lotName)))
+                        ? 'ORIGINAL'
+                        : 'RBO';
+                }
+            }
+
+            $results[$lotName] = [
+                'rental_id' => $origin,
+                'date' => $info['date'],
+                'customer' => $customer,
+                'sent_as' => $sentAs,
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
      * Authenticate with Odoo and return user ID
      */
     protected function authenticate(): ?int

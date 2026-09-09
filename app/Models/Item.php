@@ -32,6 +32,7 @@ class Item extends Model
         'repair_odometer' => 'integer',
         'purchase_date' => 'date',
         'last_invoice_date' => 'date',
+        'first_start_sewa_date' => 'date',
     ];
 
     protected static function booted()
@@ -60,6 +61,67 @@ class Item extends Model
     public function scopeSold($query)
     {
         return $query->where('is_sold', true);
+    }
+
+    /**
+     * Disposal Module Accessors & Helpers
+     */
+    public function getDisposalDueDateAttribute(): ?\Carbon\Carbon
+    {
+        return $this->first_start_sewa_date ? $this->first_start_sewa_date->copy()->addYears(5) : null;
+    }
+
+    public function getServiceAgeStringAttribute(): string
+    {
+        if (!$this->first_start_sewa_date) {
+            return '-';
+        }
+
+        $diff = $this->first_start_sewa_date->diff(now());
+        return "{$diff->y} Thn {$diff->m} Bln";
+    }
+
+    public function getDisposalStatusAttribute(): string
+    {
+        $locUpper = strtoupper($this->location ?? '');
+        if ($this->is_sold || str_contains($locUpper, 'SOLD') || str_contains($locUpper, 'DISPOSAL')) {
+            return 'disposed';
+        }
+
+        if (!$this->first_start_sewa_date) {
+            return 'never_rented';
+        }
+
+        $dueDate = $this->disposal_due_date;
+        $now = now();
+
+        if ($now->greaterThanOrEqualTo($dueDate)) {
+            return 'due';
+        }
+
+        if ($now->greaterThanOrEqualTo($dueDate->copy()->subMonths(6))) {
+            return 'approaching';
+        }
+
+        return 'active';
+    }
+
+    public function getFirstSentAsBadgeAttribute(): array
+    {
+        return match ($this->first_sent_as) {
+            'ORIGINAL' => [
+                'label' => 'ORIGINAL',
+                'class' => 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+            ],
+            'RBO' => [
+                'label' => 'RBO',
+                'class' => 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+            ],
+            default => [
+                'label' => '-',
+                'class' => 'text-slate-500'
+            ],
+        };
     }
 
     /**
