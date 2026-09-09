@@ -146,13 +146,13 @@ class AutoGenerateSuratKuasa extends Command
         }
 
         // Block units that were explicitly manually generated (IT Admin Word download or email).
-        // Auto-generated units that were reset (auto_sk_sent=null, log action_type='auto') are allowed through.
+        // Match by physical identifiers (lot_number, no_rangka) - NEVER by recyclable item_id.
         $manuallyGeneratedLots = SuratKuasaLog::whereIn('action_type', ['word', 'email'])
             ->pluck('lot_number')->filter()->unique()->toArray();
-        $manuallyGeneratedIds = SuratKuasaLog::whereIn('action_type', ['word', 'email'])
-            ->pluck('item_id')->filter()->unique()->toArray();
+        $manuallyGeneratedRangkas = SuratKuasaLog::whereIn('action_type', ['word', 'email'])
+            ->pluck('no_rangka')->filter()->unique()->toArray();
 
-        $readyItems = Item::where('surat_kuasa_tracked', true)
+        $readyItemsQuery = Item::where('surat_kuasa_tracked', true)
             ->where('on_hand_quantity', 0)
             ->where('is_vendor_rent', false)
             ->whereNotNull('internal_reference')
@@ -160,9 +160,13 @@ class AutoGenerateSuratKuasa extends Command
             ->whereNotNull('engine_number')
             ->where('engine_number', '!=', '')
             ->whereNull('auto_sk_sent')
-            ->whereNotIn('id', $manuallyGeneratedIds)
-            ->whereNotIn('lot_number', $manuallyGeneratedLots)
-            ->get();
+            ->whereNotIn('lot_number', $manuallyGeneratedLots);
+
+        if (!empty($manuallyGeneratedRangkas)) {
+            $readyItemsQuery->whereNotIn('internal_reference', $manuallyGeneratedRangkas);
+        }
+
+        $readyItems = $readyItemsQuery->get();
 
         $totalReady = $readyItems->count();
         $this->info("Found {$totalReady} unit(s) ready for auto-generation.");
@@ -224,10 +228,9 @@ class AutoGenerateSuratKuasa extends Command
 
             try {
                 // Reuse previously assigned doc_no if this unit already has one (e.g. after a reset).
-                // Query by lot_number and no_rangka first to survive table truncates / item_id shifts across syncs.
-                $existingLog = SuratKuasaLog::where(function ($q) use ($item, $lotNumber, $noRangka) {
-                        $q->where('lot_number', $lotNumber)
-                          ->orWhere('item_id', $item->id);
+                // Query strictly by lot_number and no_rangka to survive table truncates / auto-increment resets.
+                $existingLog = SuratKuasaLog::where(function ($q) use ($lotNumber, $noRangka) {
+                        $q->where('lot_number', $lotNumber);
                         if (!empty($noRangka)) {
                             $q->orWhere('no_rangka', $noRangka);
                         }

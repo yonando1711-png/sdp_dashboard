@@ -208,8 +208,10 @@
                             $noMesin = trim((string)$item->engine_number);
                             $isReadyToPrint = !empty($noRangka) && !empty($noMesin);
                             $canGenerate = $isReadyToPrint || $isItAdmin;
-                            $hasGeneratedLog = in_array($item->id, $generatedItemIds);
-                            $existingLog = $generatedLogsByItemId[$item->id] ?? null;
+                            $existingLog = ($generatedLogsByLot[$item->lot_number] ?? null)
+                                ?? (!empty($noRangka) ? ($generatedLogsByRangka[$noRangka] ?? null) : null)
+                                ?? ($generatedLogsByItemId[$item->id] ?? null);
+                            $hasGeneratedLog = $existingLog !== null;
                         @endphp
                         <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                             <td class="py-4 px-5 text-slate-400 font-mono">{{ $items->firstItem() + $index }}</td>
