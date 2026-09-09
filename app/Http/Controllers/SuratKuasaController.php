@@ -167,8 +167,11 @@ class SuratKuasaController extends Controller
 
         $items = $query->orderBy('product')->orderBy('lot_number')->paginate(50);
 
-        // Fetch map of item IDs that already have generated Surat Kuasa logs with their latest log data
-        $generatedLogsByItemId = SuratKuasaLog::latest('id')->get()->keyBy('item_id');
+        // Fetch map of vehicle logs by lot_number and no_rangka (survives item table truncates/resets during Odoo sync)
+        $allLogs = SuratKuasaLog::latest('id')->get();
+        $generatedLogsByLot = $allLogs->filter(fn($l) => !empty($l->lot_number))->keyBy('lot_number');
+        $generatedLogsByRangka = $allLogs->filter(fn($l) => !empty($l->no_rangka))->keyBy('no_rangka');
+        $generatedLogsByItemId = $allLogs->keyBy('item_id');
         $generatedItemIds = $generatedLogsByItemId->keys()->toArray();
 
         // Fetch dynamic Surat Kuasa settings from UTILITIES -> Settings
@@ -218,6 +221,8 @@ class SuratKuasaController extends Controller
             'items' => $items,
             'generatedItemIds' => $generatedItemIds,
             'generatedLogsByItemId' => $generatedLogsByItemId,
+            'generatedLogsByLot' => $generatedLogsByLot,
+            'generatedLogsByRangka' => $generatedLogsByRangka,
             'settings' => $settings,
             'search' => $search,
             'nextDocNo' => self::generateNextDocNo(),
@@ -966,7 +971,12 @@ class SuratKuasaController extends Controller
 
         $fileSize = filesize($tempFile);
 
-        $isReprint = $request->boolean('reprint') || SuratKuasaLog::where('item_id', $item->id)->where('doc_no', $docNo)->exists();
+        $isReprint = $request->boolean('reprint') || SuratKuasaLog::where(function ($q) use ($item, $noRangka) {
+            $q->where('lot_number', $item->lot_number);
+            if (!empty($noRangka) && $noRangka !== '[EMPTY - IT ADMIN TEST]') {
+                $q->orWhere('no_rangka', $noRangka);
+            }
+        })->where('doc_no', $docNo)->exists();
 
         if (!$isReprint) {
             // Log Surat Kuasa generation
