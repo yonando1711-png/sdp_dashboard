@@ -890,13 +890,26 @@ class SummaryGenerator
             $trackedRefs        = $trackedItems->pluck('internal_reference')->filter()->flip()->toArray();
 
             // -- Preserve Disposal lifecycle data before wipe --
+            // Build BOTH lot_number and internal_reference (No. Rangka) maps.
+            // When Odoo renames a lot (e.g. temporary unit name like "00134-Puratama..." to real No. Polisi),
+            // matching on internal_reference ensures the vehicle seamlessly retains its disposal tracking data.
             $disposalBackup = \App\Models\Item::where(function ($q) {
                     $q->whereNotNull('first_start_sewa_date')
                       ->orWhereNotNull('first_rental_id')
                       ->orWhereNotNull('first_sent_as');
                 })
-                ->get(['lot_number', 'first_rental_id', 'first_start_sewa_date', 'first_customer_name', 'first_sent_as'])
-                ->keyBy('lot_number');
+                ->get(['lot_number', 'internal_reference', 'first_rental_id', 'first_start_sewa_date', 'first_customer_name', 'first_sent_as']);
+
+            $disposalByLot = [];
+            $disposalByRef = [];
+            foreach ($disposalBackup as $d) {
+                if (!empty($d->lot_number)) {
+                    $disposalByLot[trim($d->lot_number)] = $d;
+                }
+                if (!empty($d->internal_reference)) {
+                    $disposalByRef[trim($d->internal_reference)] = $d;
+                }
+            }
 
             \App\Models\Item::truncate();
 
@@ -908,8 +921,11 @@ class SummaryGenerator
                     $start = $this->excelDateToCarbon($item['actual_start_rental']);
                     $end = $this->excelDateToCarbon($item['actual_end_rental']);
 
-                    $lotNum = $item['lot_number'] ?? '';
-                    $disposalData = $lotNum ? ($disposalBackup[$lotNum] ?? null) : null;
+                    $lotNum = trim($item['lot_number'] ?? '');
+                    $refNum = trim($item['internal_reference'] ?? '');
+                    $disposalData = ($lotNum && isset($disposalByLot[$lotNum]))
+                        ? $disposalByLot[$lotNum]
+                        : (($refNum && isset($disposalByRef[$refNum])) ? $disposalByRef[$refNum] : null);
 
                     $insertData[] = [
                         'product' => $item['product'],

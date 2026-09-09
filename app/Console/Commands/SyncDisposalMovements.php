@@ -39,7 +39,13 @@ class SyncDisposalMovements extends Command
                 ->where('lot_number', '!=', '');
 
             if (!$force) {
-                $query->whereNull('first_sent_as');
+                $query->where(function ($q) {
+                    $q->whereNull('first_sent_as')
+                      ->orWhere(function ($q2) {
+                          $q2->where('first_sent_as', 'NONE')
+                             ->whereNotNull('actual_start_rental');
+                      });
+                });
             }
 
             $lotNumbers = $query->pluck('lot_number')->unique()->values()->toArray();
