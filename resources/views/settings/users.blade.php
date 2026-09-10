@@ -240,11 +240,11 @@ function userManagementApp() {
         </div>
     </div>
 
-    <!-- Create / Edit User Modal (Spacious Wide Layout) -->
-    <div x-show="showModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-8 bg-slate-900/40 dark:bg-slate-950/90 backdrop-blur-md dark:backdrop-blur-xl" x-transition>
-        <div @click.away="showModal = false" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-700/80 rounded-3xl p-7 md:p-8 w-full max-w-4xl shadow-2xl dark:shadow-[0_0_60px_rgba(0,0,0,0.95)] relative text-slate-900 dark:text-slate-100 transition-all space-y-5">
+    <!-- Create / Edit User Modal (Spacious Wide Layout with Scrollable Body) -->
+    <div x-show="showModal" style="display: none;" class="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 dark:bg-slate-950/90 backdrop-blur-md" x-transition>
+        <div @click.away="showModal = false" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl relative text-slate-900 dark:text-slate-100 transition-all my-auto">
             
-            <!-- Modal Title Bar -->
+            <!-- Modal Title Bar (Pinned Top) -->
             <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-4 shrink-0">
                 <div class="flex items-center gap-3.5">
                     <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-cyan-500/10 dark:from-indigo-500/20 dark:to-cyan-500/20 border border-indigo-500/20 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner shrink-0">
@@ -262,13 +262,16 @@ function userManagementApp() {
                 </button>
             </div>
 
-            <!-- Form Body -->
-            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" class="space-y-4.5">
+            <!-- Form Body with Scrollable Middle -->
+            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" class="flex flex-col flex-1 min-h-0 overflow-hidden mt-4">
                 @csrf
                 <template x-if="editMode">
                     <input type="hidden" name="_method" value="PUT">
                 </template>
                 <input type="hidden" name="user_id" :value="form.id">
+
+                <!-- Scrollable Fields Area -->
+                <div class="overflow-y-auto flex-1 pr-1.5 space-y-4.5 py-1">
 
                 @if($errors->any())
                     <div class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-sm space-y-1">
@@ -562,9 +565,10 @@ function userManagementApp() {
                         </div>
                     </div>
                 </div>
+                </div>
 
-                <!-- Footer Buttons -->
-                <div class="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800/80 pt-4 mt-4 shrink-0">
+                <!-- Footer Buttons (Pinned Bottom) -->
+                <div class="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800/80 pt-4 mt-3 shrink-0">
                     <button type="button" @click="showModal = false" class="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all">
                         Cancel
                     </button>
