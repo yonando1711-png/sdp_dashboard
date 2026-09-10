@@ -40,6 +40,9 @@ class DashboardController extends Controller
             if ($user->hasMenuPermission('in-service')) {
                 return redirect()->route('details', ['category' => 'in_service']);
             }
+            if ($user->hasMenuPermission('disposal')) {
+                return redirect()->route('disposal.index');
+            }
             if ($user->hasMenuPermission('surat-kuasa')) {
                 return redirect()->route('surat-kuasa.index');
             }

@@ -140,11 +140,6 @@ class User extends Authenticatable
             return $this->canAccessSmd();
         }
 
-        // Non-Jakarta/Non-Nationwide branches can NEVER access LoR, CRM, Surat Kuasa, or Disposal unless explicitly permitted
-        if (!$this->isNationwide() && in_array($key, ['lor', 'crm', 'surat-kuasa', 'disposal'])) {
-            return false;
-        }
-
         // If custom menu_permissions array exists for this account, strictly enforce it!
         if (is_array($this->menu_permissions)) {
             return in_array($menu, $this->menu_permissions)
@@ -155,12 +150,29 @@ class User extends Authenticatable
                 || ($key === 'in-service' && (in_array('in_service', $this->menu_permissions) || in_array('in-service', $this->menu_permissions)));
         }
 
-        // Default fallbacks when menu_permissions is null
+        // Default fallbacks when menu_permissions is null (Unconfigured accounts)
+        // Non-Jakarta/Non-Nationwide branches default to basic stock menus only (no LoR, CRM, Surat Kuasa, or Disposal unless explicitly permitted above)
         if ($this->isNationwide()) {
             return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details', 'lor', 'crm', 'surat-kuasa', 'disposal']);
         }
 
         return in_array($key, ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'inventory', 'details']);
+    }
+
+    /**
+     * Get effective menu permissions array (used for initializing edit forms)
+     */
+    public function getEffectiveMenuPermissions(): array
+    {
+        if (is_array($this->menu_permissions)) {
+            return array_values(array_filter($this->menu_permissions));
+        }
+
+        if ($this->isNationwide()) {
+            return ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service', 'lor', 'crm', 'surat-kuasa', 'disposal'];
+        }
+
+        return ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service'];
     }
 
     /**
