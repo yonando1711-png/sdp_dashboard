@@ -1,39 +1,108 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="space-y-6" x-data="{ 
-    showModal: {{ $errors->any() ? 'true' : 'false' }}, 
-    editMode: {{ old('_method') === 'PUT' ? 'true' : 'false' }}, 
-    form: { 
-        id: {{ old('user_id', 'null') }}, 
-        name: {!! json_encode(old('name', '')) !!}, 
-        email: {!! json_encode(old('email', '')) !!}, 
-        password: '', 
-        branch: {!! json_encode(old('branch', 'ALL')) !!}, 
-        role: {!! json_encode(old('role', 'branch_user')) !!}, 
-        menu_permissions: {!! json_encode(old('menu_permissions', [])) !!}, 
-        can_view_lor_smd: {{ old('can_view_lor_smd') ? 'true' : 'false' }}, 
-        can_view_smd_last_invoice_date: {{ old('can_view_smd_last_invoice_date') ? 'true' : 'false' }}, 
-        can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }}, 
-        can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }}, 
-        allowed_salespersons: {!! json_encode(old('allowed_salespersons', [])) !!}, 
-        allowed_sales_teams: {!! json_encode(old('allowed_sales_teams', [])) !!} 
-    }, 
-    salespersonTeamsMap: {{ json_encode($salespersonTeamsMap ?? []) }}, 
-    allSalesTeams: {{ json_encode($allSalesTeams ?? []) }},
-    get availableTeams() {
-        if (!this.form.allowed_salespersons || this.form.allowed_salespersons.length === 0) {
-            return this.allSalesTeams;
-        }
-        let teams = [];
-        this.form.allowed_salespersons.forEach(sp => {
-            if (this.salespersonTeamsMap[sp]) {
-                teams = teams.concat(this.salespersonTeamsMap[sp]);
-            }
-        });
-        return [...new Set(teams)].sort();
+@php
+    $usersData = [];
+    foreach ($users as $u) {
+        $usersData[$u->id] = [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'branch' => $u->branch,
+            'role' => $u->role,
+            'menu_permissions' => $u->getEffectiveMenuPermissions(),
+            'can_view_lor_smd' => (bool) $u->can_view_lor_smd,
+            'can_view_smd_last_invoice_date' => (bool) $u->can_view_smd_last_invoice_date,
+            'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
+            'can_export_disposal' => (bool) $u->can_export_disposal,
+            'allowed_salespersons' => $u->getAllowedSalespersons(),
+            'allowed_sales_teams' => $u->getAllowedSalesTeams(),
+        ];
     }
-}">
+@endphp
+
+<script>
+function userManagementApp() {
+    const usersMap = @json($usersData);
+
+    return {
+        showModal: {{ $errors->any() ? 'true' : 'false' }},
+        editMode: {{ old('_method') === 'PUT' ? 'true' : 'false' }},
+        users: usersMap,
+        form: {
+            id: {{ old('user_id', 'null') }},
+            name: @json(old('name', '')),
+            email: @json(old('email', '')),
+            password: '',
+            branch: @json(old('branch', 'ALL')),
+            role: @json(old('role', 'branch_user')),
+            menu_permissions: @json(old('menu_permissions', [])),
+            can_view_lor_smd: {{ old('can_view_lor_smd') ? 'true' : 'false' }},
+            can_view_smd_last_invoice_date: {{ old('can_view_smd_last_invoice_date') ? 'true' : 'false' }},
+            can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }},
+            can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }},
+            allowed_salespersons: @json(old('allowed_salespersons', [])),
+            allowed_sales_teams: @json(old('allowed_sales_teams', []))
+        },
+        salespersonTeamsMap: @json($salespersonTeamsMap ?? []),
+        allSalesTeams: @json($allSalesTeams ?? []),
+        get availableTeams() {
+            if (!this.form.allowed_salespersons || this.form.allowed_salespersons.length === 0) {
+                return this.allSalesTeams;
+            }
+            let teams = [];
+            this.form.allowed_salespersons.forEach(sp => {
+                if (this.salespersonTeamsMap[sp]) {
+                    teams = teams.concat(this.salespersonTeamsMap[sp]);
+                }
+            });
+            return [...new Set(teams)].sort();
+        },
+        openCreateModal() {
+            this.editMode = false;
+            this.form = {
+                id: null,
+                name: '',
+                email: '',
+                password: '',
+                branch: 'ALL',
+                role: 'branch_user',
+                menu_permissions: [],
+                can_view_lor_smd: false,
+                can_view_smd_last_invoice_date: false,
+                can_export_lor_smd: false,
+                can_export_disposal: false,
+                allowed_salespersons: [],
+                allowed_sales_teams: []
+            };
+            this.showModal = true;
+        },
+        openEditModal(userId) {
+            const u = this.users[userId];
+            if (!u) return;
+            this.editMode = true;
+            this.form = {
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                password: '',
+                branch: u.branch,
+                role: u.role,
+                menu_permissions: Array.isArray(u.menu_permissions) ? [...u.menu_permissions] : [],
+                can_view_lor_smd: Boolean(u.can_view_lor_smd),
+                can_view_smd_last_invoice_date: Boolean(u.can_view_smd_last_invoice_date),
+                can_export_lor_smd: Boolean(u.can_export_lor_smd),
+                can_export_disposal: Boolean(u.can_export_disposal),
+                allowed_salespersons: Array.isArray(u.allowed_salespersons) ? [...u.allowed_salespersons] : [],
+                allowed_sales_teams: Array.isArray(u.allowed_sales_teams) ? [...u.allowed_sales_teams] : []
+            };
+            this.showModal = true;
+        }
+    };
+}
+</script>
+
+<div class="space-y-6" x-data="userManagementApp()">
 
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900/80 p-6 rounded-3xl border border-slate-200 dark:border-slate-800/80 backdrop-blur-xl shadow-lg dark:shadow-xl transition-all">
@@ -49,7 +118,7 @@
             </div>
         </div>
 
-        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, can_export_disposal: false, allowed_salespersons: [], allowed_sales_teams: [] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+        <button type="button" @click="openCreateModal()" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
             <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -151,7 +220,7 @@
                             </td>
                             <td class="py-4 px-6 text-right">
                                 <div class="inline-flex items-center gap-2">
-                                    <button type="button" @click="editMode = true; form = { id: {{ $u->id }}, name: {{ json_encode($u->name) }}, email: {{ json_encode($u->email) }}, password: '', branch: {{ json_encode($u->branch) }}, role: {{ json_encode($u->role) }}, menu_permissions: {{ json_encode($u->getEffectiveMenuPermissions()) }}, can_view_lor_smd: {{ $u->can_view_lor_smd ? 'true' : 'false' }}, can_view_smd_last_invoice_date: {{ $u->can_view_smd_last_invoice_date ? 'true' : 'false' }}, can_export_lor_smd: {{ $u->can_export_lor_smd ? 'true' : 'false' }}, can_export_disposal: {{ $u->can_export_disposal ? 'true' : 'false' }}, allowed_salespersons: {{ json_encode($u->getAllowedSalespersons()) }}, allowed_sales_teams: {{ json_encode($u->getAllowedSalesTeams()) }} }; showModal = true" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
+                                    <button type="button" @click="openEditModal({{ $u->id }})" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
                                         Edit
                                     </button>
                                     @if(auth()->id() != $u->id)
@@ -167,9 +236,11 @@
                             </td>
                         </tr>
                     @endforeach
-                </tbody>
             </table>
-       <!-- Create / Edit User Modal (Spacious Wide Layout) -->
+        </div>
+    </div>
+
+    <!-- Create / Edit User Modal (Spacious Wide Layout) -->
     <div x-show="showModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-8 bg-slate-900/40 dark:bg-slate-950/90 backdrop-blur-md dark:backdrop-blur-xl" x-transition>
         <div @click.away="showModal = false" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-700/80 rounded-3xl p-7 md:p-8 w-full max-w-4xl shadow-2xl dark:shadow-[0_0_60px_rgba(0,0,0,0.95)] relative text-slate-900 dark:text-slate-100 transition-all space-y-5">
             
