@@ -143,7 +143,7 @@
 
             <!-- Scrollable Nav -->
             <nav class="p-4 space-y-1 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-                @if(auth()->check() && (auth()->user()->hasMenuPermission('dashboard') || auth()->user()->hasMenuPermission('rental-pairs') || auth()->user()->hasMenuPermission('total-stock') || auth()->user()->hasMenuPermission('crm') || auth()->user()->hasMenuPermission('lor') || auth()->user()->hasMenuPermission('surat-kuasa') || auth()->user()->hasMenuPermission('disposal')))
+                @if(auth()->check() && (auth()->user()->hasMenuPermission('dashboard') || auth()->user()->hasMenuPermission('rental-pairs') || auth()->user()->hasMenuPermission('total-stock') || auth()->user()->hasMenuPermission('crm') || auth()->user()->hasMenuPermission('lor') || auth()->user()->canAccessSmd() || auth()->user()->hasMenuPermission('surat-kuasa') || auth()->user()->hasMenuPermission('disposal')))
                 <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-4 px-2 whitespace-nowrap overflow-hidden transition-all duration-300"
                     :class="sidebarCollapsed ? 'text-center' : 'px-4'">
                     <span x-show="!sidebarCollapsed">Overview</span>

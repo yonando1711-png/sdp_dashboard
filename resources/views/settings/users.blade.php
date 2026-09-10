@@ -1,25 +1,108 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="space-y-6" x-data="{ 
-    showModal: false, 
-    editMode: false, 
-    form: { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, can_export_disposal: false, allowed_salespersons: [], allowed_sales_teams: [] }, 
-    salespersonTeamsMap: {{ json_encode($salespersonTeamsMap ?? []) }}, 
-    allSalesTeams: {{ json_encode($allSalesTeams ?? []) }},
-    get availableTeams() {
-        if (!this.form.allowed_salespersons || this.form.allowed_salespersons.length === 0) {
-            return this.allSalesTeams;
-        }
-        let teams = [];
-        this.form.allowed_salespersons.forEach(sp => {
-            if (this.salespersonTeamsMap[sp]) {
-                teams = teams.concat(this.salespersonTeamsMap[sp]);
-            }
-        });
-        return [...new Set(teams)].sort();
+@php
+    $usersData = [];
+    foreach ($users as $u) {
+        $usersData[$u->id] = [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'branch' => $u->branch,
+            'role' => $u->role,
+            'menu_permissions' => $u->getEffectiveMenuPermissions(),
+            'can_view_lor_smd' => (bool) $u->can_view_lor_smd,
+            'can_view_smd_last_invoice_date' => (bool) $u->can_view_smd_last_invoice_date,
+            'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
+            'can_export_disposal' => (bool) $u->can_export_disposal,
+            'allowed_salespersons' => $u->getAllowedSalespersons(),
+            'allowed_sales_teams' => $u->getAllowedSalesTeams(),
+        ];
     }
-}">
+@endphp
+
+<script>
+function userManagementApp() {
+    const usersMap = @json($usersData);
+
+    return {
+        showModal: {{ $errors->any() ? 'true' : 'false' }},
+        editMode: {{ old('_method') === 'PUT' ? 'true' : 'false' }},
+        users: usersMap,
+        form: {
+            id: {{ old('user_id', 'null') }},
+            name: @json(old('name', '')),
+            email: @json(old('email', '')),
+            password: '',
+            branch: @json(old('branch', 'ALL')),
+            role: @json(old('role', 'branch_user')),
+            menu_permissions: @json(old('menu_permissions', [])),
+            can_view_lor_smd: {{ old('can_view_lor_smd') ? 'true' : 'false' }},
+            can_view_smd_last_invoice_date: {{ old('can_view_smd_last_invoice_date') ? 'true' : 'false' }},
+            can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }},
+            can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }},
+            allowed_salespersons: @json(old('allowed_salespersons', [])),
+            allowed_sales_teams: @json(old('allowed_sales_teams', []))
+        },
+        salespersonTeamsMap: @json($salespersonTeamsMap ?? []),
+        allSalesTeams: @json($allSalesTeams ?? []),
+        get availableTeams() {
+            if (!this.form.allowed_salespersons || this.form.allowed_salespersons.length === 0) {
+                return this.allSalesTeams;
+            }
+            let teams = [];
+            this.form.allowed_salespersons.forEach(sp => {
+                if (this.salespersonTeamsMap[sp]) {
+                    teams = teams.concat(this.salespersonTeamsMap[sp]);
+                }
+            });
+            return [...new Set(teams)].sort();
+        },
+        openCreateModal() {
+            this.editMode = false;
+            this.form = {
+                id: null,
+                name: '',
+                email: '',
+                password: '',
+                branch: 'ALL',
+                role: 'branch_user',
+                menu_permissions: [],
+                can_view_lor_smd: false,
+                can_view_smd_last_invoice_date: false,
+                can_export_lor_smd: false,
+                can_export_disposal: false,
+                allowed_salespersons: [],
+                allowed_sales_teams: []
+            };
+            this.showModal = true;
+        },
+        openEditModal(userId) {
+            const u = this.users[userId];
+            if (!u) return;
+            this.editMode = true;
+            this.form = {
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                password: '',
+                branch: u.branch,
+                role: u.role,
+                menu_permissions: Array.isArray(u.menu_permissions) ? [...u.menu_permissions] : [],
+                can_view_lor_smd: Boolean(u.can_view_lor_smd),
+                can_view_smd_last_invoice_date: Boolean(u.can_view_smd_last_invoice_date),
+                can_export_lor_smd: Boolean(u.can_export_lor_smd),
+                can_export_disposal: Boolean(u.can_export_disposal),
+                allowed_salespersons: Array.isArray(u.allowed_salespersons) ? [...u.allowed_salespersons] : [],
+                allowed_sales_teams: Array.isArray(u.allowed_sales_teams) ? [...u.allowed_sales_teams] : []
+            };
+            this.showModal = true;
+        }
+    };
+}
+</script>
+
+<div class="space-y-6" x-data="userManagementApp()">
 
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900/80 p-6 rounded-3xl border border-slate-200 dark:border-slate-800/80 backdrop-blur-xl shadow-lg dark:shadow-xl transition-all">
@@ -35,7 +118,7 @@
             </div>
         </div>
 
-        <button type="button" @click="editMode = false; form = { id: null, name: '', email: '', password: '', branch: 'ALL', role: 'branch_user', menu_permissions: [], can_view_lor_smd: false, can_view_smd_last_invoice_date: false, can_export_lor_smd: false, can_export_disposal: false, allowed_salespersons: [], allowed_sales_teams: [] }; showModal = true" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+        <button type="button" @click="openCreateModal()" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
             <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path>
             </svg>
@@ -53,6 +136,19 @@
         <div class="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2 shadow-sm">
             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             <span>{{ session('error') }}</span>
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-sm space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5">
+                <svg class="w-4 h-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span>Please fix the following validation errors:</span>
+            </div>
+            <ul class="list-disc list-inside pl-1 text-[11px] space-y-0.5 font-medium">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
     @endif
 
@@ -108,13 +204,23 @@
                                     @if($u->hasMenuPermission('lor')) <span class="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/80">LoR</span> @endif
                                     @if($u->hasMenuPermission('crm')) <span class="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/80 text-[10px] font-semibold text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/80">CRM</span> @endif
                                     @if($u->hasMenuPermission('surat-kuasa')) <span class="px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950/80 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700/80">Surat Kuasa</span> @endif
-                                    @if($u->canAccessSmd()) <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700/80">LoR (SMD)</span> @endif
-                                    @if($u->hasMenuPermission('disposal')) <span class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/80 text-[10px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700/80">Disposal</span> @endif
+                                    @if($u->canAccessSmd()) 
+                                        <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700/80 inline-flex items-center gap-1">
+                                            LoR (SMD)
+                                            @if($u->canExportSmd()) <span class="text-[9px] opacity-75 font-normal">(Export)</span> @endif
+                                        </span> 
+                                    @endif
+                                    @if($u->hasMenuPermission('disposal')) 
+                                        <span class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/80 text-[10px] font-semibold text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700/80 inline-flex items-center gap-1">
+                                            Disposal
+                                            @if($u->canExportDisposal()) <span class="text-[9px] opacity-75 font-normal">(Export)</span> @endif
+                                        </span> 
+                                    @endif
                                 </div>
                             </td>
                             <td class="py-4 px-6 text-right">
                                 <div class="inline-flex items-center gap-2">
-                                    <button type="button" @click="editMode = true; form = { id: {{ $u->id }}, name: '{{ addslashes($u->name) }}', email: '{{ addslashes($u->email) }}', password: '', branch: '{{ addslashes($u->branch) }}', role: '{{ addslashes($u->role) }}', menu_permissions: {{ json_encode($u->menu_permissions ?? ['dashboard', 'total-stock', 'rental-pairs', 'in-stock', 'active-rentals', 'in-service']) }}, can_view_lor_smd: {{ $u->can_view_lor_smd ? 'true' : 'false' }}, can_view_smd_last_invoice_date: {{ $u->can_view_smd_last_invoice_date ? 'true' : 'false' }}, can_export_lor_smd: {{ $u->can_export_lor_smd ? 'true' : 'false' }}, can_export_disposal: {{ $u->can_export_disposal ? 'true' : 'false' }}, allowed_salespersons: {{ json_encode($u->getAllowedSalespersons()) }}, allowed_sales_teams: {{ json_encode($u->getAllowedSalesTeams()) }} }; showModal = true" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
+                                    <button type="button" @click="openEditModal({{ $u->id }})" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold transition-all shadow-sm">
                                         Edit
                                     </button>
                                     @if(auth()->id() != $u->id)
@@ -132,11 +238,14 @@
                     @endforeach
                 </tbody>
             </table>
-       <!-- Create / Edit User Modal (Spacious Wide Layout) -->
-    <div x-show="showModal" style="display: none;" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-8 bg-slate-900/40 dark:bg-slate-950/90 backdrop-blur-md dark:backdrop-blur-xl" x-transition>
-        <div @click.away="showModal = false" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-700/80 rounded-3xl p-7 md:p-8 w-full max-w-4xl shadow-2xl dark:shadow-[0_0_60px_rgba(0,0,0,0.95)] relative text-slate-900 dark:text-slate-100 transition-all space-y-5">
+        </div>
+    </div>
+
+    <!-- Create / Edit User Modal (Spacious Wide Layout with Scrollable Body) -->
+    <div x-show="showModal" style="display: none;" class="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 dark:bg-slate-950/90 backdrop-blur-md" x-transition>
+        <div @click.away="showModal = false" class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl relative text-slate-900 dark:text-slate-100 transition-all my-auto">
             
-            <!-- Modal Title Bar -->
+            <!-- Modal Title Bar (Pinned Top) -->
             <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-4 shrink-0">
                 <div class="flex items-center gap-3.5">
                     <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-cyan-500/10 dark:from-indigo-500/20 dark:to-cyan-500/20 border border-indigo-500/20 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner shrink-0">
@@ -154,12 +263,30 @@
                 </button>
             </div>
 
-            <!-- Form Body -->
-            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" class="space-y-4.5">
+            <!-- Form Body with Scrollable Middle -->
+            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" class="flex flex-col flex-1 min-h-0 overflow-hidden mt-4">
                 @csrf
                 <template x-if="editMode">
                     <input type="hidden" name="_method" value="PUT">
                 </template>
+                <input type="hidden" name="user_id" :value="form.id">
+
+                <!-- Scrollable Fields Area -->
+                <div class="overflow-y-auto flex-1 pr-1.5 space-y-4.5 py-1">
+
+                @if($errors->any())
+                    <div class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-sm space-y-1">
+                        <div class="font-bold flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Please correct the errors below:</span>
+                        </div>
+                        <ul class="list-disc list-inside pl-1 text-[11px] space-y-0.5 font-medium">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
 
                 <!-- Row 1: Username & Email (2 Columns) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -191,8 +318,9 @@
                                 <svg class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                                 Password
                             </span>
+                            <span class="text-[10px] font-normal text-slate-400" x-text="editMode ? '(Leave blank to keep)' : '(min. 6 chars)'"></span>
                         </label>
-                        <input type="password" name="password" :required="!editMode" placeholder="••••••••" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
+                        <input type="password" name="password" :required="!editMode" minlength="6" placeholder="••••••••" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
                     </div>
 
                     <!-- Role Type Field -->
@@ -269,7 +397,7 @@
                         </label>
                         <!-- LoR (SMD) Navigation Item Checkbox -->
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300 border border-indigo-500/20 bg-indigo-500/5">
-                            <input type="checkbox" name="can_view_lor_smd" value="1" x-model="form.can_view_lor_smd" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                            <input type="checkbox" name="can_view_lor_smd" value="1" x-model="form.can_view_lor_smd" @change="if(!form.can_view_lor_smd) { form.can_view_smd_last_invoice_date = false; form.can_export_lor_smd = false; form.allowed_salespersons = []; form.allowed_sales_teams = []; }" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-bold text-indigo-600 dark:text-indigo-400">LoR (SMD)</span>
                                 <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">SMD</span>
@@ -290,7 +418,7 @@
                             </div>
                         </label>
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300">
-                            <input type="checkbox" name="menu_permissions[]" value="disposal" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                            <input type="checkbox" name="menu_permissions[]" value="disposal" x-model="form.menu_permissions" @change="if(!form.menu_permissions.includes('disposal')) form.can_export_disposal = false" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-semibold">Disposal</span>
                                 <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">JKT/IT</span>
@@ -328,9 +456,8 @@
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             <span>Disposal Granular Permissions</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                            <div class="hidden sm:block"></div>
-                            <label class="sm:col-start-2 flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-rose-500/50 transition-colors">
+                        <div class="grid grid-cols-1 gap-2 text-xs">
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-rose-500/50 transition-colors">
                                 <input type="checkbox" name="can_export_disposal" value="1" x-model="form.can_export_disposal" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-rose-600 focus:ring-rose-500">
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-200">Can Export Data</span>
@@ -342,7 +469,13 @@
                 </div>
 
                 <!-- Row 4: Scoped Salesperson & Team Selection (2-Column Grid when LoR (SMD) is checked) -->
-                <div x-show="form.can_view_lor_smd" x-transition class="p-4 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-indigo-500/20">
+                <div x-show="form.can_view_lor_smd" x-transition class="p-4 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-indigo-500/20 space-y-3">
+                    <template x-if="form.can_view_lor_smd && form.role === 'branch_user' && form.allowed_salespersons.length === 0 && form.allowed_sales_teams.length === 0">
+                        <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
+                            <span>⚠️</span>
+                            <span>At least one Salesperson or Sales Team must be selected for LoR (SMD) branch scoping.</span>
+                        </div>
+                    </template>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Custom Interactive Multi-Select Dropdown for Salespersons -->
                         <div class="space-y-1.5 relative" x-data="{ open: false }">
@@ -433,9 +566,10 @@
                         </div>
                     </div>
                 </div>
+                </div>
 
-                <!-- Footer Buttons -->
-                <div class="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800/80 pt-4 mt-4 shrink-0">
+                <!-- Footer Buttons (Pinned Bottom) -->
+                <div class="flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800/80 pt-4 mt-3 shrink-0">
                     <button type="button" @click="showModal = false" class="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all">
                         Cancel
                     </button>

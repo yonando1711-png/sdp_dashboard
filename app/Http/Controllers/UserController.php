@@ -117,8 +117,18 @@ class UserController extends Controller
             'allowed_sales_teams' => 'nullable|array',
         ]);
 
-        $canViewSmd = $request->has('can_view_lor_smd');
-        $canAccessDisposal = in_array('disposal', (array) $request->input('menu_permissions', []));
+        $canViewSmd = $request->boolean('can_view_lor_smd');
+        $allowedSalespersons = $canViewSmd && $request->has('allowed_salespersons') ? array_values(array_filter((array)$request->input('allowed_salespersons'))) : [];
+        $allowedSalesTeams = $canViewSmd && $request->has('allowed_sales_teams') ? array_values(array_filter((array)$request->input('allowed_sales_teams'))) : [];
+
+        // Validate LoR (SMD) scoping: branch users MUST have at least one salesperson or sales team assigned
+        if ($canViewSmd && $validated['role'] === 'branch_user' && empty($allowedSalespersons) && empty($allowedSalesTeams)) {
+            return back()->withInput()->withErrors([
+                'allowed_salespersons' => 'Please select at least one Salesperson or Sales Team when granting LoR (SMD) access.',
+            ]);
+        }
+
+        $canAccessDisposal = ($validated['role'] === 'it_admin') || in_array('disposal', (array) $request->input('menu_permissions', []));
 
         User::create([
             'name' => $validated['name'],
@@ -128,11 +138,11 @@ class UserController extends Controller
             'role' => $validated['role'],
             'menu_permissions' => $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [],
             'can_view_lor_smd' => $canViewSmd,
-            'can_view_smd_last_invoice_date' => $canViewSmd && $request->has('can_view_smd_last_invoice_date'),
-            'can_export_lor_smd' => $canViewSmd && $request->has('can_export_lor_smd'),
-            'can_export_disposal' => $canAccessDisposal && $request->has('can_export_disposal'),
-            'allowed_salespersons' => $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [],
-            'allowed_sales_teams' => $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [],
+            'can_view_smd_last_invoice_date' => $canViewSmd && $request->boolean('can_view_smd_last_invoice_date'),
+            'can_export_lor_smd' => $canViewSmd && $request->boolean('can_export_lor_smd'),
+            'can_export_disposal' => $canAccessDisposal && $request->boolean('can_export_disposal'),
+            'allowed_salespersons' => $allowedSalespersons,
+            'allowed_sales_teams' => $allowedSalesTeams,
         ]);
 
         return redirect()->route('users.index')->with('success', 'User account created successfully!');
@@ -160,8 +170,18 @@ class UserController extends Controller
             'allowed_sales_teams' => 'nullable|array',
         ]);
 
-        $canViewSmd = $request->has('can_view_lor_smd');
-        $canAccessDisposal = in_array('disposal', (array) $request->input('menu_permissions', []));
+        $canViewSmd = $request->boolean('can_view_lor_smd');
+        $allowedSalespersons = $canViewSmd && $request->has('allowed_salespersons') ? array_values(array_filter((array)$request->input('allowed_salespersons'))) : [];
+        $allowedSalesTeams = $canViewSmd && $request->has('allowed_sales_teams') ? array_values(array_filter((array)$request->input('allowed_sales_teams'))) : [];
+
+        // Validate LoR (SMD) scoping: branch users MUST have at least one salesperson or sales team assigned
+        if ($canViewSmd && $validated['role'] === 'branch_user' && empty($allowedSalespersons) && empty($allowedSalesTeams)) {
+            return back()->withInput()->withErrors([
+                'allowed_salespersons' => 'Please select at least one Salesperson or Sales Team when granting LoR (SMD) access.',
+            ]);
+        }
+
+        $canAccessDisposal = ($validated['role'] === 'it_admin') || in_array('disposal', (array) $request->input('menu_permissions', []));
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
@@ -169,11 +189,11 @@ class UserController extends Controller
         $user->role = $validated['role'];
         $user->menu_permissions = $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [];
         $user->can_view_lor_smd = $canViewSmd;
-        $user->can_view_smd_last_invoice_date = $canViewSmd && $request->has('can_view_smd_last_invoice_date');
-        $user->can_export_lor_smd = $canViewSmd && $request->has('can_export_lor_smd');
-        $user->can_export_disposal = $canAccessDisposal && $request->has('can_export_disposal');
-        $user->allowed_salespersons = $request->has('allowed_salespersons') ? array_values(array_filter($request->input('allowed_salespersons'))) : [];
-        $user->allowed_sales_teams = $request->has('allowed_sales_teams') ? array_values(array_filter($request->input('allowed_sales_teams'))) : [];
+        $user->can_view_smd_last_invoice_date = $canViewSmd && $request->boolean('can_view_smd_last_invoice_date');
+        $user->can_export_lor_smd = $canViewSmd && $request->boolean('can_export_lor_smd');
+        $user->can_export_disposal = $canAccessDisposal && $request->boolean('can_export_disposal');
+        $user->allowed_salespersons = $allowedSalespersons;
+        $user->allowed_sales_teams = $allowedSalesTeams;
 
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);

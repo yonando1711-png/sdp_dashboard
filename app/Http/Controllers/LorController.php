@@ -188,7 +188,19 @@ class LorController extends Controller
         $allowedSalespersons = $user->getAllowedSalespersons();
         $allowedSalesTeams = $user->getAllowedSalesTeams();
 
-        if (!$user->isItAdmin() || (!empty($allowedSalespersons) || !empty($allowedSalesTeams))) {
+        if (!$user->isItAdmin()) {
+            if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                $query->whereIn('salesperson', $allowedSalespersons)
+                      ->whereIn('sales_team', $allowedSalesTeams);
+            } elseif (!empty($allowedSalespersons)) {
+                $query->whereIn('salesperson', $allowedSalespersons);
+            } elseif (!empty($allowedSalesTeams)) {
+                $query->whereIn('sales_team', $allowedSalesTeams);
+            } else {
+                // Non-admin user with NO scoping assigned must see 0 records
+                $query->whereRaw('1 = 0');
+            }
+        } elseif (!empty($allowedSalespersons) || !empty($allowedSalesTeams)) {
             if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
                 $query->whereIn('salesperson', $allowedSalespersons)
                       ->whereIn('sales_team', $allowedSalesTeams);
@@ -235,13 +247,29 @@ class LorController extends Controller
             ->forUserBranch()
             ->whereNotNull('sales_team')->where('sales_team', '!=', '');
 
-        if (!empty($allowedSalespersons)) {
-            $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
-            $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
-        }
-        if (!empty($allowedSalesTeams)) {
-            $filterSpQuery->whereIn('sales_team', $allowedSalesTeams);
-            $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+        if (!$user->isItAdmin()) {
+            if (!empty($allowedSalespersons)) {
+                $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterSpQuery->whereRaw('1 = 0');
+            }
+
+            if (!empty($allowedSalesTeams)) {
+                $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+            } elseif (!empty($allowedSalespersons)) {
+                $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterTeamQuery->whereRaw('1 = 0');
+            }
+        } else {
+            if (!empty($allowedSalespersons)) {
+                $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+                $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+            }
+            if (!empty($allowedSalesTeams)) {
+                $filterSpQuery->whereIn('sales_team', $allowedSalesTeams);
+                $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+            }
         }
 
         $filterSalespersons = $filterSpQuery->distinct()->pluck('salesperson')->sort()->values();
@@ -344,7 +372,18 @@ class LorController extends Controller
         if ($isSmd && $user) {
             $allowedSalespersons = $user->getAllowedSalespersons();
             $allowedSalesTeams = $user->getAllowedSalesTeams();
-            if (!$user->isItAdmin() || (!empty($allowedSalespersons) || !empty($allowedSalesTeams))) {
+            if (!$user->isItAdmin()) {
+                if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                    $query->whereIn('salesperson', $allowedSalespersons)
+                          ->whereIn('sales_team', $allowedSalesTeams);
+                } elseif (!empty($allowedSalespersons)) {
+                    $query->whereIn('salesperson', $allowedSalespersons);
+                } elseif (!empty($allowedSalesTeams)) {
+                    $query->whereIn('sales_team', $allowedSalesTeams);
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            } elseif (!empty($allowedSalespersons) || !empty($allowedSalesTeams)) {
                 if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
                     $query->whereIn('salesperson', $allowedSalespersons)
                           ->whereIn('sales_team', $allowedSalesTeams);
