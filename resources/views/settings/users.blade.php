@@ -236,6 +236,7 @@ function userManagementApp() {
                             </td>
                         </tr>
                     @endforeach
+                </tbody>
             </table>
         </div>
     </div>
