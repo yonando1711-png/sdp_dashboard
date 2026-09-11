@@ -322,7 +322,8 @@
                                         'customer' => $item->current_customer,
                                         'existing_doc_no' => $existingLog ? $existingLog->doc_no : null,
                                         'existing_penerima_nama' => $existingLog ? $existingLog->penerima_nama : '',
-                                        'existing_penerima_alamat' => $existingLog ? $existingLog->penerima_alamat : ''
+                                        'existing_penerima_alamat' => $existingLog ? $existingLog->penerima_alamat : '',
+                                        'pemilik_alamat' => \App\Http\Controllers\SuratKuasaController::getPemilikAlamatForItem($item),
                                     ]) }})" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white text-xs font-extrabold shadow-md shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-1.5 ml-auto">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                                         @if($hasGeneratedLog)
@@ -497,9 +498,7 @@
 
                 <table class="w-full text-xs">
                     <tr><td class="w-32 py-0.5 font-bold">Nama Pemilik</td><td class="w-4">:</td><td class="font-bold">{{ $settings['pemilik_nama'] ?? 'PT Surya Darma Perkasa' }}</td></tr>
-                    @if(!empty($settings['pemilik_alamat']))
-                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>{{ $settings['pemilik_alamat'] }}</td></tr>
-                    @endif
+                    <tr x-show="modalData.pemilikAlamat"><td class="py-0.5">Alamat</td><td>:</td><td x-text="modalData.pemilikAlamat"></td></tr>
                     <tr><td class="py-0.5">Merk/Type</td><td>:</td><td x-text="modalData.cleanProduct || modalData.product"></td></tr>
                     <tr><td class="py-0.5">Jenis / Model</td><td>:</td><td x-text="modalData.jenisModel"></td></tr>
                     <tr><td class="py-0.5">Tahun</td><td>:</td><td x-text="modalData.year"></td></tr>
@@ -707,7 +706,8 @@ function suratKuasaApp() {
                 docNo: data.existing_doc_no || this.nextDocNo || ('0001/HRCJ/FOD/' + '{{ \App\Http\Controllers\SuratKuasaController::getRomanMonth((int)date('n')) }}' + '/{{ date('y') }}'),
                 penerimaNama: data.existing_penerima_nama || '',
                 penerimaAlamat: data.existing_penerima_alamat || '',
-                jenisModel: data.vehicle_category || ''
+                jenisModel: data.vehicle_category || '',
+                pemilikAlamat: data.pemilik_alamat || '{{ $settings['pemilik_alamat'] ?? '' }}'
             };
             this.emailForm.subject = 'Surat Kuasa Document - ' + (this.modalData.cleanProduct || 'Vehicle');
             this.emailForm.message = 'Please find attached the Surat Kuasa document for vehicle unit (' + data.noRangka + ').';

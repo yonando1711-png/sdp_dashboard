@@ -2285,6 +2285,44 @@ class OdooService
     }
 
     /**
+     * Dedicated method for Surat Kuasa:
+     * Fetch all Vehicle BBN records from Odoo (vehicle.bbn)
+     * Returns an associative array mapping:
+     * - by_code: ['MES' => 'Jl. Bakti Luhur...', 'JKT' => '...', ...]
+     * - by_id:   [10 => 'Jl. Bakti Luhur...', 2 => '...', ...]
+     */
+    public function getVehicleBbnMap(bool $forceRefresh = false): array
+    {
+        if ($forceRefresh) {
+            \Illuminate\Support\Facades\Cache::forget('odoo_vehicle_bbn_map');
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('odoo_vehicle_bbn_map', 3600, function () {
+            try {
+                $records = $this->execute('vehicle.bbn', 'search_read', [[]], ['fields' => ['id', 'kode', 'alamat']]);
+                $mapByCode = [];
+                $mapById = [];
+                if (is_array($records)) {
+                    foreach ($records as $r) {
+                        $code = trim((string)($r['kode'] ?? ''));
+                        $address = trim((string)($r['alamat'] ?? ''));
+                        if ($code && $address) {
+                            $mapByCode[$code] = $address;
+                        }
+                        if (!empty($r['id']) && $address) {
+                            $mapById[$r['id']] = $address;
+                        }
+                    }
+                }
+                return ['by_code' => $mapByCode, 'by_id' => $mapById];
+            } catch (\Exception $e) {
+                \Log::warning('Could not fetch vehicle.bbn map from Odoo: ' . $e->getMessage());
+                return ['by_code' => [], 'by_id' => []];
+            }
+        });
+    }
+
+    /**
      * Dedicated Odoo fetch specifically for Surat Kuasa units:
      * Two-Tier Discovery:
      * Tier 1: Strict criteria (product_qty = 0, ref = false, engine_number = false, is_vendor_rent != true)
@@ -2357,6 +2395,7 @@ class OdooService
                 }
             }
 
+            $bbnMap = $this->getVehicleBbnMap();
             $records = [];
             foreach ($combinedRows as $row) {
                 $lotNumber = $row['name'] ?? '';
@@ -2369,7 +2408,12 @@ class OdooService
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $customer = $row['x_studio_partnercust'] ?? null;
+                $bbnId = is_array($row['bbn_id']) ? ($row['bbn_id'][0] ?? null) : null;
                 $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
+                $bbnCode = !empty($bbn) ? trim((string) $bbn) : null;
+                $bbnAlamat = ($bbnId && isset($bbnMap['by_id'][$bbnId]))
+                    ? $bbnMap['by_id'][$bbnId]
+                    : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
 
                 $records[] = [
@@ -2381,7 +2425,8 @@ class OdooService
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
                     'location'           => $location,
-                    'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
+                    'bbn'                => $bbnCode,
+                    'bbn_alamat'         => $bbnAlamat,
                     'current_customer'   => $customer ?: null,
                     'on_hand_quantity'   => 0,
                     'is_on_hand'         => true,
@@ -2457,6 +2502,7 @@ class OdooService
                 }
             }
 
+            $bbnMap = $this->getVehicleBbnMap();
             $data = [];
             foreach ($rows as $row) {
                 $odooId = $row['id'];
@@ -2464,7 +2510,12 @@ class OdooService
                 $product = is_array($row['product_id']) ? ($row['product_id'][1] ?? '') : ($row['product_id'] ?? '');
                 $location = is_array($row['location_id']) ? ($row['location_id'][1] ?? '') : ($row['location_id'] ?? '');
                 $isVendorRent = !empty($row['is_vendor_rent']) && $row['is_vendor_rent'] !== false;
+                $bbnId = is_array($row['bbn_id']) ? ($row['bbn_id'][0] ?? null) : null;
                 $bbn = is_array($row['bbn_id']) ? ($row['bbn_id'][1] ?? '') : (is_string($row['bbn_id']) ? $row['bbn_id'] : null);
+                $bbnCode = !empty($bbn) ? trim((string) $bbn) : null;
+                $bbnAlamat = ($bbnId && isset($bbnMap['by_id'][$bbnId]))
+                    ? $bbnMap['by_id'][$bbnId]
+                    : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
 
                 $data[$odooId] = [
@@ -2476,7 +2527,8 @@ class OdooService
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
                     'location'           => $location,
-                    'bbn'                => !empty($bbn) ? trim((string) $bbn) : null,
+                    'bbn'                => $bbnCode,
+                    'bbn_alamat'         => $bbnAlamat,
                     'current_customer'   => $row['x_studio_partnercust'] ?? null,
                     'on_hand_quantity'   => $row['product_qty'] ?? 0,
                     'is_vendor_rent'     => $isVendorRent,
