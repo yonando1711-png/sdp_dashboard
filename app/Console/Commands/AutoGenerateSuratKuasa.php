@@ -93,6 +93,7 @@ class AutoGenerateSuratKuasa extends Command
                             'year'                => $rec['year'] ?? date('Y'),
                             'location'            => $rec['location'] ?? '',
                             'bbn'                 => $rec['bbn'] ?? null,
+                            'bbn_alamat'          => $rec['bbn_alamat'] ?? null,
                             'current_customer'    => $rec['current_customer'] ?? null,
                             'internal_reference'  => $rec['internal_reference'] ?? null,
                             'engine_number'       => $rec['engine_number'] ?? null,
@@ -134,6 +135,8 @@ class AutoGenerateSuratKuasa extends Command
                             if (!empty($row['engine_number']))      $item->engine_number = $row['engine_number'];
                             if (!empty($row['year']))               $item->year = $row['year'];
                             if (!empty($row['vehicle_category']))   $item->vehicle_category = $row['vehicle_category'];
+                            if (isset($row['bbn']))                 $item->bbn = $row['bbn'];
+                            if (isset($row['bbn_alamat']))          $item->bbn_alamat = $row['bbn_alamat'];
                             $item->save();
                         }
                     }
@@ -239,6 +242,9 @@ class AutoGenerateSuratKuasa extends Command
                     ->first();
                 $docNo = $existingLog ? $existingLog->doc_no : SuratKuasaController::generateNextDocNo();
 
+                $itemSettings = $settings;
+                $itemSettings['pemilik_alamat'] = SuratKuasaController::getPemilikAlamatForItem($item);
+
                 $this->line("  → Processing: {$lotNumber} | Doc: {$docNo}");
                 $filePath = $this->buildDocument(
                     format: $format,
@@ -254,7 +260,7 @@ class AutoGenerateSuratKuasa extends Command
                     printDate: $printDate,
                     penerimaNama: $autoPenerimaNama,
                     penerimaAlamat: $autoPenerimaAlamat,
-                    settings: $settings,
+                    settings: $itemSettings,
                     item: $item,
                 );
 

@@ -113,7 +113,11 @@
                             </td>
                             <td class="py-4 px-5 text-right whitespace-nowrap space-x-1.5">
                                 <!-- Preview Document -->
-                                <button type="button" @click="openPreviewModal({{ json_encode($log) }})" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs inline-flex items-center gap-1">
+                                @php
+                                    $logData = $log->toArray();
+                                    $logData['pemilik_alamat'] = \App\Http\Controllers\SuratKuasaController::getPemilikAlamatForItem($log->item);
+                                @endphp
+                                <button type="button" @click="openPreviewModal({{ json_encode($logData) }})" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs inline-flex items-center gap-1">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                                     Preview
                                 </button>
@@ -184,9 +188,7 @@
 
                 <table class="w-full text-xs">
                     <tr><td class="w-32 py-0.5 font-bold">Nama Pemilik</td><td class="w-4">:</td><td class="font-bold">{{ $settings['pemilik_nama'] ?? 'PT Surya Darma Perkasa' }}</td></tr>
-                    @if(!empty($settings['pemilik_alamat']))
-                    <tr><td class="py-0.5">Alamat</td><td>:</td><td>{{ $settings['pemilik_alamat'] }}</td></tr>
-                    @endif
+                    <tr x-show="activeLog.pemilik_alamat || '{{ $settings['pemilik_alamat'] ?? '' }}'"><td class="py-0.5">Alamat</td><td>:</td><td x-text="activeLog.pemilik_alamat || '{{ $settings['pemilik_alamat'] ?? '' }}'"></td></tr>
                     <tr><td class="py-0.5">Merk/Type</td><td>:</td><td x-text="activeLog.clean_product || activeLog.product"></td></tr>
                     <tr><td class="py-0.5">Jenis / Model</td><td>:</td><td x-text="activeLog.jenis_model"></td></tr>
                     <tr><td class="py-0.5">Tahun</td><td>:</td><td x-text="activeLog.tahun"></td></tr>

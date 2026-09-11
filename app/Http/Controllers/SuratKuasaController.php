@@ -124,6 +124,58 @@ class SuratKuasaController extends Controller
     }
 
     /**
+     * Resolve the registered BBN location address from Odoo vehicle.bbn
+     */
+    public static function resolveBbnAddress(?string $bbnCode, ?int $bbnId = null): ?string
+    {
+        if (empty($bbnCode) && empty($bbnId)) {
+            return null;
+        }
+
+        try {
+            /** @var \App\Services\OdooService $odooService */
+            $odooService = app(\App\Services\OdooService::class);
+            $bbnMap = $odooService->getVehicleBbnMap();
+
+            if ($bbnId && isset($bbnMap['by_id'][$bbnId])) {
+                return $bbnMap['by_id'][$bbnId];
+            }
+
+            if ($bbnCode && isset($bbnMap['by_code'][$bbnCode])) {
+                return $bbnMap['by_code'][$bbnCode];
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Could not resolve BBN address: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Get dynamic Alamat Pemilik for Surat Kuasa
+     * Precedence:
+     * 1. $item->bbn_alamat (from database)
+     * 2. resolveBbnAddress($item->bbn) (from Odoo vehicle.bbn cache)
+     * 3. surat_kuasa_pemilik_alamat (from Settings fallback)
+     */
+    public static function getPemilikAlamatForItem(?Item $item): string
+    {
+        if ($item) {
+            if (!empty($item->bbn_alamat)) {
+                return $item->bbn_alamat;
+            }
+            if (!empty($item->bbn)) {
+                $resolved = self::resolveBbnAddress($item->bbn);
+                if (!empty($resolved)) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat');
+    }
+
+    /**
      * Display the Surat Kuasa dashboard or password unlock prompt
      */
     public function index(Request $request)
@@ -355,6 +407,8 @@ class SuratKuasaController extends Controller
                         $existing->location = $itemData['location'];
                     if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn'])
                         $existing->bbn = $itemData['bbn'];
+                    if (isset($itemData['bbn_alamat']) && $existing->bbn_alamat !== $itemData['bbn_alamat'])
+                        $existing->bbn_alamat = $itemData['bbn_alamat'];
                     if (!empty($itemData['current_customer']) && $existing->current_customer !== $itemData['current_customer'])
                         $existing->current_customer = $itemData['current_customer'];
 
@@ -397,6 +451,7 @@ class SuratKuasaController extends Controller
                         'year'               => $itemData['year'] ?? date('Y'),
                         'location'           => $itemData['location'] ?? '',
                         'bbn'                => $itemData['bbn'] ?? null,
+                        'bbn_alamat'         => $itemData['bbn_alamat'] ?? null,
                         'current_customer'   => $itemData['current_customer'] ?? null,
                         'internal_reference' => $itemData['internal_reference'] ?? null,
                         'engine_number'      => $itemData['engine_number'] ?? null,
@@ -580,6 +635,9 @@ class SuratKuasaController extends Controller
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
                 }
+                if (isset($odooRow['bbn_alamat']) && $item->bbn_alamat !== $odooRow['bbn_alamat']) {
+                    $item->bbn_alamat = $odooRow['bbn_alamat'];
+                }
                 if (!empty($odooRow['current_customer']) && $item->current_customer !== $odooRow['current_customer'])
                     $item->current_customer = $odooRow['current_customer'];
 
@@ -632,6 +690,9 @@ class SuratKuasaController extends Controller
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
+                }
+                if (isset($odooRow['bbn_alamat']) && $item->bbn_alamat !== $odooRow['bbn_alamat']) {
+                    $item->bbn_alamat = $odooRow['bbn_alamat'];
                 }
 
                 if ($item->isDirty()) {
@@ -743,7 +804,7 @@ class SuratKuasaController extends Controller
             'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
             'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
             'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
-            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+            'pemilik_alamat' => self::getPemilikAlamatForItem($item),
         ];
 
         return view('surat_kuasa.print', [
@@ -802,7 +863,7 @@ class SuratKuasaController extends Controller
             'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
             'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
             'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
-            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+            'pemilik_alamat' => self::getPemilikAlamatForItem($item),
         ];
 
         $phpWord = new \PhpOffice\PhpWord\PhpWord();
@@ -1050,7 +1111,7 @@ class SuratKuasaController extends Controller
             'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
             'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
             'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
-            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+            'pemilik_alamat' => self::getPemilikAlamatForItem($item),
         ];
 
         $html = view('surat_kuasa.print', [
@@ -1130,7 +1191,7 @@ class SuratKuasaController extends Controller
             'pemberi_2_jabatan' => Setting::get('surat_kuasa_pemberi_2_jabatan', 'Fleet Operation Manager'),
             'pemberi_alamat' => Setting::get('surat_kuasa_pemberi_alamat', 'Jl. Daan Mogot KM 1 No. 99 Jakarta Barat 11510'),
             'pemilik_nama' => Setting::get('surat_kuasa_pemilik_nama', 'PT Surya Darma Perkasa'),
-            'pemilik_alamat' => Setting::get('surat_kuasa_pemilik_alamat', 'Kel. Duri Kepa Kec. Kebon Jeruk Kota Jakarta Barat'),
+            'pemilik_alamat' => self::getPemilikAlamatForItem($item),
         ];
 
         try {
