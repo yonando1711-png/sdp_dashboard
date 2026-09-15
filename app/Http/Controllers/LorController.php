@@ -393,6 +393,17 @@ class LorController extends Controller
                     $query->whereIn('sales_team', $allowedSalesTeams);
                 }
             }
+
+            // Apply SMD Request Filters
+            if ($request->filled('salesperson')) {
+                $query->where('salesperson', $request->input('salesperson'));
+            }
+            if ($request->filled('sales_team')) {
+                $query->where('sales_team', $request->input('sales_team'));
+            }
+            if ($request->filled('status')) {
+                $query->where('status', $request->input('status'));
+            }
         }
         
         if (!empty($selectedStatuses)) {
@@ -442,7 +453,7 @@ class LorController extends Controller
                 $customerSuffix = '_' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search));
             }
         }
-        $filename = 'list_of_rented' . $customerSuffix . '_' . date('Y-m-d');
+        $filename = ($isSmd ? 'list_of_rented_smd' : 'list_of_rented') . $customerSuffix . '_' . date('Y-m-d');
 
         if ($format === 'pdf') {
             $options = new \Dompdf\Options();
@@ -450,13 +461,25 @@ class LorController extends Controller
             $options->set('isRemoteEnabled', true);
             
             $dompdf = new \Dompdf\Dompdf($options);
-            $html = view('exports.lor_pdf', [
-                'rentals' => $currentRentals,
-                'priceHistories' => $priceHistories,
-                'includeNopol' => $includeNopol,
-                'nopolHistories' => collect($nopolHistories),
-                'taxMode' => $taxMode
-            ])->render();
+
+            if ($isSmd) {
+                $html = view('exports.lor_smd_pdf', [
+                    'rentals' => $currentRentals,
+                    'canViewLastInvoiceDate' => (bool) $user?->canViewSmdLastInvoiceDate(),
+                    'search' => $search,
+                    'salespersonFilter' => $request->input('salesperson'),
+                    'salesTeamFilter' => $request->input('sales_team'),
+                    'statusFilter' => $request->input('status'),
+                ])->render();
+            } else {
+                $html = view('exports.lor_pdf', [
+                    'rentals' => $currentRentals,
+                    'priceHistories' => $priceHistories,
+                    'includeNopol' => $includeNopol,
+                    'nopolHistories' => collect($nopolHistories),
+                    'taxMode' => $taxMode
+                ])->render();
+            }
             
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'landscape');

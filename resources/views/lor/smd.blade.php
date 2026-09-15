@@ -29,6 +29,10 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         <span>Export Data (Excel)</span>
                     </a>
+                    <a href="{{ route('lor.export', array_merge(request()->all(), ['source' => 'smd', 'format' => 'pdf'])) }}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        <span>Export PDF</span>
+                    </a>
                 </div>
             @endif
         </div>
@@ -40,7 +44,7 @@
                     <!-- Search Input -->
                     <div class="relative flex-1 min-w-[240px]">
                         <input type="text" name="search" value="{{ $search }}" placeholder="Search Rental ID, Contract, Customer, Unit, Salesperson..." 
-                               class="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200">
+                                class="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200">
                         <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
 
@@ -96,11 +100,13 @@
                             <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">CUSTOMER</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">UNIT / LOT</th>
                             <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">PRODUCT</th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">LOKASI PEMAKAIAN</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">START SEWA</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">END SEWA</th>
                             @if(auth()->user()?->canViewSmdLastInvoiceDate())
                                 <th class="py-3.5 px-4 whitespace-nowrap text-cyan-600 dark:text-cyan-400">LAST INVOICE DATE</th>
                             @endif
+                            <th class="py-3.5 px-4 text-right whitespace-nowrap">HARGA PER BULAN</th>
                             <th class="py-3.5 px-4 text-right whitespace-nowrap">TOTAL HARGA</th>
                             <th class="py-3.5 px-4 text-center whitespace-nowrap">STATUS</th>
                             <th class="py-3.5 px-4 whitespace-nowrap">NOMOR KONTRAK</th>
@@ -128,6 +134,9 @@
                                 <td class="py-3.5 px-4 text-slate-800 dark:text-slate-200" title="{{ $rental->product }}">
                                     {{ $rental->product ?: '-' }}
                                 </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
+                                    {{ $rental->city ?: '-' }}
+                                </td>
                                 <td class="py-3.5 px-4 whitespace-nowrap">
                                     {{ $rental->actual_start_rental ? \Carbon\Carbon::parse($rental->actual_start_rental)->format('d M Y') : '-' }}
                                 </td>
@@ -139,6 +148,9 @@
                                         {{ $rental->last_invoice_date ? \Carbon\Carbon::parse($rental->last_invoice_date)->format('d M Y') : '-' }}
                                     </td>
                                 @endif
+                                <td class="py-3.5 px-4 text-right font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                    {{ $rental->price ? 'Rp ' . number_format($rental->price, 0, ',', '.') : '-' }}
+                                </td>
                                 <td class="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                                     {{ $rental->amount_total ? 'Rp ' . number_format($rental->amount_total, 0, ',', '.') : ($rental->total_price ? 'Rp ' . number_format($rental->total_price, 0, ',', '.') : '-') }}
                                 </td>
@@ -168,7 +180,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ auth()->user()?->canViewSmdLastInvoiceDate() ? 13 : 12 }}" class="p-8 text-center text-slate-500 dark:text-slate-400">
+                                <td colspan="{{ auth()->user()?->canViewSmdLastInvoiceDate() ? 15 : 14 }}" class="p-8 text-center text-slate-500 dark:text-slate-400">
                                     No rental contracts found matching your assigned Salesperson / Sales Team scope.
                                 </td>
                             </tr>
