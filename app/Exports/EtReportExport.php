@@ -19,6 +19,7 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
     protected array $summary;
     protected array $rows = [];
     protected array $teamMerges = [];
+    protected array $spMerges = [];
     protected array $custMerges = [];
     protected int $totalRow = 0;
 
@@ -33,6 +34,7 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
     {
         $this->rows = [];
         $this->teamMerges = [];
+        $this->spMerges = [];
         $this->custMerges = [];
         $currentRow = 2; // Row 1 is header
 
@@ -40,32 +42,46 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
             $teamStart = $currentRow;
             $teamFirst = true;
 
-            foreach ($teamData['customers'] as $custName => $custData) {
-                $custStart = $currentRow;
-                $custFirst = true;
+            $salespersons = $teamData['salespersons'] ?? [];
+            foreach ($salespersons as $spName => $spData) {
+                $spStart = $currentRow;
+                $spFirst = true;
 
-                foreach ($custData['items'] as $item) {
-                    $this->rows[] = [
-                        $teamFirst ? $teamCode : '',
-                        $teamFirst ? $teamData['total_units'] : '',
-                        $custFirst ? $custName : '',
-                        $custFirst ? $custData['total_units'] : '',
-                        $item['tipe_unit'],
-                        $item['tahun_kendaraan'],
-                        $item['tgl_et'],
-                        $item['masa_sewa'],
-                        $item['sewa_sdh_berjalan'],
-                        $item['sisa_masa_sewa'],
-                    ];
+                $customers = $spData['customers'] ?? [];
+                foreach ($customers as $custName => $custData) {
+                    $custStart = $currentRow;
+                    $custFirst = true;
 
-                    $teamFirst = false;
-                    $custFirst = false;
-                    $currentRow++;
+                    foreach ($custData['items'] as $item) {
+                        $this->rows[] = [
+                            $teamFirst ? $teamCode : '',
+                            $teamFirst ? $teamData['total_units'] : '',
+                            $spFirst ? $spName : '',
+                            $custFirst ? $custName : '',
+                            $custFirst ? $custData['total_units'] : '',
+                            $item['tipe_unit'],
+                            $item['tahun_kendaraan'],
+                            $item['tgl_et'],
+                            $item['masa_sewa'],
+                            $item['sewa_sdh_berjalan'],
+                            $item['sisa_masa_sewa'],
+                        ];
+
+                        $teamFirst = false;
+                        $spFirst = false;
+                        $custFirst = false;
+                        $currentRow++;
+                    }
+
+                    $custEnd = $currentRow - 1;
+                    if ($custEnd > $custStart) {
+                        $this->custMerges[] = [$custStart, $custEnd];
+                    }
                 }
 
-                $custEnd = $currentRow - 1;
-                if ($custEnd > $custStart) {
-                    $this->custMerges[] = [$custStart, $custEnd];
+                $spEnd = $currentRow - 1;
+                if ($spEnd > $spStart) {
+                    $this->spMerges[] = [$spStart, $spEnd];
                 }
             }
 
@@ -80,7 +96,8 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
         $this->rows[] = [
             'TOTAL',
             $this->summary['total_units'] ?? 0,
-            '',
+            ($this->summary['total_salespersons'] ?? 0) . ' Salespersons',
+            ($this->summary['total_customers'] ?? 0) . ' Customers Impacted',
             $this->summary['total_units'] ?? 0,
             '',
             '',
@@ -101,6 +118,7 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
         return [
             'Team',
             'Total Unit ET',
+            'Salesperson',
             'Nama Customer',
             'ET / Cust',
             'Tipe Unit Kendaraan',
@@ -147,26 +165,31 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
                     $sheet->mergeCells("B{$merge[0]}:B{$merge[1]}");
                 }
 
+                // Merge cells for Salesperson
+                foreach ($this->spMerges as $merge) {
+                    $sheet->mergeCells("C{$merge[0]}:C{$merge[1]}");
+                }
+
                 // Merge cells for Customer
                 foreach ($this->custMerges as $merge) {
-                    $sheet->mergeCells("C{$merge[0]}:C{$merge[1]}");
                     $sheet->mergeCells("D{$merge[0]}:D{$merge[1]}");
+                    $sheet->mergeCells("E{$merge[0]}:E{$merge[1]}");
                 }
 
                 // Set column alignments for data rows
-                $dataRange = "A2:J" . ($lastRow - 1);
+                $dataRange = "A2:K" . ($lastRow - 1);
                 $sheet->getStyle($dataRange)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getStyle("A2:B" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("C2:C" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                $sheet->getStyle("D2:D" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("E2:E" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-                $sheet->getStyle("F2:J" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("C2:D" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("E2:E" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("F2:F" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("G2:K" . ($lastRow - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Set thin borders for all table cells
-                $sheet->getStyle("A1:J{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFCBD5E1');
+                $sheet->getStyle("A1:K{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFCBD5E1');
 
                 // Style Total Row
-                $sheet->getStyle("A{$lastRow}:J{$lastRow}")->applyFromArray([
+                $sheet->getStyle("A{$lastRow}:K{$lastRow}")->applyFromArray([
                     'font' => [
                         'bold' => true,
                         'size' => 11,
@@ -183,7 +206,9 @@ class EtReportExport implements FromArray, WithHeadings, WithStyles, ShouldAutoS
 
                 $sheet->getStyle("A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("B{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("C{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                $sheet->getStyle("E{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Row heights
                 $sheet->getRowDimension(1)->setRowHeight(28);

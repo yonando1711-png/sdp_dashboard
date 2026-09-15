@@ -174,147 +174,181 @@
         </form>
     </div>
 
-    <!-- Grouped Table Card -->
-    <div class="bg-white dark:bg-[#0d1322] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
-                <!-- Table Head -->
-                <thead>
-                    <tr class="bg-slate-900 text-white dark:bg-slate-950 font-bold uppercase tracking-wider text-[11px] border-b border-slate-800">
-                        <th class="py-3.5 px-4 text-center border-r border-slate-800/80 w-24">Team</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-28">Total Unit ET</th>
-                        <th class="py-3.5 px-4 border-r border-slate-800/80 min-w-[220px]">Nama Customer</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-24">ET / Cust</th>
-                        <th class="py-3.5 px-4 border-r border-slate-800/80 min-w-[240px]">Tipe Unit Kendaraan</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-24">Tahun</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-28">Tgl ET</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-28">Masa Sewa</th>
-                        <th class="py-3.5 px-3 text-center border-r border-slate-800/80 w-36">Sewa Sdh Berjalan</th>
-                        <th class="py-3.5 px-3 text-center w-32">Sisa Masa Sewa</th>
-                    </tr>
-                </thead>
+    <!-- Salesperson Tables (Each Salesperson in a Dedicated Card) -->
+    <div class="space-y-6">
+        @forelse($grouped as $teamCode => $team)
+            @foreach($team['salespersons'] as $spName => $sp)
+                @php
+                    $spSearchString = strtolower($teamCode . ' ' . $spName . ' ' . implode(' ', array_map(function($c) {
+                        return $c['customer'] . ' ' . implode(' ', array_map(function($it) {
+                            return $it['tipe_unit'] . ' ' . $it['tahun_kendaraan'] . ' ' . $it['nopol'] . ' ' . $it['order_name'];
+                        }, $c['items']));
+                    }, $sp['customers'])));
+                @endphp
 
-                <!-- Table Body -->
-                <tbody class="divide-y divide-slate-200 dark:divide-slate-800/60">
-                    @forelse($grouped as $teamCode => $team)
-                        @php
-                            $teamTotalUnits = $team['total_units'];
-                            $teamFirstRow = true;
-                        @endphp
+                <div class="bg-white dark:bg-[#0d1322] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden transition-all"
+                     x-show="!searchQuery || '{{ $spSearchString }}'.includes(searchQuery.toLowerCase())">
+                    
+                    <!-- Salesperson Card Header -->
+                    <div class="px-6 py-4 bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center text-indigo-500 font-black text-xl shadow-xs">
+                                👤
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2.5">
+                                    <h3 class="text-base font-black text-slate-900 dark:text-white tracking-tight">{{ $spName }}</h3>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-extrabold text-xs border border-indigo-500/20">
+                                        <span class="text-[10px] uppercase text-indigo-400 font-medium">Team</span>
+                                        <span>{{ $teamCode }}</span>
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                                    {{ $team['team_full'] }} &bull; <span class="font-semibold text-slate-700 dark:text-slate-300">{{ count($sp['customers']) }} Corporate Customer{{ count($sp['customers']) > 1 ? 's' : '' }}</span>
+                                </p>
+                            </div>
+                        </div>
 
-                        @foreach($team['customers'] as $custName => $cust)
-                            @php
-                                $custTotalUnits = $cust['total_units'];
-                                $custFirstRow = true;
-                            @endphp
+                        <!-- Right Side Badge: Total ET Units -->
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Total ET</span>
+                                <span class="text-lg font-black text-rose-600 dark:text-rose-400">{{ $sp['total_units'] }} Unit{{ $sp['total_units'] > 1 ? 's' : '' }}</span>
+                            </div>
+                            <div class="w-10 h-10 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center text-rose-500 font-bold">
+                                🚗
+                            </div>
+                        </div>
+                    </div>
 
-                            @foreach($cust['items'] as $item)
-                                <tr class="hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 transition-colors"
-                                    x-show="!searchQuery || '{{ strtolower($teamCode . ' ' . $custName . ' ' . $item['tipe_unit'] . ' ' . $item['tahun_kendaraan'] . ' ' . $item['nopol'] . ' ' . $item['order_name']) }}'.includes(searchQuery.toLowerCase())">
-                                    
-                                    <!-- Team Column (Rendered only on first row of team) -->
-                                    @if($teamFirstRow)
-                                        <td rowspan="{{ $teamTotalUnits }}" class="py-3 px-4 text-center font-extrabold text-slate-800 dark:text-slate-100 bg-slate-50/70 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-800 align-middle">
-                                            <span class="inline-block px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black text-sm shadow-xs border border-indigo-500/20">
-                                                {{ $teamCode }}
-                                            </span>
-                                            <div class="text-[10px] text-slate-400 font-normal mt-1">{{ $team['team_full'] }}</div>
-                                        </td>
-                                        <td rowspan="{{ $teamTotalUnits }}" class="py-3 px-3 text-center font-black text-sm text-slate-900 dark:text-white bg-slate-50/70 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-800 align-middle">
-                                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-inner">
-                                                {{ $teamTotalUnits }}
-                                            </span>
-                                        </td>
-                                        @php $teamFirstRow = false; @endphp
-                                    @endif
+                    <!-- Table for this Salesperson -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-900 text-white dark:bg-slate-950 font-bold uppercase tracking-wider text-[11px] border-b border-slate-800">
+                                    <th class="py-3 px-4 border-r border-slate-800/80 min-w-[220px]">Nama Customer</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-24">ET / Cust</th>
+                                    <th class="py-3 px-4 border-r border-slate-800/80 min-w-[260px]">Tipe Unit Kendaraan</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-20">Tahun</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-28">Tgl ET</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-28">Masa Sewa</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-36">Sewa Sdh Berjalan</th>
+                                    <th class="py-3 px-3 text-center w-32">Sisa Masa Sewa</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-slate-800/60">
+                                @foreach($sp['customers'] as $custName => $cust)
+                                    @php
+                                        $custTotalUnits = $cust['total_units'];
+                                        $custFirstRow = true;
+                                    @endphp
 
-                                    <!-- Customer Column (Rendered only on first row of customer) -->
-                                    @if($custFirstRow)
-                                        <td rowspan="{{ $custTotalUnits }}" class="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 align-middle bg-white/50 dark:bg-slate-900/30">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-indigo-500">🏢</span>
-                                                <span class="font-bold leading-snug">{{ $custName }}</span>
-                                            </div>
-                                        </td>
-                                        <td rowspan="{{ $custTotalUnits }}" class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800 align-middle bg-white/50 dark:bg-slate-900/30">
-                                            <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
-                                                {{ $custTotalUnits }}
-                                            </span>
-                                        </td>
-                                        @php $custFirstRow = false; @endphp
-                                    @endif
-
-                                    <!-- Vehicle Unit & Durations (Row by Row) -->
-                                    <td class="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800">
-                                        <div class="font-bold text-slate-900 dark:text-white">{{ $item['tipe_unit'] }}</div>
-                                        <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                                            @if($item['nopol'] && $item['nopol'] !== '-')
-                                                <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
-                                                    {{ $item['nopol'] }}
-                                                </span>
+                                    @foreach($cust['items'] as $item)
+                                        <tr class="hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 transition-colors"
+                                            x-show="!searchQuery || '{{ strtolower($custName . ' ' . $item['tipe_unit'] . ' ' . $item['tahun_kendaraan'] . ' ' . $item['nopol'] . ' ' . $item['order_name']) }}'.includes(searchQuery.toLowerCase())">
+                                            
+                                            <!-- Customer Column (Rendered once per customer with rowspan) -->
+                                            @if($custFirstRow)
+                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 align-middle bg-slate-50/30 dark:bg-slate-900/20">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-indigo-500 text-sm">🏢</span>
+                                                        <span class="font-bold leading-snug">{{ $custName }}</span>
+                                                    </div>
+                                                </td>
+                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800 align-middle bg-slate-50/30 dark:bg-slate-900/20">
+                                                    <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
+                                                        {{ $custTotalUnits }}
+                                                    </span>
+                                                </td>
+                                                @php $custFirstRow = false; @endphp
                                             @endif
-                                            <span>SO: {{ $item['order_name'] }}</span>
-                                        </div>
+
+                                            <!-- Vehicle Unit & Durations -->
+                                            <td class="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800">
+                                                <div class="font-bold text-slate-900 dark:text-white">{{ $item['tipe_unit'] }}</div>
+                                                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                                                    @if($item['nopol'] && $item['nopol'] !== '-')
+                                                        <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
+                                                            {{ $item['nopol'] }}
+                                                        </span>
+                                                    @endif
+                                                    <span>SO: {{ $item['order_name'] }}</span>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 font-mono">
+                                                {{ $item['tahun_kendaraan'] }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center font-bold text-rose-600 dark:text-rose-400 border-r border-slate-200 dark:border-slate-800 font-mono">
+                                                {{ $item['tgl_et'] }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
+                                                {{ $item['masa_sewa'] }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
+                                                {{ $item['sewa_sdh_berjalan'] }}
+                                            </td>
+                                            <td class="py-3 px-3 text-center font-extrabold text-amber-600 dark:text-amber-400">
+                                                {{ $item['sisa_masa_sewa'] }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-50 dark:bg-slate-900/60 font-bold text-slate-800 dark:text-slate-200 text-xs border-t border-slate-200 dark:border-slate-800">
+                                    <td class="py-2.5 px-4 font-black uppercase text-[11px] text-slate-500 dark:text-slate-400">
+                                        Subtotal {{ $spName }}
                                     </td>
-                                    <td class="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 font-mono">
-                                        {{ $item['tahun_kendaraan'] }}
+                                    <td class="py-2.5 px-3 text-center font-black text-rose-600 dark:text-rose-400">
+                                        {{ $sp['total_units'] }}
                                     </td>
-                                    <td class="py-3 px-3 text-center font-bold text-rose-600 dark:text-rose-400 border-r border-slate-200 dark:border-slate-800 font-mono">
-                                        {{ $item['tgl_et'] }}
-                                    </td>
-                                    <td class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
-                                        {{ $item['masa_sewa'] }}
-                                    </td>
-                                    <td class="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
-                                        {{ $item['sewa_sdh_berjalan'] }}
-                                    </td>
-                                    <td class="py-3 px-3 text-center font-extrabold text-amber-600 dark:text-amber-400">
-                                        {{ $item['sisa_masa_sewa'] }}
+                                    <td colspan="6" class="py-2.5 px-4 text-right text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                                        {{ count($sp['customers']) }} customer{{ count($sp['customers']) > 1 ? 's' : '' }} &bull; {{ $sp['total_units'] }} unit{{ $sp['total_units'] > 1 ? 's' : '' }} handled by {{ $spName }}
                                     </td>
                                 </tr>
-                            @endforeach
-                        @endforeach
-                    @empty
-                        <tr>
-                            <td colspan="10" class="py-12 text-center text-slate-400 dark:text-slate-500">
-                                <div class="flex flex-col items-center justify-center gap-3">
-                                    <div class="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-3xl">
-                                        📋
-                                    </div>
-                                    <h4 class="font-bold text-slate-700 dark:text-slate-300 text-sm">No Early Termination records found</h4>
-                                    <p class="text-xs text-slate-400 dark:text-slate-500 max-w-sm">
-                                        There are no terminated rental contracts recorded in Odoo for the selected date range and filter criteria.
-                                    </p>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            @endforeach
+        @empty
+            <!-- Empty State Card -->
+            <div class="bg-white dark:bg-[#0d1322] rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 dark:text-slate-500 shadow-sm">
+                <div class="flex flex-col items-center justify-center gap-3">
+                    <div class="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center text-3xl">
+                        📋
+                    </div>
+                    <h4 class="font-bold text-slate-700 dark:text-slate-300 text-sm">No Early Termination records found</h4>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 max-w-sm">
+                        There are no terminated rental contracts recorded in Odoo for the selected date range and filter criteria.
+                    </p>
+                </div>
+            </div>
+        @endforelse
 
-                <!-- Table Footer (Total Summary) -->
-                @if(!empty($grouped))
-                <tfoot>
-                    <tr class="bg-slate-100 dark:bg-slate-900/90 font-black text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700 text-xs">
-                        <td class="py-3.5 px-4 text-center border-r border-slate-300 dark:border-slate-700 uppercase tracking-wider font-extrabold">
-                            TOTAL
-                        </td>
-                        <td class="py-3.5 px-3 text-center border-r border-slate-300 dark:border-slate-700 text-sm font-black text-rose-600 dark:text-rose-400">
-                            {{ number_format($summary['total_units'] ?? 0) }}
-                        </td>
-                        <td class="py-3.5 px-4 border-r border-slate-300 dark:border-slate-700 font-bold text-slate-500 dark:text-slate-400">
-                            {{ $summary['total_customers'] ?? 0 }} Customers Impacted
-                        </td>
-                        <td class="py-3.5 px-3 text-center border-r border-slate-300 dark:border-slate-700 text-sm font-black text-rose-600 dark:text-rose-400">
-                            {{ number_format($summary['total_units'] ?? 0) }}
-                        </td>
-                        <td colspan="6" class="py-3.5 px-4 text-right text-[11px] text-slate-400 dark:text-slate-500 font-normal italic">
-                            Generated from live Odoo rental contracts &bull; SDP Dashboard
-                        </td>
-                    </tr>
-                </tfoot>
-                @endif
-            </table>
-        </div>
+        <!-- Grand Total Summary Banner (if items exist) -->
+        @if(!empty($grouped))
+            <div class="bg-white dark:bg-[#0d1322] rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center text-indigo-500 font-black text-xl">
+                        📊
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Grand Total Early Termination</h4>
+                        <div class="flex items-center gap-3 mt-1">
+                            <span class="text-2xl font-black text-rose-600 dark:text-rose-400">{{ number_format($summary['total_units'] ?? 0) }} Units</span>
+                            <span class="text-slate-300 dark:text-slate-700">&bull;</span>
+                            <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ $summary['total_salespersons'] ?? 0 }} Salespersons</span>
+                            <span class="text-slate-300 dark:text-slate-700">&bull;</span>
+                            <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ $summary['total_customers'] ?? 0 }} Customers</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                    Generated from live Odoo rental contracts &bull; SDP Dashboard
+                </p>
+            </div>
+        @endif
     </div>
 </div>
 @endsection

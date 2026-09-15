@@ -2606,7 +2606,8 @@ class OdooService
             $orders = $this->execute('sale.order', 'search_read', [$domain], [
                 'fields' => [
                     'id', 'name', 'is_terminate', 'partner_id', 'user_id', 'team_id',
-                    'actual_start_rental', 'initial_end_date', 'actual_end_rental',
+                    'actual_start_rental', 'rental_start_date', 'initial_end_date', 'rental_return_date', 'actual_end_rental',
+                    'rental_contract_id', 'previous_so_id',
                     'order_line'
                 ],
                 'order' => 'actual_end_rental desc, id desc'
@@ -2619,6 +2620,26 @@ class OdooService
                     'raw_items' => [],
                     'summary' => ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0]
                 ];
+            }
+
+            // Batch fetch contracts if available
+            $contractIds = [];
+            foreach ($orders as $order) {
+                if (!empty($order['rental_contract_id'][0])) {
+                    $contractIds[] = (int)$order['rental_contract_id'][0];
+                }
+            }
+
+            $contracts = [];
+            if (!empty($contractIds)) {
+                $cRecords = $this->execute('rental.contract', 'search_read', [
+                    [['id', 'in', array_values(array_unique($contractIds))]]
+                ], [
+                    'fields' => ['id', 'name', 'start_date', 'end_date']
+                ]);
+                foreach ($cRecords as $c) {
+                    $contracts[$c['id']] = $c;
+                }
             }
 
             $solIds = [];
@@ -2672,16 +2693,32 @@ class OdooService
                 $customer = is_array($order['partner_id']) ? preg_replace('/^\[.*?\]\s*/', '', $order['partner_id'][1]) : 'Unknown';
                 $salesperson = is_array($order['user_id']) ? $order['user_id'][1] : '';
 
-                $startCarbon = !empty($order['actual_start_rental']) ? \Carbon\Carbon::parse($order['actual_start_rental'], 'UTC')->setTimezone('Asia/Jakarta') : null;
-                $initEndCarbon = !empty($order['initial_end_date']) ? \Carbon\Carbon::parse($order['initial_end_date'], 'UTC')->setTimezone('Asia/Jakarta') : null;
-                $etCarbon = !empty($order['actual_end_rental']) ? \Carbon\Carbon::parse($order['actual_end_rental'], 'UTC')->setTimezone('Asia/Jakarta') : null;
+                $cid = $order['rental_contract_id'][0] ?? null;
+                $contract = $cid ? ($contracts[$cid] ?? null) : null;
+
+                // 1. Effective Start Date:
+                // If continuation SO (previous_so_id) under a contract with a valid start_date, use contract start
+                $startDateRaw = !empty($order['actual_start_rental']) ? $order['actual_start_rental'] : ($order['rental_start_date'] ?? null);
+                if (!empty($order['previous_so_id']) && !empty($contract['start_date'])) {
+                    $startCarbon = \Carbon\Carbon::parse($contract['start_date'], 'Asia/Jakarta')->startOfDay();
+                } else {
+                    $startCarbon = !empty($startDateRaw) ? \Carbon\Carbon::parse($startDateRaw, 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
+                }
+
+                // 2. Effective End Date:
+                // Always prioritize rental_return_date (active/extended return date), fallback to initial_end_date
+                $endDateRaw = !empty($order['rental_return_date']) ? $order['rental_return_date'] : ($order['initial_end_date'] ?? null);
+                $endCarbon = !empty($endDateRaw) ? \Carbon\Carbon::parse($endDateRaw, 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
+
+                // 3. Actual ET Date:
+                $etCarbon = !empty($order['actual_end_rental']) ? \Carbon\Carbon::parse($order['actual_end_rental'], 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
 
                 $tglEt = $etCarbon ? $etCarbon->format('d-M-Y') : '-';
 
                 $masaSewa = '-';
-                if ($startCarbon && $initEndCarbon) {
-                    $initEndPlus1 = $initEndCarbon->copy()->addDay();
-                    $diff = $startCarbon->diff($initEndPlus1);
+                if ($startCarbon && $endCarbon) {
+                    $endPlus1 = $endCarbon->copy()->addDay();
+                    $diff = $startCarbon->diff($endPlus1);
                     $m = $diff->y * 12 + $diff->m;
                     $masaSewa = ($diff->d > 0 && $diff->d < 28) ? "{$m} BLN {$diff->d} HARI" : "{$m} BLN";
                 }
@@ -2695,8 +2732,8 @@ class OdooService
                 }
 
                 $sisaMasaSewa = '-';
-                if ($etCarbon && $initEndCarbon && $etCarbon->lt($initEndCarbon)) {
-                    $diff = $etCarbon->diff($initEndCarbon);
+                if ($etCarbon && $endCarbon && $etCarbon->lt($endCarbon)) {
+                    $diff = $etCarbon->diff($endCarbon);
                     $m = $diff->y * 12 + $diff->m;
                     $sisaMasaSewa = ($diff->d > 0 && $diff->d < 28) ? "{$m} BULAN {$diff->d} HARI" : "{$m} BULAN";
                 }
@@ -2776,12 +2813,14 @@ class OdooService
                 }
             }
 
-            // Group by Team -> Customer
+            // Group by Team -> Salesperson -> Customer
             $grouped = [];
             $allCustomers = [];
+            $allSalespersons = [];
 
             foreach ($rawUnits as $item) {
                 $tCode = $item['team_code'];
+                $sp = !empty($item['salesperson']) ? $item['salesperson'] : 'Unassigned';
                 $cust = $item['customer'];
 
                 if (!isset($grouped[$tCode])) {
@@ -2789,14 +2828,25 @@ class OdooService
                         'team_code' => $tCode,
                         'team_full' => $item['team_full'],
                         'total_units' => 0,
-                        'customers' => [],
+                        'salespersons' => [],
                     ];
                 }
 
                 $grouped[$tCode]['total_units']++;
 
-                if (!isset($grouped[$tCode]['customers'][$cust])) {
-                    $grouped[$tCode]['customers'][$cust] = [
+                if (!isset($grouped[$tCode]['salespersons'][$sp])) {
+                    $grouped[$tCode]['salespersons'][$sp] = [
+                        'salesperson' => $sp,
+                        'total_units' => 0,
+                        'customers' => [],
+                    ];
+                    $allSalespersons[$sp] = true;
+                }
+
+                $grouped[$tCode]['salespersons'][$sp]['total_units']++;
+
+                if (!isset($grouped[$tCode]['salespersons'][$sp]['customers'][$cust])) {
+                    $grouped[$tCode]['salespersons'][$sp]['customers'][$cust] = [
                         'customer' => $cust,
                         'total_units' => 0,
                         'items' => [],
@@ -2804,11 +2854,18 @@ class OdooService
                     $allCustomers[$cust] = true;
                 }
 
-                $grouped[$tCode]['customers'][$cust]['total_units']++;
-                $grouped[$tCode]['customers'][$cust]['items'][] = $item;
+                $grouped[$tCode]['salespersons'][$sp]['customers'][$cust]['total_units']++;
+                $grouped[$tCode]['salespersons'][$sp]['customers'][$cust]['items'][] = $item;
             }
 
             ksort($grouped);
+            foreach ($grouped as &$teamData) {
+                ksort($teamData['salespersons']);
+                foreach ($teamData['salespersons'] as &$spData) {
+                    ksort($spData['customers']);
+                }
+            }
+            unset($teamData, $spData);
 
             return [
                 'success' => true,
@@ -2818,6 +2875,7 @@ class OdooService
                     'total_units' => count($rawUnits),
                     'total_customers' => count($allCustomers),
                     'total_teams' => count($grouped),
+                    'total_salespersons' => count($allSalespersons),
                 ]
             ];
         } catch (\Exception $e) {
