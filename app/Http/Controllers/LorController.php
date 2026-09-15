@@ -750,7 +750,12 @@ class LorController extends Controller
 
         $filename = 'ET_Report_' . $dateFrom . '_to_' . $dateTo . '.xlsx';
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\EtReportExport($reportData['grouped'] ?? [], $reportData['summary'] ?? ['total_units' => 0]),
+            new \App\Exports\EtReportExport(
+                $reportData['grouped'] ?? [], 
+                $reportData['summary'] ?? ['total_units' => 0],
+                $dateFrom,
+                $dateTo
+            ),
             $filename
         );
     }

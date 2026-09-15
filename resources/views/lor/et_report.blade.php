@@ -100,29 +100,41 @@
                 
                 <!-- Date Filters -->
                 <div class="flex flex-wrap items-center gap-2">
-                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#050913] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">From</span>
-                        <input type="date" name="date_from" value="{{ $dateFrom }}" class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none">
+                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#050913] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-indigo-500/50 transition-colors group"
+                         onclick="if (!window.fpFrom) document.getElementById('date_from').showPicker();">
+                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">From</span>
+                        <input type="date" name="date_from" id="date_from" value="{{ $dateFrom }}" 
+                               onclick="this.showPicker()"
+                               class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] w-28">
+                        <svg class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 flex-shrink-0 cursor-pointer group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
                     </div>
-                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#050913] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">To</span>
-                        <input type="date" name="date_to" value="{{ $dateTo }}" class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none">
+                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-[#050913] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer hover:border-indigo-500/50 transition-colors group"
+                         onclick="if (!window.fpTo) document.getElementById('date_to').showPicker();">
+                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">To</span>
+                        <input type="date" name="date_to" id="date_to" value="{{ $dateTo }}" 
+                               onclick="this.showPicker()"
+                               class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark] w-28">
+                        <svg class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 flex-shrink-0 cursor-pointer group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
                     </div>
 
                     <!-- Quick Preset Buttons -->
                     <div class="hidden sm:flex items-center gap-1.5 pl-1">
                         <button type="button" 
-                                onclick="document.querySelector('[name=date_from]').value='{{ now()->startOfMonth()->format('Y-m-d') }}'; document.querySelector('[name=date_to]').value='{{ now()->endOfMonth()->format('Y-m-d') }}'; document.getElementById('etFilterForm').submit();"
+                                onclick="setDatePreset('{{ now()->startOfMonth()->format('Y-m-d') }}', '{{ now()->endOfMonth()->format('Y-m-d') }}')"
                                 class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                             This Month
                         </button>
                         <button type="button" 
-                                onclick="document.querySelector('[name=date_from]').value='{{ now()->subMonth()->startOfMonth()->format('Y-m-d') }}'; document.querySelector('[name=date_to]').value='{{ now()->subMonth()->endOfMonth()->format('Y-m-d') }}'; document.getElementById('etFilterForm').submit();"
+                                onclick="setDatePreset('{{ now()->subMonth()->startOfMonth()->format('Y-m-d') }}', '{{ now()->subMonth()->endOfMonth()->format('Y-m-d') }}')"
                                 class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                             Last Month
                         </button>
                         <button type="button" 
-                                onclick="document.querySelector('[name=date_from]').value='{{ now()->startOfYear()->format('Y-m-d') }}'; document.querySelector('[name=date_to]').value='{{ now()->endOfYear()->format('Y-m-d') }}'; document.getElementById('etFilterForm').submit();"
+                                onclick="setDatePreset('{{ now()->startOfYear()->format('Y-m-d') }}', '{{ now()->endOfYear()->format('Y-m-d') }}')"
                                 class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                             This Year
                         </button>
@@ -223,17 +235,27 @@
 
                     <!-- Table for this Salesperson -->
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs border-collapse">
+                        <table class="w-full min-w-[980px] table-fixed text-left text-xs border-collapse">
+                            <colgroup>
+                                <col style="width: 25%;">
+                                <col style="width: 7%;">
+                                <col style="width: 26%;">
+                                <col style="width: 6%;">
+                                <col style="width: 9%;">
+                                <col style="width: 9%;">
+                                <col style="width: 9%;">
+                                <col style="width: 9%;">
+                            </colgroup>
                             <thead>
                                 <tr class="bg-slate-900 text-white dark:bg-slate-950 font-bold uppercase tracking-wider text-[11px] border-b border-slate-800">
-                                    <th class="py-3 px-4 border-r border-slate-800/80 min-w-[220px]">Nama Customer</th>
-                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-24">ET / Cust</th>
-                                    <th class="py-3 px-4 border-r border-slate-800/80 min-w-[260px]">Tipe Unit Kendaraan</th>
-                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-20">Tahun</th>
-                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-28">Tgl ET</th>
-                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-28">Masa Sewa</th>
-                                    <th class="py-3 px-3 text-center border-r border-slate-800/80 w-36">Sewa Sdh Berjalan</th>
-                                    <th class="py-3 px-3 text-center w-32">Sisa Masa Sewa</th>
+                                    <th class="py-3 px-4 border-r border-slate-800/80">Nama Customer</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80">ET / Cust</th>
+                                    <th class="py-3 px-4 border-r border-slate-800/80">Tipe Unit Kendaraan</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80">Tahun</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80">Tgl ET</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80">Masa Sewa</th>
+                                    <th class="py-3 px-3 text-center border-r border-slate-800/80">Sewa Sdh Berjalan</th>
+                                    <th class="py-3 px-3 text-center">Sisa Masa Sewa</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-200 dark:divide-slate-800/60">
@@ -249,13 +271,13 @@
                                             
                                             <!-- Customer Column (Rendered once per customer with rowspan) -->
                                             @if($custFirstRow)
-                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 align-middle bg-slate-50/30 dark:bg-slate-900/20">
+                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-800 align-middle bg-white dark:bg-[#0d1322]">
                                                     <div class="flex items-center gap-2">
-                                                        <span class="text-indigo-500 text-sm">🏢</span>
-                                                        <span class="font-bold leading-snug">{{ $custName }}</span>
+                                                        <span class="text-indigo-500 text-sm flex-shrink-0">🏢</span>
+                                                        <span class="font-bold leading-snug break-words">{{ $custName }}</span>
                                                     </div>
                                                 </td>
-                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800 align-middle bg-slate-50/30 dark:bg-slate-900/20">
+                                                <td rowspan="{{ $custTotalUnits }}" class="py-3 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800 align-middle bg-white dark:bg-[#0d1322]">
                                                     <span class="px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
                                                         {{ $custTotalUnits }}
                                                     </span>
@@ -296,13 +318,13 @@
                             </tbody>
                             <tfoot>
                                 <tr class="bg-slate-50 dark:bg-slate-900/60 font-bold text-slate-800 dark:text-slate-200 text-xs border-t border-slate-200 dark:border-slate-800">
-                                    <td class="py-2.5 px-4 font-black uppercase text-[11px] text-slate-500 dark:text-slate-400">
+                                    <td class="py-2.5 px-4 font-black uppercase text-[11px] text-slate-500 dark:text-slate-400 truncate">
                                         Subtotal {{ $spName }}
                                     </td>
                                     <td class="py-2.5 px-3 text-center font-black text-rose-600 dark:text-rose-400">
                                         {{ $sp['total_units'] }}
                                     </td>
-                                    <td colspan="6" class="py-2.5 px-4 text-right text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                                    <td colspan="6" class="py-2.5 px-4 text-right text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate">
                                         {{ count($sp['customers']) }} customer{{ count($sp['customers']) > 1 ? 's' : '' }} &bull; {{ $sp['total_units'] }} unit{{ $sp['total_units'] > 1 ? 's' : '' }} handled by {{ $spName }}
                                     </td>
                                 </tr>
@@ -351,4 +373,98 @@
         @endif
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<!-- Flatpickr CSS & JS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    /* Custom Flatpickr styling tailored to Dashboard Dark/Light theme */
+    .flatpickr-calendar {
+        border-radius: 1rem !important;
+        font-family: inherit !important;
+        border: 1px solid rgba(226, 232, 240, 0.8) !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    }
+    .dark .flatpickr-calendar {
+        background: #0d1322 !important;
+        border: 1px solid #1e293b !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+    }
+    .dark .flatpickr-calendar .flatpickr-day {
+        color: #cbd5e1 !important;
+        border-radius: 0.5rem !important;
+    }
+    .dark .flatpickr-calendar .flatpickr-day:hover {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+    }
+    .dark .flatpickr-calendar .flatpickr-day.selected {
+        background: #4f46e5 !important;
+        border-color: #4f46e5 !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    .dark .flatpickr-calendar .flatpickr-day.today {
+        border-color: #6366f1 !important;
+    }
+    .dark .flatpickr-current-month span.cur-month, 
+    .dark .flatpickr-current-month input.cur-year {
+        color: #f8fafc !important;
+        font-weight: 700 !important;
+    }
+    .dark .flatpickr-months .flatpickr-prev-month svg,
+    .dark .flatpickr-months .flatpickr-next-month svg {
+        fill: #94a3b8 !important;
+    }
+    .dark .flatpickr-weekdays span.flatpickr-weekday {
+        color: #64748b !important;
+        font-weight: 700 !important;
+    }
+    /* Fallback native date inputs */
+    input[type="date"] {
+        cursor: pointer;
+    }
+    .dark input[type="date"] {
+        color-scheme: dark;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 0.8;
+    }
+    .dark input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(0.85);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    function setDatePreset(from, to) {
+        if (window.fpFrom && window.fpTo) {
+            window.fpFrom.setDate(from);
+            window.fpTo.setDate(to);
+        } else {
+            const elFrom = document.getElementById('date_from');
+            const elTo = document.getElementById('date_to');
+            if (elFrom) elFrom.value = from;
+            if (elTo) elTo.value = to;
+        }
+        document.getElementById('etFilterForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof flatpickr !== 'undefined') {
+            const commonConfig = {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd M Y',
+                altInputClass: 'bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer w-24',
+                disableMobile: true,
+                allowInput: false
+            };
+
+            window.fpFrom = flatpickr("#date_from", commonConfig);
+            window.fpTo = flatpickr("#date_to", commonConfig);
+        }
+    });
+</script>
 @endsection

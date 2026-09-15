@@ -14,6 +14,7 @@
             'can_view_lor_smd' => (bool) $u->can_view_lor_smd,
             'can_view_smd_last_invoice_date' => (bool) $u->can_view_smd_last_invoice_date,
             'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
+            'can_view_et_report' => (bool) $u->can_view_et_report,
             'can_export_disposal' => (bool) $u->can_export_disposal,
             'allowed_salespersons' => $u->getAllowedSalespersons(),
             'allowed_sales_teams' => $u->getAllowedSalesTeams(),
