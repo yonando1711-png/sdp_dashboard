@@ -25,6 +25,7 @@ class User extends Authenticatable
         'can_view_lor_smd',
         'can_view_smd_last_invoice_date',
         'can_export_lor_smd',
+        'can_view_et_report',
         'can_export_disposal',
         'allowed_salespersons',
         'allowed_sales_teams',
@@ -54,6 +55,7 @@ class User extends Authenticatable
             'can_view_lor_smd' => 'boolean',
             'can_view_smd_last_invoice_date' => 'boolean',
             'can_export_lor_smd' => 'boolean',
+            'can_view_et_report' => 'boolean',
             'can_export_disposal' => 'boolean',
             'allowed_salespersons' => 'array',
             'allowed_sales_teams' => 'array',
@@ -90,6 +92,14 @@ class User extends Authenticatable
     public function canExportSmd(): bool
     {
         return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_export_lor_smd);
+    }
+
+    /**
+     * Check if user can view ET Report under LoR (SMD)
+     */
+    public function canViewEtReport(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_view_et_report);
     }
 
     /**
@@ -138,6 +148,10 @@ class User extends Authenticatable
 
         if ($key === 'lor-smd') {
             return $this->canAccessSmd();
+        }
+
+        if ($key === 'et-report' || $key === 'lor-et-report') {
+            return $this->canViewEtReport();
         }
 
         // If custom menu_permissions array exists for this account, strictly enforce it!

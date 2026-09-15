@@ -647,4 +647,111 @@ class LorController extends Controller
         session(['lor_authenticated_at' => now()->timestamp]);
         return true;
     }
+
+    /**
+     * Display Early Termination (ET) Report under LoR (SMD)
+     */
+    public function etReport(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewEtReport()) {
+            abort(403, 'Access Denied: Your account does not have permission to view ET Report.');
+        }
+
+        // Default date range: 1st of current month to end of month
+        $dateFrom = $request->input('date_from', now()->startOfMonth()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', now()->endOfMonth()->format('Y-m-d'));
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $reportData = $odooService->fetchEarlyTerminationReport(
+            $dateFrom,
+            $dateTo,
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $user->isItAdmin()
+        );
+
+        // Filter dropdown options strictly matching user's scoping permissions
+        $filterSpQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('salesperson')->where('salesperson', '!=', '');
+            
+        $filterTeamQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('sales_team')->where('sales_team', '!=', '');
+
+        if (!$user->isItAdmin()) {
+            if (!empty($allowedSalespersons)) {
+                $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterSpQuery->whereRaw('1 = 0');
+            }
+
+            if (!empty($allowedSalesTeams)) {
+                $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+            } elseif (!empty($allowedSalespersons)) {
+                $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterTeamQuery->whereRaw('1 = 0');
+            }
+        }
+
+        $availableSalespersons = $filterSpQuery->distinct()->pluck('salesperson')->sort()->values();
+        $availableSalesTeams = $filterTeamQuery->distinct()->pluck('sales_team')->sort()->values();
+
+        return view('lor.et_report', [
+            'grouped' => $reportData['grouped'] ?? [],
+            'rawItems' => $reportData['raw_items'] ?? [],
+            'summary' => $reportData['summary'] ?? ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0],
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'salespersonFilter' => $salespersonFilter,
+            'salesTeamFilter' => $salesTeamFilter,
+            'availableSalespersons' => $availableSalespersons,
+            'availableSalesTeams' => $availableSalesTeams,
+        ]);
+    }
+
+    /**
+     * Export Early Termination (ET) Report as Excel
+     */
+    public function exportEtReport(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewEtReport()) {
+            abort(403, 'Access Denied: Your account does not have permission to view ET Report.');
+        }
+
+        $dateFrom = $request->input('date_from', now()->startOfMonth()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', now()->endOfMonth()->format('Y-m-d'));
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $reportData = $odooService->fetchEarlyTerminationReport(
+            $dateFrom,
+            $dateTo,
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $user->isItAdmin()
+        );
+
+        $filename = 'ET_Report_' . $dateFrom . '_to_' . $dateTo . '.xlsx';
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\EtReportExport($reportData['grouped'] ?? [], $reportData['summary'] ?? ['total_units' => 0]),
+            $filename
+        );
+    }
 }
