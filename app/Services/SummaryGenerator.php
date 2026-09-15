@@ -799,7 +799,8 @@ class SummaryGenerator
                         'actual_end_rental',
                         'price',
                         'driver',
-                        'status'
+                        'status',
+                        'last_invoice_date'
                     ];
 
                     $changed = false;
@@ -968,6 +969,7 @@ class SummaryGenerator
                         'sales_team' => $item['sales_team'] ?? null,
                         'driver' => $item['driver'] ?? null,
                         'is_order_only' => $item['is_order_only'] ?? false,
+                        'last_invoice_date' => $item['last_invoice_date'] ?? null,
                         // Preserve Disposal lifecycle data
                         'first_rental_id' => $disposalData ? $disposalData->first_rental_id : null,
                         'first_start_sewa_date' => $disposalData ? $disposalData->first_start_sewa_date : null,

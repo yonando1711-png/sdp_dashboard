@@ -1803,12 +1803,19 @@ class OdooService
         }
 
         try {
-            // 1. Fetch sale.order records for invoice_ids
-            $orders = $this->execute('sale.order', 'search_read', [
-                [['name', 'in', $rentalNames]]
-            ], [
-                'fields' => ['name', 'invoice_ids']
-            ]);
+            // 1. Fetch sale.order records for invoice_ids in chunks of 500
+            $chunkedRentalNames = array_chunk($rentalNames, 500);
+            $orders = [];
+            foreach ($chunkedRentalNames as $chunk) {
+                $chunkOrders = $this->execute('sale.order', 'search_read', [
+                    [['name', 'in', $chunk]]
+                ], [
+                    'fields' => ['name', 'invoice_ids']
+                ]);
+                if (is_array($chunkOrders)) {
+                    $orders = array_merge($orders, $chunkOrders);
+                }
+            }
 
             if (empty($orders)) {
                 return [];
