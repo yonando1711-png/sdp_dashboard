@@ -99,6 +99,7 @@
                         Export Date: {{ date('d M Y H:i') }} | Total Records: {{ count($rentals) }} units
                         @if(!empty($salespersonFilter)) | Salesperson: {{ $salespersonFilter }} @endif
                         @if(!empty($salesTeamFilter)) | Sales Team: {{ $salesTeamFilter }} @endif
+                        @if(!empty($customerFilter)) | Customer: {{ $customerFilter }} @endif
                         @if(!empty($statusFilter)) | Status: {{ $statusFilter }} @endif
                         @if(!empty($search)) | Search: "{{ $search }}" @endif
                     </div>

@@ -68,6 +68,16 @@
                     </select>
                     @endif
 
+                    <!-- Customer Filter -->
+                    @if(count($filterCustomers) > 1)
+                    <select name="customer" onchange="this.form.submit()" class="px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200 font-medium max-w-[220px] truncate">
+                        <option value="">🏢 All Customers</option>
+                        @foreach($filterCustomers as $cust)
+                            <option value="{{ $cust }}" {{ $customerFilter === $cust ? 'selected' : '' }}>🏢 {{ $cust }}</option>
+                        @endforeach
+                    </select>
+                    @endif
+
                     <!-- Status Filter -->
                     <select name="status" onchange="this.form.submit()" class="px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200 font-medium">
                         <option value="">All Statuses</option>
@@ -78,15 +88,27 @@
                         <option value="Cancelled" {{ $statusFilter === 'Cancelled' ? 'selected' : '' }}>Cancelled</option>
                     </select>
 
+                    @if($sortBy)
+                        <input type="hidden" name="sort_by" value="{{ $sortBy }}">
+                        <input type="hidden" name="sort_dir" value="{{ $sortDir }}">
+                    @endif
+
                     <button type="submit" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl transition-colors">
                         Filter
                     </button>
-                    @if($search || $salespersonFilter || $salesTeamFilter || $statusFilter)
+                    @if($search || $salespersonFilter || $salesTeamFilter || $customerFilter || $statusFilter || $sortBy)
                         <a href="{{ route('lor.smd') }}" class="px-3 py-2.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium">Clear</a>
                     @endif
                 </div>
             </form>
         </div>
+
+        @php
+            $getSortUrl = function($col) use ($sortBy, $sortDir) {
+                $nextDir = ($sortBy === $col && $sortDir === 'asc') ? 'desc' : 'asc';
+                return route('lor.smd', array_merge(request()->all(), ['sort_by' => $col, 'sort_dir' => $nextDir]));
+            };
+        @endphp
 
         <!-- LoR SMD Table Container with Frozen Sticky Header -->
         <div class="bg-white dark:bg-slate-900/90 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -94,23 +116,158 @@
                 <table class="w-full text-left text-xs border-collapse">
                     <thead class="sticky top-0 z-20 bg-slate-100/95 dark:bg-slate-950/95 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 backdrop-blur-md shadow-sm">
                         <tr>
-                            <th class="py-3.5 px-4 whitespace-nowrap">RENTAL ID</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">SALESPERSON</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">SALES TEAM</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">CUSTOMER</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">UNIT / LOT</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">PRODUCT</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">LOKASI PEMAKAIAN</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">START SEWA</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">END SEWA</th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('rental_id') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>RENTAL ID</span>
+                                    @if($sortBy === 'rental_id')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('salesperson') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>SALESPERSON</span>
+                                    @if($sortBy === 'salesperson')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('sales_team') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>SALES TEAM</span>
+                                    @if($sortBy === 'sales_team')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">
+                                <a href="{{ $getSortUrl('customer') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>CUSTOMER</span>
+                                    @if($sortBy === 'customer')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('unit') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>UNIT / LOT</span>
+                                    @if($sortBy === 'unit')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap min-w-[200px]">
+                                <a href="{{ $getSortUrl('product') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>PRODUCT</span>
+                                    @if($sortBy === 'product')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('lokasi') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>LOKASI PEMAKAIAN</span>
+                                    @if($sortBy === 'lokasi')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('start_sewa') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>START SEWA</span>
+                                    @if($sortBy === 'start_sewa')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('end_sewa') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>END SEWA</span>
+                                    @if($sortBy === 'end_sewa')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
                             @if(auth()->user()?->canViewSmdLastInvoiceDate())
-                                <th class="py-3.5 px-4 whitespace-nowrap text-cyan-600 dark:text-cyan-400">LAST INVOICE DATE</th>
+                                <th class="py-3.5 px-4 whitespace-nowrap text-cyan-600 dark:text-cyan-400">
+                                    <a href="{{ $getSortUrl('last_invoice') }}" class="flex items-center gap-1.5 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors group">
+                                        <span>LAST INVOICE DATE</span>
+                                        @if($sortBy === 'last_invoice')
+                                            <span class="text-cyan-700 dark:text-cyan-300">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                        @else
+                                            <span class="text-cyan-300 dark:text-cyan-700 group-hover:text-cyan-400 text-[10px]">⇅</span>
+                                        @endif
+                                    </a>
+                                </th>
                             @endif
-                            <th class="py-3.5 px-4 text-right whitespace-nowrap">HARGA PER BULAN</th>
-                            <th class="py-3.5 px-4 text-right whitespace-nowrap">TOTAL HARGA</th>
-                            <th class="py-3.5 px-4 text-center whitespace-nowrap">STATUS</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">NOMOR KONTRAK</th>
-                            <th class="py-3.5 px-4 whitespace-nowrap">TYPE</th>
+                            <th class="py-3.5 px-4 text-right whitespace-nowrap">
+                                <a href="{{ $getSortUrl('harga') }}" class="flex items-center justify-end gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>HARGA PER BULAN</span>
+                                    @if($sortBy === 'harga')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 text-right whitespace-nowrap">
+                                <a href="{{ $getSortUrl('total_harga') }}" class="flex items-center justify-end gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>TOTAL HARGA</span>
+                                    @if($sortBy === 'total_harga')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 text-center whitespace-nowrap">
+                                <a href="{{ $getSortUrl('status') }}" class="flex items-center justify-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>STATUS</span>
+                                    @if($sortBy === 'status')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('contract') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>NOMOR KONTRAK</span>
+                                    @if($sortBy === 'contract')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
+                            <th class="py-3.5 px-4 whitespace-nowrap">
+                                <a href="{{ $getSortUrl('type') }}" class="flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group">
+                                    <span>TYPE</span>
+                                    @if($sortBy === 'type')
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ $sortDir === 'desc' ? '▼' : '▲' }}</span>
+                                    @else
+                                        <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                    @endif
+                                </a>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300 font-medium">
