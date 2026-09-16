@@ -53,6 +53,10 @@ Route::middleware(['auth'])->group(function () {
     // LoR SMD Route (Protected by SMD Access Permission)
     Route::get('/lor/smd', [LorController::class, 'indexSmd'])->middleware(CheckMenuPermission::class . ':lor-smd')->name('lor.smd');
 
+    // ET Report Routes under LoR SMD (Protected by ET Report Permission)
+    Route::get('/lor/smd/et-report', [LorController::class, 'etReport'])->middleware(CheckMenuPermission::class . ':et-report')->name('lor.et-report');
+    Route::get('/lor/smd/et-report/export', [LorController::class, 'exportEtReport'])->middleware(CheckMenuPermission::class . ':et-report')->name('lor.et-report.export');
+
     // LoR Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':lor'])->group(function () {
         Route::get('/lor', [LorController::class, 'index'])->name('lor.index');

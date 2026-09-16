@@ -38,11 +38,11 @@ class LorExport extends DefaultValueBinder implements FromCollection, WithHeadin
 
     public function headings(): array
     {
-        $hargaHeader = 'Harga';
+        $hargaHeader = 'Harga Per Bulan';
         if ($this->taxMode === 'include') {
-            $hargaHeader = 'Harga (11% INCL)';
+            $hargaHeader = 'Harga Per Bulan (11% INCL)';
         } elseif ($this->taxMode === 'exclude') {
-            $hargaHeader = 'Harga (11% EXCL)';
+            $hargaHeader = 'Harga Per Bulan (11% EXCL)';
         }
 
         $headers = [

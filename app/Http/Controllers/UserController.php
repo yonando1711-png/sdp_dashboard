@@ -112,6 +112,7 @@ class UserController extends Controller
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
+            'can_view_et_report' => 'nullable|boolean',
             'can_export_disposal' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
@@ -140,6 +141,7 @@ class UserController extends Controller
             'can_view_lor_smd' => $canViewSmd,
             'can_view_smd_last_invoice_date' => $canViewSmd && $request->boolean('can_view_smd_last_invoice_date'),
             'can_export_lor_smd' => $canViewSmd && $request->boolean('can_export_lor_smd'),
+            'can_view_et_report' => $canViewSmd && $request->boolean('can_view_et_report'),
             'can_export_disposal' => $canAccessDisposal && $request->boolean('can_export_disposal'),
             'allowed_salespersons' => $allowedSalespersons,
             'allowed_sales_teams' => $allowedSalesTeams,
@@ -165,6 +167,7 @@ class UserController extends Controller
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
+            'can_view_et_report' => 'nullable|boolean',
             'can_export_disposal' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
@@ -191,6 +194,7 @@ class UserController extends Controller
         $user->can_view_lor_smd = $canViewSmd;
         $user->can_view_smd_last_invoice_date = $canViewSmd && $request->boolean('can_view_smd_last_invoice_date');
         $user->can_export_lor_smd = $canViewSmd && $request->boolean('can_export_lor_smd');
+        $user->can_view_et_report = $canViewSmd && $request->boolean('can_view_et_report');
         $user->can_export_disposal = $canAccessDisposal && $request->boolean('can_export_disposal');
         $user->allowed_salespersons = $allowedSalespersons;
         $user->allowed_sales_teams = $allowedSalesTeams;

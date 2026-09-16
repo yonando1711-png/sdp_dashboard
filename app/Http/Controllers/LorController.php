@@ -172,7 +172,28 @@ class LorController extends Controller
         $search = $request->input('search');
         $salespersonFilter = $request->input('salesperson');
         $salesTeamFilter = $request->input('sales_team');
+        $customerFilter = $request->input('customer');
         $statusFilter = $request->input('status');
+        $sortBy = $request->input('sort_by');
+        $sortDir = strtolower($request->input('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $sortableColumns = [
+            'rental_id' => 'rental_id',
+            'salesperson' => 'salesperson',
+            'sales_team' => 'sales_team',
+            'customer' => 'current_customer',
+            'unit' => 'lot_number',
+            'product' => 'product',
+            'lokasi' => 'city',
+            'start_sewa' => 'actual_start_rental',
+            'end_sewa' => 'actual_end_rental',
+            'last_invoice' => 'last_invoice_date',
+            'harga' => 'price',
+            'total_harga' => 'total_price',
+            'status' => 'status',
+            'contract' => 'contract_ref',
+            'type' => 'rental_type',
+        ];
 
         $query = Item::withoutGlobalScope('exclude_order_only')
                      ->forUserBranch()
@@ -220,6 +241,10 @@ class LorController extends Controller
             $query->where('sales_team', $salesTeamFilter);
         }
 
+        if ($customerFilter) {
+            $query->where('current_customer', $customerFilter);
+        }
+
         if ($statusFilter) {
             $query->where('status', $statusFilter);
         }
@@ -236,7 +261,17 @@ class LorController extends Controller
             });
         }
 
-        $currentRentals = $query->orderBy('salesperson')->orderBy('sales_team')->orderBy('rental_id')->paginate(50)->withQueryString();
+        // Apply Sorting
+        if ($sortBy && isset($sortableColumns[$sortBy])) {
+            $query->orderBy($sortableColumns[$sortBy], $sortDir);
+            if ($sortableColumns[$sortBy] !== 'rental_id') {
+                $query->orderBy('rental_id', 'asc');
+            }
+        } else {
+            $query->orderBy('salesperson')->orderBy('sales_team')->orderBy('rental_id');
+        }
+
+        $currentRentals = $query->paginate(50)->withQueryString();
 
         // Fetch unique filter dropdown options restricted strictly to user's allowed scope
         $filterSpQuery = Item::withoutGlobalScope('exclude_order_only')
@@ -247,15 +282,22 @@ class LorController extends Controller
             ->forUserBranch()
             ->whereNotNull('sales_team')->where('sales_team', '!=', '');
 
+        $filterCustQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('current_customer')->where('current_customer', '!=', '');
+
         if (!$user->isItAdmin()) {
             if (!empty($allowedSalespersons)) {
                 $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+                $filterCustQuery->whereIn('salesperson', $allowedSalespersons);
             } else {
                 $filterSpQuery->whereRaw('1 = 0');
+                $filterCustQuery->whereRaw('1 = 0');
             }
 
             if (!empty($allowedSalesTeams)) {
                 $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+                $filterCustQuery->whereIn('sales_team', $allowedSalesTeams);
             } elseif (!empty($allowedSalespersons)) {
                 $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
             } else {
@@ -265,25 +307,32 @@ class LorController extends Controller
             if (!empty($allowedSalespersons)) {
                 $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
                 $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+                $filterCustQuery->whereIn('salesperson', $allowedSalespersons);
             }
             if (!empty($allowedSalesTeams)) {
                 $filterSpQuery->whereIn('sales_team', $allowedSalesTeams);
                 $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+                $filterCustQuery->whereIn('sales_team', $allowedSalesTeams);
             }
         }
 
         $filterSalespersons = $filterSpQuery->distinct()->pluck('salesperson')->sort()->values();
         $filterSalesTeams = $filterTeamQuery->distinct()->pluck('sales_team')->sort()->values();
+        $filterCustomers = $filterCustQuery->distinct()->pluck('current_customer')->sort()->values();
 
         return view('lor.smd', [
             'authenticated' => true,
             'currentRentals' => $currentRentals,
             'filterSalespersons' => $filterSalespersons,
             'filterSalesTeams' => $filterSalesTeams,
+            'filterCustomers' => $filterCustomers,
             'salespersonFilter' => $salespersonFilter,
             'salesTeamFilter' => $salesTeamFilter,
+            'customerFilter' => $customerFilter,
             'statusFilter' => $statusFilter,
             'search' => $search,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
         ]);
     }
 
@@ -393,6 +442,20 @@ class LorController extends Controller
                     $query->whereIn('sales_team', $allowedSalesTeams);
                 }
             }
+
+            // Apply SMD Request Filters
+            if ($request->filled('salesperson')) {
+                $query->where('salesperson', $request->input('salesperson'));
+            }
+            if ($request->filled('sales_team')) {
+                $query->where('sales_team', $request->input('sales_team'));
+            }
+            if ($request->filled('customer')) {
+                $query->where('current_customer', $request->input('customer'));
+            }
+            if ($request->filled('status')) {
+                $query->where('status', $request->input('status'));
+            }
         }
         
         if (!empty($selectedStatuses)) {
@@ -408,7 +471,39 @@ class LorController extends Controller
             });
         }
 
-        $currentRentals = $query->orderBy('current_customer')->orderBy('status')->orderBy('rental_id')->get();
+        if ($isSmd && $request->filled('sort_by')) {
+            $sortableColumns = [
+                'rental_id' => 'rental_id',
+                'salesperson' => 'salesperson',
+                'sales_team' => 'sales_team',
+                'customer' => 'current_customer',
+                'unit' => 'lot_number',
+                'product' => 'product',
+                'lokasi' => 'city',
+                'start_sewa' => 'actual_start_rental',
+                'end_sewa' => 'actual_end_rental',
+                'last_invoice' => 'last_invoice_date',
+                'harga' => 'price',
+                'total_harga' => 'total_price',
+                'status' => 'status',
+                'contract' => 'contract_ref',
+                'type' => 'rental_type',
+            ];
+            $sortColKey = $request->input('sort_by');
+            if (isset($sortableColumns[$sortColKey])) {
+                $sortDir = strtolower($request->input('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+                $query->orderBy($sortableColumns[$sortColKey], $sortDir);
+                if ($sortableColumns[$sortColKey] !== 'rental_id') {
+                    $query->orderBy('rental_id', 'asc');
+                }
+            } else {
+                $query->orderBy('current_customer')->orderBy('status')->orderBy('rental_id');
+            }
+        } else {
+            $query->orderBy('current_customer')->orderBy('status')->orderBy('rental_id');
+        }
+
+        $currentRentals = $query->get();
         $rentalIds = $currentRentals->pluck('rental_id')->toArray();
         
         // Fetch bulk price histories only for active rentals (not Returned)
@@ -442,7 +537,7 @@ class LorController extends Controller
                 $customerSuffix = '_' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $search));
             }
         }
-        $filename = 'list_of_rented' . $customerSuffix . '_' . date('Y-m-d');
+        $filename = ($isSmd ? 'list_of_rented_smd' : 'list_of_rented') . $customerSuffix . '_' . date('Y-m-d');
 
         if ($format === 'pdf') {
             $options = new \Dompdf\Options();
@@ -450,13 +545,26 @@ class LorController extends Controller
             $options->set('isRemoteEnabled', true);
             
             $dompdf = new \Dompdf\Dompdf($options);
-            $html = view('exports.lor_pdf', [
-                'rentals' => $currentRentals,
-                'priceHistories' => $priceHistories,
-                'includeNopol' => $includeNopol,
-                'nopolHistories' => collect($nopolHistories),
-                'taxMode' => $taxMode
-            ])->render();
+
+            if ($isSmd) {
+                $html = view('exports.lor_smd_pdf', [
+                    'rentals' => $currentRentals,
+                    'canViewLastInvoiceDate' => (bool) $user?->canViewSmdLastInvoiceDate(),
+                    'search' => $search,
+                    'salespersonFilter' => $request->input('salesperson'),
+                    'salesTeamFilter' => $request->input('sales_team'),
+                    'customerFilter' => $request->input('customer'),
+                    'statusFilter' => $request->input('status'),
+                ])->render();
+            } else {
+                $html = view('exports.lor_pdf', [
+                    'rentals' => $currentRentals,
+                    'priceHistories' => $priceHistories,
+                    'includeNopol' => $includeNopol,
+                    'nopolHistories' => collect($nopolHistories),
+                    'taxMode' => $taxMode
+                ])->render();
+            }
             
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'landscape');
@@ -646,5 +754,117 @@ class LorController extends Controller
 
         session(['lor_authenticated_at' => now()->timestamp]);
         return true;
+    }
+
+    /**
+     * Display Early Termination (ET) Report under LoR (SMD)
+     */
+    public function etReport(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewEtReport()) {
+            abort(403, 'Access Denied: Your account does not have permission to view ET Report.');
+        }
+
+        // Default date range: 1st of current month to end of month
+        $dateFrom = $request->input('date_from', now()->startOfMonth()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', now()->endOfMonth()->format('Y-m-d'));
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $reportData = $odooService->fetchEarlyTerminationReport(
+            $dateFrom,
+            $dateTo,
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $user->isItAdmin()
+        );
+
+        // Filter dropdown options strictly matching user's scoping permissions
+        $filterSpQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('salesperson')->where('salesperson', '!=', '');
+            
+        $filterTeamQuery = Item::withoutGlobalScope('exclude_order_only')
+            ->forUserBranch()
+            ->whereNotNull('sales_team')->where('sales_team', '!=', '');
+
+        if (!$user->isItAdmin()) {
+            if (!empty($allowedSalespersons)) {
+                $filterSpQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterSpQuery->whereRaw('1 = 0');
+            }
+
+            if (!empty($allowedSalesTeams)) {
+                $filterTeamQuery->whereIn('sales_team', $allowedSalesTeams);
+            } elseif (!empty($allowedSalespersons)) {
+                $filterTeamQuery->whereIn('salesperson', $allowedSalespersons);
+            } else {
+                $filterTeamQuery->whereRaw('1 = 0');
+            }
+        }
+
+        $availableSalespersons = $filterSpQuery->distinct()->pluck('salesperson')->sort()->values();
+        $availableSalesTeams = $filterTeamQuery->distinct()->pluck('sales_team')->sort()->values();
+
+        return view('lor.et_report', [
+            'grouped' => $reportData['grouped'] ?? [],
+            'rawItems' => $reportData['raw_items'] ?? [],
+            'summary' => $reportData['summary'] ?? ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0],
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'salespersonFilter' => $salespersonFilter,
+            'salesTeamFilter' => $salesTeamFilter,
+            'availableSalespersons' => $availableSalespersons,
+            'availableSalesTeams' => $availableSalesTeams,
+        ]);
+    }
+
+    /**
+     * Export Early Termination (ET) Report as Excel
+     */
+    public function exportEtReport(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewEtReport()) {
+            abort(403, 'Access Denied: Your account does not have permission to view ET Report.');
+        }
+
+        $dateFrom = $request->input('date_from', now()->startOfMonth()->format('Y-m-d'));
+        $dateTo = $request->input('date_to', now()->endOfMonth()->format('Y-m-d'));
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $reportData = $odooService->fetchEarlyTerminationReport(
+            $dateFrom,
+            $dateTo,
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $user->isItAdmin()
+        );
+
+        $filename = 'ET_Report_' . $dateFrom . '_to_' . $dateTo . '.xlsx';
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\EtReportExport(
+                $reportData['grouped'] ?? [], 
+                $reportData['summary'] ?? ['total_units' => 0],
+                $dateFrom,
+                $dateTo
+            ),
+            $filename
+        );
     }
 }

@@ -1803,12 +1803,19 @@ class OdooService
         }
 
         try {
-            // 1. Fetch sale.order records for invoice_ids
-            $orders = $this->execute('sale.order', 'search_read', [
-                [['name', 'in', $rentalNames]]
-            ], [
-                'fields' => ['name', 'invoice_ids']
-            ]);
+            // 1. Fetch sale.order records for invoice_ids in chunks of 500
+            $chunkedRentalNames = array_chunk($rentalNames, 500);
+            $orders = [];
+            foreach ($chunkedRentalNames as $chunk) {
+                $chunkOrders = $this->execute('sale.order', 'search_read', [
+                    [['name', 'in', $chunk]]
+                ], [
+                    'fields' => ['name', 'invoice_ids']
+                ]);
+                if (is_array($chunkOrders)) {
+                    $orders = array_merge($orders, $chunkOrders);
+                }
+            }
 
             if (empty($orders)) {
                 return [];
@@ -2538,6 +2545,355 @@ class OdooService
             return ['success' => true, 'data' => $data];
         } catch (\Exception $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'data' => []];
+        }
+    }
+
+    /**
+     * Fetch Early Termination (ET) Report from Odoo
+     *
+     * @param string|null $dateFrom
+     * @param string|null $dateTo
+     * @param array $allowedSalespersons
+     * @param array $allowedSalesTeams
+     * @param string|null $selectedSalesperson
+     * @param string|null $selectedSalesTeam
+     * @param bool $isItAdmin
+     * @return array
+     */
+    public function fetchEarlyTerminationReport(
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        array $allowedSalespersons = [],
+        array $allowedSalesTeams = [],
+        ?string $selectedSalesperson = null,
+        ?string $selectedSalesTeam = null,
+        bool $isItAdmin = false
+    ): array {
+        try {
+            $domain = [
+                ['is_terminate', '=', true],
+            ];
+
+            if ($dateFrom) {
+                $fromUtc = \Carbon\Carbon::parse($dateFrom, 'Asia/Jakarta')->startOfDay()->setTimezone('UTC')->toDateTimeString();
+                $domain[] = ['actual_end_rental', '>=', $fromUtc];
+            }
+            if ($dateTo) {
+                $toUtc = \Carbon\Carbon::parse($dateTo, 'Asia/Jakarta')->endOfDay()->setTimezone('UTC')->toDateTimeString();
+                $domain[] = ['actual_end_rental', '<=', $toUtc];
+            }
+
+            // Scoping
+            if (!$isItAdmin) {
+                if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                    $domain[] = ['user_id.name', 'in', $allowedSalespersons];
+                    $domain[] = ['team_id.name', 'in', $allowedSalesTeams];
+                } elseif (!empty($allowedSalespersons)) {
+                    $domain[] = ['user_id.name', 'in', $allowedSalespersons];
+                } elseif (!empty($allowedSalesTeams)) {
+                    $domain[] = ['team_id.name', 'in', $allowedSalesTeams];
+                } else {
+                    return [
+                        'success' => true,
+                        'grouped' => [],
+                        'raw_items' => [],
+                        'summary' => ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0]
+                    ];
+                }
+            }
+
+            // Dropdown filters
+            if ($selectedSalesperson) {
+                $domain[] = ['user_id.name', '=', $selectedSalesperson];
+            }
+            if ($selectedSalesTeam) {
+                $domain[] = ['team_id.name', '=', $selectedSalesTeam];
+            }
+
+            $orders = $this->execute('sale.order', 'search_read', [$domain], [
+                'fields' => [
+                    'id', 'name', 'is_terminate', 'partner_id', 'user_id', 'team_id',
+                    'actual_start_rental', 'rental_start_date', 'initial_end_date', 'rental_return_date', 'actual_end_rental',
+                    'rental_contract_id', 'previous_so_id',
+                    'order_line'
+                ],
+                'order' => 'actual_end_rental desc, id desc'
+            ]);
+
+            if (empty($orders)) {
+                return [
+                    'success' => true,
+                    'grouped' => [],
+                    'raw_items' => [],
+                    'summary' => ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0]
+                ];
+            }
+
+            // Batch fetch contracts if available
+            $contractIds = [];
+            foreach ($orders as $order) {
+                if (!empty($order['rental_contract_id'][0])) {
+                    $contractIds[] = (int)$order['rental_contract_id'][0];
+                }
+            }
+
+            $contracts = [];
+            if (!empty($contractIds)) {
+                $cRecords = $this->execute('rental.contract', 'search_read', [
+                    [['id', 'in', array_values(array_unique($contractIds))]]
+                ], [
+                    'fields' => ['id', 'name', 'start_date', 'end_date']
+                ]);
+                foreach ($cRecords as $c) {
+                    $contracts[$c['id']] = $c;
+                }
+            }
+
+            $solIds = [];
+            foreach ($orders as $order) {
+                if (!empty($order['order_line'])) {
+                    $solIds = array_merge($solIds, $order['order_line']);
+                }
+            }
+
+            $orderLines = [];
+            if (!empty($solIds)) {
+                $lines = $this->execute('sale.order.line', 'search_read', [
+                    [['id', 'in', array_values(array_unique($solIds))]]
+                ], [
+                    'fields' => ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'reserved_lot_ids', 'pickedup_lot_ids', 'returned_lot_ids']
+                ]);
+                foreach ($lines as $line) {
+                    $orderLines[$line['id']] = $line;
+                }
+            }
+
+            $lotIds = [];
+            foreach ($orderLines as $line) {
+                foreach (['reserved_lot_ids', 'pickedup_lot_ids', 'returned_lot_ids'] as $lf) {
+                    if (!empty($line[$lf])) {
+                        foreach ($line[$lf] as $lid) {
+                            $lotIds[] = $lid;
+                        }
+                    }
+                }
+            }
+
+            $lots = [];
+            if (!empty($lotIds)) {
+                $lotRecords = $this->execute('stock.lot', 'search_read', [
+                    [['id', 'in', array_values(array_unique($lotIds))]]
+                ], [
+                    'fields' => ['id', 'name', 'product_id', 'vehicle_year']
+                ]);
+                foreach ($lotRecords as $lot) {
+                    $lots[$lot['id']] = $lot;
+                }
+            }
+
+            $rawUnits = [];
+            foreach ($orders as $order) {
+                $teamFull = is_array($order['team_id']) ? $order['team_id'][1] : 'Unassigned';
+                $teamCode = trim(explode('-', $teamFull)[0] ?? $teamFull);
+                if (empty($teamCode)) $teamCode = $teamFull;
+
+                $customer = is_array($order['partner_id']) ? preg_replace('/^\[.*?\]\s*/', '', $order['partner_id'][1]) : 'Unknown';
+                $salesperson = is_array($order['user_id']) ? $order['user_id'][1] : '';
+
+                $cid = $order['rental_contract_id'][0] ?? null;
+                $contract = $cid ? ($contracts[$cid] ?? null) : null;
+
+                // 1. Effective Start Date:
+                // If continuation SO (previous_so_id) under a contract with a valid start_date, use contract start
+                $startDateRaw = !empty($order['actual_start_rental']) ? $order['actual_start_rental'] : ($order['rental_start_date'] ?? null);
+                if (!empty($order['previous_so_id']) && !empty($contract['start_date'])) {
+                    $startCarbon = \Carbon\Carbon::parse($contract['start_date'], 'Asia/Jakarta')->startOfDay();
+                } else {
+                    $startCarbon = !empty($startDateRaw) ? \Carbon\Carbon::parse($startDateRaw, 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
+                }
+
+                // 2. Effective End Date:
+                // Always prioritize rental_return_date (active/extended return date), fallback to initial_end_date
+                $endDateRaw = !empty($order['rental_return_date']) ? $order['rental_return_date'] : ($order['initial_end_date'] ?? null);
+                $endCarbon = !empty($endDateRaw) ? \Carbon\Carbon::parse($endDateRaw, 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
+
+                // 3. Actual ET Date:
+                $etCarbon = !empty($order['actual_end_rental']) ? \Carbon\Carbon::parse($order['actual_end_rental'], 'UTC')->setTimezone('Asia/Jakarta')->startOfDay() : null;
+
+                $tglEt = $etCarbon ? $etCarbon->format('d-M-Y') : '-';
+
+                $masaSewa = '-';
+                if ($startCarbon && $endCarbon) {
+                    $endPlus1 = $endCarbon->copy()->addDay();
+                    $diff = $startCarbon->diff($endPlus1);
+                    $m = $diff->y * 12 + $diff->m;
+                    $masaSewa = ($diff->d > 0 && $diff->d < 28) ? "{$m} BLN {$diff->d} HARI" : "{$m} BLN";
+                }
+
+                $sewaSdhBerjalan = '-';
+                if ($startCarbon && $etCarbon) {
+                    $etPlus1 = $etCarbon->copy()->addDay();
+                    $diff = $startCarbon->diff($etPlus1);
+                    $m = $diff->y * 12 + $diff->m;
+                    $sewaSdhBerjalan = ($diff->d > 0 && $diff->d < 28) ? "{$m} BULAN {$diff->d} HARI" : "{$m} BULAN";
+                }
+
+                $sisaMasaSewa = '-';
+                if ($etCarbon && $endCarbon && $etCarbon->lt($endCarbon)) {
+                    $diff = $etCarbon->diff($endCarbon);
+                    $m = $diff->y * 12 + $diff->m;
+                    $sisaMasaSewa = ($diff->d > 0 && $diff->d < 28) ? "{$m} BULAN {$diff->d} HARI" : "{$m} BULAN";
+                }
+
+                $hasLines = false;
+                if (!empty($order['order_line'])) {
+                    foreach ($order['order_line'] as $lineId) {
+                        $line = $orderLines[$lineId] ?? null;
+                        if (!$line || (($line['product_uom_qty'] ?? 0) <= 0 && empty($line['reserved_lot_ids']))) continue;
+
+                        $hasLines = true;
+                        $targetLots = !empty($line['reserved_lot_ids']) ? $line['reserved_lot_ids'] : (!empty($line['pickedup_lot_ids']) ? $line['pickedup_lot_ids'] : $line['returned_lot_ids']);
+
+                        if (!empty($targetLots)) {
+                            foreach ($targetLots as $lid) {
+                                $lot = $lots[$lid] ?? null;
+                                $prodName = $lot && is_array($lot['product_id']) ? $lot['product_id'][1] : ($line['product_id'] ? $line['product_id'][1] : $line['name']);
+                                $cleanProd = preg_replace('/^\[.*?\]\s*/', '', $prodName);
+
+                                $rawUnits[] = [
+                                    'order_id' => $order['id'],
+                                    'order_name' => $order['name'],
+                                    'team_code' => $teamCode,
+                                    'team_full' => $teamFull,
+                                    'salesperson' => $salesperson,
+                                    'customer' => $customer,
+                                    'tipe_unit' => $cleanProd,
+                                    'nopol' => $lot['name'] ?? '-',
+                                    'tahun_kendaraan' => !empty($lot['vehicle_year']) ? (string)$lot['vehicle_year'] : '-',
+                                    'tgl_et' => $tglEt,
+                                    'tgl_et_raw' => $etCarbon ? $etCarbon->format('Y-m-d') : '',
+                                    'masa_sewa' => $masaSewa,
+                                    'sewa_sdh_berjalan' => $sewaSdhBerjalan,
+                                    'sisa_masa_sewa' => $sisaMasaSewa,
+                                ];
+                            }
+                        } else {
+                            $prodName = $line['product_id'] ? $line['product_id'][1] : $line['name'];
+                            $cleanProd = preg_replace('/^\[.*?\]\s*/', '', $prodName);
+                            $rawUnits[] = [
+                                'order_id' => $order['id'],
+                                'order_name' => $order['name'],
+                                'team_code' => $teamCode,
+                                'team_full' => $teamFull,
+                                'salesperson' => $salesperson,
+                                'customer' => $customer,
+                                'tipe_unit' => $cleanProd,
+                                'nopol' => '-',
+                                'tahun_kendaraan' => '-',
+                                'tgl_et' => $tglEt,
+                                'tgl_et_raw' => $etCarbon ? $etCarbon->format('Y-m-d') : '',
+                                'masa_sewa' => $masaSewa,
+                                'sewa_sdh_berjalan' => $sewaSdhBerjalan,
+                                'sisa_masa_sewa' => $sisaMasaSewa,
+                            ];
+                        }
+                    }
+                }
+
+                if (!$hasLines) {
+                    $rawUnits[] = [
+                        'order_id' => $order['id'],
+                        'order_name' => $order['name'],
+                        'team_code' => $teamCode,
+                        'team_full' => $teamFull,
+                        'salesperson' => $salesperson,
+                        'customer' => $customer,
+                        'tipe_unit' => 'Rental Order Unit',
+                        'nopol' => '-',
+                        'tahun_kendaraan' => '-',
+                        'tgl_et' => $tglEt,
+                        'tgl_et_raw' => $etCarbon ? $etCarbon->format('Y-m-d') : '',
+                        'masa_sewa' => $masaSewa,
+                        'sewa_sdh_berjalan' => $sewaSdhBerjalan,
+                        'sisa_masa_sewa' => $sisaMasaSewa,
+                    ];
+                }
+            }
+
+            // Group by Team -> Salesperson -> Customer
+            $grouped = [];
+            $allCustomers = [];
+            $allSalespersons = [];
+
+            foreach ($rawUnits as $item) {
+                $tCode = $item['team_code'];
+                $sp = !empty($item['salesperson']) ? $item['salesperson'] : 'Unassigned';
+                $cust = $item['customer'];
+
+                if (!isset($grouped[$tCode])) {
+                    $grouped[$tCode] = [
+                        'team_code' => $tCode,
+                        'team_full' => $item['team_full'],
+                        'total_units' => 0,
+                        'salespersons' => [],
+                    ];
+                }
+
+                $grouped[$tCode]['total_units']++;
+
+                if (!isset($grouped[$tCode]['salespersons'][$sp])) {
+                    $grouped[$tCode]['salespersons'][$sp] = [
+                        'salesperson' => $sp,
+                        'total_units' => 0,
+                        'customers' => [],
+                    ];
+                    $allSalespersons[$sp] = true;
+                }
+
+                $grouped[$tCode]['salespersons'][$sp]['total_units']++;
+
+                if (!isset($grouped[$tCode]['salespersons'][$sp]['customers'][$cust])) {
+                    $grouped[$tCode]['salespersons'][$sp]['customers'][$cust] = [
+                        'customer' => $cust,
+                        'total_units' => 0,
+                        'items' => [],
+                    ];
+                    $allCustomers[$cust] = true;
+                }
+
+                $grouped[$tCode]['salespersons'][$sp]['customers'][$cust]['total_units']++;
+                $grouped[$tCode]['salespersons'][$sp]['customers'][$cust]['items'][] = $item;
+            }
+
+            ksort($grouped);
+            foreach ($grouped as &$teamData) {
+                ksort($teamData['salespersons']);
+                foreach ($teamData['salespersons'] as &$spData) {
+                    ksort($spData['customers']);
+                }
+            }
+            unset($teamData, $spData);
+
+            return [
+                'success' => true,
+                'grouped' => $grouped,
+                'raw_items' => $rawUnits,
+                'summary' => [
+                    'total_units' => count($rawUnits),
+                    'total_customers' => count($allCustomers),
+                    'total_teams' => count($grouped),
+                    'total_salespersons' => count($allSalespersons),
+                ]
+            ];
+        } catch (\Exception $e) {
+            \Log::error('fetchEarlyTerminationReport failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'grouped' => [],
+                'raw_items' => [],
+                'summary' => ['total_units' => 0, 'total_customers' => 0, 'total_teams' => 0]
+            ];
         }
     }
 }

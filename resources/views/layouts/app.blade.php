@@ -228,20 +228,53 @@
                 @endif
 
                 @if(auth()->check() && auth()->user()->canAccessSmd())
-                <a href="{{ route('lor.smd') }}"
-                    class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ request()->routeIs('lor.smd') ? 'active' : '' }}"
-                    title="LoR (SMD)">
-                    <!-- LoR SMD Briefcase/Sales Icon -->
-                    <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
-                        </path>
-                    </svg>
-                    <span
-                        class="font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
-                        :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">LoR (SMD)</span>
-                </a>
+                    @if(auth()->user()->canViewEtReport())
+                    <div x-data="{ open: {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*')) ? 'true' : 'false' }} }" class="space-y-1">
+                        <button type="button" @click="open = !open"
+                            class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*')) ? 'active' : '' }}"
+                            title="LoR (SMD)">
+                            <div class="flex items-center gap-3">
+                                <!-- LoR SMD Briefcase/Sales Icon -->
+                                <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
+                                    :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">LoR (SMD)</span>
+                            </div>
+                            <svg x-show="!sidebarCollapsed" class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div x-show="open && !sidebarCollapsed" x-transition class="pl-11 space-y-1">
+                            <a href="{{ route('lor.smd') }}"
+                                class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.smd') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
+                                LoR (SMD)
+                            </a>
+                            <a href="{{ route('lor.et-report') }}"
+                                class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.et-report*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
+                                ET Report
+                            </a>
+                        </div>
+                    </div>
+                    @else
+                    <a href="{{ route('lor.smd') }}"
+                        class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ request()->routeIs('lor.smd') ? 'active' : '' }}"
+                        title="LoR (SMD)">
+                        <!-- LoR SMD Briefcase/Sales Icon -->
+                        <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                        <span
+                            class="font-medium tracking-wide whitespace-nowrap transition-all duration-300 transform origin-left"
+                            :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">LoR (SMD)</span>
+                    </a>
+                    @endif
                 @endif
 
                 @if(auth()->check() && auth()->user()->hasMenuPermission('disposal'))
