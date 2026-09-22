@@ -8,7 +8,7 @@
                 <div class="flex items-center gap-3">
                     <h1 class="text-2xl font-extrabold text-slate-800 dark:text-slate-100">List of Rented (SMD)</h1>
                     <span class="px-3 py-1 text-xs font-bold bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
-                        Sales Management  Division
+                        Sales Management Division
                     </span>
                     @if(auth()->user()?->canExportSmd())
                         <span class="px-3 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
