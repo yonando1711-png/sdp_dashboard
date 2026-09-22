@@ -14,151 +14,88 @@
                 <span class="px-2.5 py-0.5 text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
                     Accounting Report
                 </span>
-                <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Live Odoo Query
-                </span>
+                @if($hasQuery)
+                    <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live Odoo Data
+                    </span>
+                @endif
             </div>
             <p class="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
                 Multi-month revenue pivot normalized by billing period (Bi-monthly, Quarterly, Semester, Yearly) with automatic change detection.
             </p>
         </div>
 
-        <div class="flex items-center gap-2">
-            <!-- Refresh Button -->
-            <button type="button" onclick="document.getElementById('filterForm').submit()" 
-                    class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all"
-                    title="Reload live data from Odoo">
-                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>Re-fetch Odoo</span>
-            </button>
+        @if($hasQuery)
+            <div class="flex items-center gap-2">
+                <!-- Refresh Button -->
+                <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['refresh' => 1])) }}"
+                   class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all"
+                   title="Reload fresh data from Odoo">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>Re-fetch Odoo</span>
+                </a>
 
-            <!-- Export to Excel Button -->
-            <a href="{{ route('accounting.summary-rented-vehicle.export', request()->all()) }}" 
-               class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <span>Export Excel</span>
-            </a>
-        </div>
+                <!-- Export to Excel Button -->
+                <a href="{{ route('accounting.summary-rented-vehicle.export', request()->all()) }}" 
+                   class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span>Export Excel</span>
+                </a>
+            </div>
+        @endif
     </div>
 
-    <!-- KPI Metric Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <!-- Card 1: Active Customers -->
-        <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Customers</span>
-                <div class="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                </div>
-            </div>
-            <p class="text-2xl font-black text-slate-800 dark:text-slate-100 mt-2">
-                {{ number_format(count($reportData['customers'] ?? [])) }}
-            </p>
-            <p class="text-[11px] text-slate-400 mt-1">Customers with active subscriptions</p>
-        </div>
-
-        <!-- Card 2: Period Total Revenue -->
-        <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Period Value</span>
-                <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                </div>
-            </div>
-            <p class="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2 truncate">
-                Rp {{ number_format($reportData['totals']['grand_total_value'] ?? 0) }}
-            </p>
-            <p class="text-[11px] text-slate-400 mt-1">Normalized untaxed monthly sum</p>
-        </div>
-
-        <!-- Card 3: Period Changes Detected -->
-        <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Period Adjustments</span>
-                <div class="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </div>
-            </div>
-            <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">
-                {{ number_format($reportData['summary']['has_period_changes'] ?? 0) }}
-            </p>
-            <p class="text-[11px] text-slate-400 mt-1">E.g., Monthly &rarr; Quarterly/Yearly</p>
-        </div>
-
-        <!-- Card 4: Price Changes Detected -->
-        <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Rate Adjustments</span>
-                <div class="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                </div>
-            </div>
-            <p class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
-                {{ number_format($reportData['summary']['has_price_changes'] ?? 0) }}
-            </p>
-            <p class="text-[11px] text-slate-400 mt-1">Price increases or renegotiations</p>
-        </div>
-    </div>
-
-    <!-- Filters Bar -->
+    <!-- Filters Bar (Always visible) -->
     <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700/80">
         <form id="filterForm" method="GET" action="{{ route('accounting.summary-rented-vehicle') }}" class="flex flex-wrap items-center justify-between gap-3">
+            <input type="hidden" name="generate" value="1">
+
             <div class="flex flex-wrap items-center gap-3 flex-1">
                 <!-- Search Input -->
-                <div class="relative min-w-[240px] flex-1">
+                <div class="relative min-w-[220px] flex-1">
                     <input type="text" name="search" value="{{ $search }}" placeholder="Search Customer Name or Ref Code..." 
                            class="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-slate-200">
                     <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
 
-                <!-- Date Range Pickers -->
-                <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span class="text-[11px] font-bold text-slate-500 uppercase">From:</span>
-                    <input type="month" name="start_month" value="{{ $startMonth }}" 
-                           class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer">
-                    <span class="text-slate-400 text-xs px-1">&rarr;</span>
-                    <span class="text-[11px] font-bold text-slate-500 uppercase">To:</span>
-                    <input type="month" name="end_month" value="{{ $endMonth }}" 
-                           class="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer">
+                {{-- Date Range Pickers --}}
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">From:</span>
+                        <input type="month" id="start_month" name="start_month" value="{{ $startMonth }}" required
+                               class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-transparent border-none outline-none cursor-pointer min-w-[120px]"
+                               style="color-scheme: dark;">
+                    </div>
+                    <span class="text-slate-400 text-sm">→</span>
+                    <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">To:</span>
+                        <input type="month" id="end_month" name="end_month" value="{{ $endMonth }}" required
+                               class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-transparent border-none outline-none cursor-pointer min-w-[120px]"
+                               style="color-scheme: dark;">
+                    </div>
                 </div>
 
-                <!-- Quick Presets -->
-                <div class="hidden lg:flex items-center gap-1 text-[11px]">
-                    <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->except(['start_month', 'end_month']), ['start_month' => '2026-04', 'end_month' => '2026-09'])) }}"
-                       class="px-2.5 py-1 rounded-lg {{ $startMonth === '2026-04' && $endMonth === '2026-09' ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200' }}">
-                        Apr-Sep '26 (Paper Match)
-                    </a>
-                    <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->except(['start_month', 'end_month']), ['start_month' => '2026-01', 'end_month' => '2026-12'])) }}"
-                       class="px-2.5 py-1 rounded-lg {{ $startMonth === '2026-01' && $endMonth === '2026-12' ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200' }}">
-                        Full Year '26
-                    </a>
-                </div>
-
-                <!-- Exclude OTHERSLT Toggle -->
-                <label class="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <input type="checkbox" name="exclude_others_lt" value="1" {{ $excludeOthersLt ? 'checked' : '' }} onchange="this.form.submit()"
-                           class="rounded text-indigo-600 focus:ring-indigo-500 dark:bg-slate-800 border-slate-300">
-                    <span>Without OTHERSLT</span>
-                </label>
-
-                <!-- Show Changes Only Toggle -->
-                <label class="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 cursor-pointer select-none bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/30">
-                    <input type="checkbox" name="changes_only" value="1" {{ $changesOnly ? 'checked' : '' }} onchange="this.form.submit()"
-                           class="rounded text-amber-600 focus:ring-amber-500 dark:bg-slate-800 border-amber-300">
-                    <span>⚡ Changes Only</span>
-                </label>
+                @if($hasQuery)
+                    <!-- Show Changes Only Toggle -->
+                    <label class="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 cursor-pointer select-none bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/30">
+                        <input type="checkbox" name="changes_only" value="1" {{ $changesOnly ? 'checked' : '' }} onchange="this.form.submit()"
+                               class="rounded text-amber-600 focus:ring-amber-500 dark:bg-slate-800 border-amber-300">
+                        <span>⚡ Changes Only</span>
+                    </label>
+                @endif
             </div>
 
             <div class="flex items-center gap-2">
-                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all">
-                    Apply Filter
+                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    <span>{{ $hasQuery ? 'Apply Filter' : 'Generate Report' }}</span>
                 </button>
-                @if(request()->hasAny(['search', 'start_month', 'end_month', 'changes_only']))
+                @if($hasQuery)
                     <a href="{{ route('accounting.summary-rented-vehicle') }}" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all">
                         Reset
                     </a>
@@ -167,165 +104,256 @@
         </form>
     </div>
 
-    <!-- Data Pivot Table -->
-    <div class="bg-white dark:bg-slate-800/90 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/80 overflow-hidden">
-        <div class="overflow-x-auto max-h-[72vh] relative">
-            <table class="w-full text-left text-xs border-collapse">
-                <!-- Table Header -->
-                <thead class="sticky top-0 z-20 bg-slate-900 text-white text-[11px] uppercase tracking-wider font-bold">
-                    <tr>
-                        <th rowspan="2" class="py-3 px-3 sticky left-0 z-30 bg-slate-900 border-r border-slate-700 min-w-[260px] shadow-sm">
-                            Customer
-                        </th>
-                        @foreach($reportData['month_keys'] as $mKey)
-                            <th colspan="2" class="py-2 px-2 text-center border-r border-slate-700/80 bg-slate-800">
-                                {{ $reportData['month_labels'][$mKey] ?? $mKey }}
-                            </th>
-                        @endforeach
-                        <th colspan="2" class="py-2 px-2 text-center bg-slate-900 min-w-[170px]">
-                            Period Total
-                        </th>
-                    </tr>
-                    <tr class="border-b border-slate-700 text-[10px] text-slate-300">
-                        @foreach($reportData['month_keys'] as $mKey)
-                            <th class="py-1.5 px-2 text-center border-r border-slate-700/50 min-w-[50px] bg-slate-800/90 font-medium">Qty.</th>
-                            <th class="py-1.5 px-2 text-right border-r border-slate-700 min-w-[115px] bg-slate-800 font-medium">Value (IDR)</th>
-                        @endforeach
-                        <th class="py-1.5 px-2 text-center border-r border-slate-700 min-w-[60px] bg-slate-900 font-medium">Max Qty</th>
-                        <th class="py-1.5 px-2 text-right min-w-[130px] bg-slate-900 font-medium">Total Value</th>
-                    </tr>
-                </thead>
-
-                <!-- Table Body -->
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-700 dark:text-slate-200">
-                    @forelse($reportData['customers'] as $index => $customer)
-                        @php
-                            $cKey = $customer['customer_key'];
-                            $hasChanges = !empty($customer['has_any_period_change']) || !empty($customer['has_any_price_change']);
-                        @endphp
-                        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors {{ $hasChanges ? 'bg-amber-500/5' : '' }}">
-                            <!-- Sticky Customer Name -->
-                            <td class="py-2.5 px-3 sticky left-0 z-10 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 font-medium shadow-sm">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="truncate max-w-[220px]" title="{{ $customer['customer_name'] }}">
-                                        @if($customer['customer_ref'])
-                                            <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1 py-0.5 rounded">
-                                                {{ $customer['customer_ref'] }}
-                                            </span>
-                                        @endif
-                                        <span class="font-bold text-slate-800 dark:text-slate-100">{{ $customer['customer_name'] }}</span>
-                                    </div>
-                                    <!-- Row Expand Toggle for Vehicle Details -->
-                                    <button type="button" @click="expandedRows['{{ $index }}'] = !expandedRows['{{ $index }}']"
-                                            class="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
-                                        <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="{ 'rotate-90': expandedRows['{{ $index }}'] }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </td>
-
-                            <!-- Monthly Qty & Value Columns -->
-                            @foreach($reportData['month_keys'] as $mKey)
-                                @php
-                                    $mInfo = $customer['months'][$mKey] ?? ['qty' => 0, 'value' => 0, 'units' => [], 'has_period_change' => false, 'has_price_change' => false];
-                                @endphp
-                                <td class="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-700/50 font-semibold {{ $mInfo['qty'] > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600' }}">
-                                    {{ $mInfo['qty'] > 0 ? $mInfo['qty'] : '-' }}
-                                </td>
-                                <td class="py-2 px-2 text-right border-r border-slate-200 dark:border-slate-700 font-mono {{ $mInfo['value'] > 0 ? 'text-slate-800 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600' }}">
-                                    @if($mInfo['value'] > 0)
-                                        <div class="flex items-center justify-end gap-1">
-                                            @if($mInfo['has_period_change'])
-                                                <span class="inline-flex items-center px-1 py-0.2 text-[9px] font-extrabold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded border border-amber-500/30" title="Invoice billing period changed this month">
-                                                    🔄
-                                                </span>
-                                            @endif
-                                            @if($mInfo['has_price_change'])
-                                                <span class="inline-flex items-center px-1 py-0.2 text-[9px] font-extrabold bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded border border-rose-500/30" title="Normalized monthly rate adjusted this month">
-                                                    💲
-                                                </span>
-                                            @endif
-                                            <span>{{ number_format($mInfo['value']) }}</span>
-                                        </div>
-                                    @else
-                                        -
-                                    @endif
-                                </td>
-                            @endforeach
-
-                            <!-- Period Totals -->
-                            <td class="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-bold bg-slate-50/50 dark:bg-slate-800/50">
-                                {{ $customer['max_qty'] }}
-                            </td>
-                            <td class="py-2 px-2 text-right font-mono font-black text-indigo-600 dark:text-indigo-400 bg-slate-50/50 dark:bg-slate-800/50">
-                                Rp {{ number_format($customer['total_value']) }}
-                            </td>
-                        </tr>
-
-                        <!-- Expandable Vehicle Breakdown Row -->
-                        <tr x-show="expandedRows['{{ $index }}']" x-cloak class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
-                            <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="p-3 pl-8">
-                                <div class="space-y-2">
-                                    <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                                        <span>Active Contract Vehicles ({{ count($customer['vehicles'] ?? []) }} Units)</span>
-                                    </div>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                        @foreach($customer['vehicles'] ?? [] as $v)
-                                            <div class="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] shadow-xs">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="font-extrabold font-mono text-slate-800 dark:text-slate-100">{{ $v['nopol'] }}</span>
-                                                    <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">{{ $v['so'] }}</span>
-                                                </div>
-                                                <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5" title="{{ $v['product'] }}">
-                                                    {{ $v['product'] }}
-                                                </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="py-12 text-center text-slate-400">
-                                <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                <p class="text-sm font-semibold">No rental contracts found for the selected period.</p>
-                                <p class="text-xs text-slate-500 mt-1">Try expanding the date range or clearing filters.</p>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-
-                <!-- Table Sticky Footer Grand Totals -->
-                @if(!empty($reportData['customers']))
-                    <tfoot class="sticky bottom-0 z-20 bg-slate-900 text-white font-extrabold text-[11px] border-t-2 border-slate-700 shadow-lg">
-                        <tr>
-                            <td class="py-3 px-3 sticky left-0 z-30 bg-slate-900 border-r border-slate-700 uppercase tracking-wider">
-                                Grand Total
-                            </td>
-                            @foreach($reportData['month_keys'] as $mKey)
-                                @php
-                                    $mTot = $reportData['totals']['months'][$mKey] ?? ['qty' => 0, 'value' => 0];
-                                @endphp
-                                <td class="py-2 px-2 text-center border-r border-slate-700/80 bg-slate-900">
-                                    {{ number_format($mTot['qty']) }}
-                                </td>
-                                <td class="py-2 px-2 text-right border-r border-slate-700 font-mono bg-slate-900">
-                                    {{ number_format($mTot['value']) }}
-                                </td>
-                            @endforeach
-                            <td class="py-2 px-2 text-center border-r border-slate-700 bg-slate-900">-</td>
-                            <td class="py-2 px-2 text-right font-mono font-black text-emerald-400 bg-slate-900">
-                                Rp {{ number_format($reportData['totals']['grand_total_value'] ?? 0) }}
-                            </td>
-                        </tr>
-                    </tfoot>
-                @endif
-            </table>
+    @if(!$hasQuery)
+        <!-- Prompt State (When user just opens the page without query) -->
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-700/80 shadow-sm">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center mb-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+            </div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Ready to Generate Summary of Rented Vehicle</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1.5 leading-relaxed">
+                Select your desired Month & Year range above and click <span class="font-bold text-indigo-600 dark:text-indigo-400">"Generate Report"</span> to load live data from Odoo.
+            </p>
         </div>
-    </div>
+
+    @else
+        <!-- KPI Metric Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <!-- Card 1: Active Customers -->
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Customers</span>
+                    <div class="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-2xl font-black text-slate-800 dark:text-slate-100 mt-2">
+                    {{ number_format(count($reportData['customers'] ?? [])) }}
+                </p>
+                <p class="text-[11px] text-slate-400 mt-1">Customers with active subscriptions</p>
+            </div>
+
+            <!-- Card 2: Period Total Revenue -->
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Period Value</span>
+                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                <p class="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2 truncate">
+                    Rp {{ number_format($reportData['totals']['grand_total_value'] ?? 0) }}
+                </p>
+                <p class="text-[11px] text-slate-400 mt-1">Normalized untaxed monthly sum</p>
+            </div>
+
+            <!-- Card 3: Period Changes Detected -->
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Period Adjustments</span>
+                    <div class="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                </div>
+                <p class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-2">
+                    {{ number_format($reportData['summary']['has_period_changes'] ?? 0) }}
+                </p>
+                <p class="text-[11px] text-slate-400 mt-1">E.g., Monthly &rarr; Quarterly/Yearly</p>
+            </div>
+
+            <!-- Card 4: Price Changes Detected -->
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Rate Adjustments</span>
+                    <div class="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                </div>
+                <p class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
+                    {{ number_format($reportData['summary']['has_price_changes'] ?? 0) }}
+                </p>
+                <p class="text-[11px] text-slate-400 mt-1">Price increases or renegotiations</p>
+            </div>
+        </div>
+
+        <!-- Data Pivot Table -->
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <div class="overflow-x-auto max-h-[72vh] relative">
+                <table class="w-full text-left text-xs border-collapse">
+                    <!-- Table Header -->
+                    <thead class="sticky top-0 z-20 bg-slate-900 text-white text-[11px] uppercase tracking-wider font-bold">
+                        <tr>
+                            <th rowspan="2" class="py-3 px-3 sticky left-0 z-30 bg-slate-900 border-r border-slate-700 min-w-[260px] shadow-sm">
+                                Customer
+                            </th>
+                            @foreach($reportData['month_keys'] as $mKey)
+                                <th colspan="2" class="py-2 px-2 text-center border-r border-slate-700/80 bg-slate-800">
+                                    {{ $reportData['month_labels'][$mKey] ?? $mKey }}
+                                </th>
+                            @endforeach
+                            <th colspan="2" class="py-2 px-2 text-center bg-slate-900 min-w-[170px]">
+                                Period Total
+                            </th>
+                        </tr>
+                        <tr class="border-b border-slate-700 text-[10px] text-slate-300">
+                            @foreach($reportData['month_keys'] as $mKey)
+                                <th class="py-1.5 px-2 text-center border-r border-slate-700/50 min-w-[50px] bg-slate-800/90 font-medium">Qty.</th>
+                                <th class="py-1.5 px-2 text-right border-r border-slate-700 min-w-[115px] bg-slate-800 font-medium">Value (IDR)</th>
+                            @endforeach
+                            <th class="py-1.5 px-2 text-center border-r border-slate-700 min-w-[60px] bg-slate-900 font-medium">Max Qty</th>
+                            <th class="py-1.5 px-2 text-right min-w-[130px] bg-slate-900 font-medium">Total Value</th>
+                        </tr>
+                    </thead>
+
+                    <!-- Table Body -->
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-700 dark:text-slate-200">
+                        @forelse($reportData['customers'] as $index => $customer)
+                            @php
+                                $cKey = $customer['customer_key'];
+                                $hasChanges = !empty($customer['has_any_period_change']) || !empty($customer['has_any_price_change']);
+                            @endphp
+                            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors {{ $hasChanges ? 'bg-amber-500/5' : '' }}">
+                                <!-- Sticky Customer Name -->
+                                <td class="py-2.5 px-3 sticky left-0 z-10 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 font-medium shadow-sm">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="truncate max-w-[220px]" title="{{ $customer['customer_name'] }}">
+                                            @if($customer['customer_ref'])
+                                                <span class="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1 py-0.5 rounded">
+                                                    {{ $customer['customer_ref'] }}
+                                                </span>
+                                            @endif
+                                            <span class="font-bold text-slate-800 dark:text-slate-100">{{ $customer['customer_name'] }}</span>
+                                        </div>
+                                        <!-- Row Expand Toggle for Vehicle Details -->
+                                        <button type="button" @click="expandedRows['{{ $index }}'] = !expandedRows['{{ $index }}']"
+                                                class="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
+                                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="{ 'rotate-90': expandedRows['{{ $index }}'] }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </td>
+
+                                <!-- Monthly Qty & Value Columns -->
+                                @foreach($reportData['month_keys'] as $mKey)
+                                    @php
+                                        $mInfo = $customer['months'][$mKey] ?? ['qty' => 0, 'value' => 0, 'units' => [], 'has_period_change' => false, 'has_price_change' => false];
+                                    @endphp
+                                    <td class="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-700/50 font-semibold {{ $mInfo['qty'] > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600' }}">
+                                        {{ $mInfo['qty'] > 0 ? $mInfo['qty'] : '-' }}
+                                    </td>
+                                    <td class="py-2 px-2 text-right border-r border-slate-200 dark:border-slate-700 font-mono {{ $mInfo['value'] > 0 ? 'text-slate-800 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600' }}">
+                                        @if($mInfo['value'] > 0)
+                                            <div class="flex items-center justify-end gap-1">
+                                                @if($mInfo['has_period_change'])
+                                                    <span class="inline-flex items-center px-1 py-0.2 text-[9px] font-extrabold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded border border-amber-500/30" title="Invoice billing period changed this month">
+                                                        🔄
+                                                    </span>
+                                                @endif
+                                                @if($mInfo['has_price_change'])
+                                                    <span class="inline-flex items-center px-1 py-0.2 text-[9px] font-extrabold bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded border border-rose-500/30" title="Normalized monthly rate adjusted this month">
+                                                        💲
+                                                    </span>
+                                                @endif
+                                                <span>{{ number_format($mInfo['value']) }}</span>
+                                            </div>
+                                        @else
+                                            -
+                                        @endif
+                                    </td>
+                                @endforeach
+
+                                <!-- Period Totals -->
+                                <td class="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-bold bg-slate-50/50 dark:bg-slate-800/50">
+                                    {{ $customer['max_qty'] }}
+                                </td>
+                                <td class="py-2 px-2 text-right font-mono font-black text-indigo-600 dark:text-indigo-400 bg-slate-50/50 dark:bg-slate-800/50">
+                                    Rp {{ number_format($customer['total_value']) }}
+                                </td>
+                            </tr>
+
+                            <!-- Expandable Vehicle Breakdown Row -->
+                            <tr x-show="expandedRows['{{ $index }}']" x-cloak class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
+                                <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="p-3 pl-8">
+                                    <div class="space-y-2">
+                                        <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                            <span>Active Contract Vehicles ({{ count($customer['vehicles'] ?? []) }} Units)</span>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                            @foreach($customer['vehicles'] ?? [] as $v)
+                                                <div class="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] shadow-xs">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="font-extrabold font-mono text-slate-800 dark:text-slate-100">{{ $v['nopol'] }}</span>
+                                                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">{{ $v['so'] }}</span>
+                                                    </div>
+                                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5" title="{{ $v['product'] }}">
+                                                        {{ $v['product'] }}
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="py-12 text-center text-slate-400">
+                                    <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    <p class="text-sm font-semibold">No rental contracts found for the selected period.</p>
+                                    <p class="text-xs text-slate-500 mt-1">Try expanding the date range or clearing filters.</p>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+
+                    <!-- Table Sticky Footer Grand Totals -->
+                    @if(!empty($reportData['customers']))
+                        <tfoot class="sticky bottom-0 z-20 bg-slate-900 text-white font-extrabold text-[11px] border-t-2 border-slate-700 shadow-lg">
+                            <tr>
+                                <td class="py-3 px-3 sticky left-0 z-30 bg-slate-900 border-r border-slate-700 uppercase tracking-wider">
+                                    Grand Total
+                                </td>
+                                @foreach($reportData['month_keys'] as $mKey)
+                                    @php
+                                        $mTot = $reportData['totals']['months'][$mKey] ?? ['qty' => 0, 'value' => 0];
+                                    @endphp
+                                    <td class="py-2 px-2 text-center border-r border-slate-700/80 bg-slate-900">
+                                        {{ number_format($mTot['qty']) }}
+                                    </td>
+                                    <td class="py-2 px-2 text-right border-r border-slate-700 font-mono bg-slate-900">
+                                        {{ number_format($mTot['value']) }}
+                                    </td>
+                                @endforeach
+                                <td class="py-2 px-2 text-center border-r border-slate-700 bg-slate-900">-</td>
+                                <td class="py-2 px-2 text-right font-mono font-black text-emerald-400 bg-slate-900">
+                                    Rp {{ number_format($reportData['totals']['grand_total_value'] ?? 0) }}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    @endif
+                </table>
+            </div>
+        </div>
+    @endif
 
 </div>
+
+<style>
+    input[type="month"] {
+        cursor: pointer;
+    }
+    .dark input[type="month"] {
+        color-scheme: dark;
+    }
+    input[type="month"]::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 0.85;
+    }
+    .dark input[type="month"]::-webkit-calendar-picker-indicator {
+        filter: invert(0.85);
+    }
+</style>
 @endsection
