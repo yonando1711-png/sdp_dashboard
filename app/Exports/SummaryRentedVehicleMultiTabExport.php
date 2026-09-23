@@ -72,7 +72,7 @@ class SummaryRentedVehicleCustomerSheet implements FromArray, ShouldAutoSize, Wi
 
         // Title Block
         $this->rows[] = ['PT. SURYA DARMA PERKASA'];
-        $subtitle = 'Summary of Rented Vehicle, Untaxed (Customer Summary)' . ($this->excludeOthersLt ? ' (Without Customer OTHERSLT)' : '');
+        $subtitle = 'Summary of Rented Vehicle, Untaxed (Customer Summary)';
         $this->rows[] = [$subtitle];
 
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');
@@ -217,7 +217,7 @@ class SummaryRentedVehicleVehicleSheet implements FromArray, ShouldAutoSize, Wit
 
         // Title Block
         $this->rows[] = ['PT. SURYA DARMA PERKASA'];
-        $subtitle = 'Summary of Rented Vehicle - Vehicle Details (Untaxed)' . ($this->excludeOthersLt ? ' (Without Customer OTHERSLT)' : '');
+        $subtitle = 'Summary of Rented Vehicle - Vehicle Details (Untaxed)';
         $this->rows[] = [$subtitle];
 
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');

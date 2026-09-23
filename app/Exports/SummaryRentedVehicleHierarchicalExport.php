@@ -46,7 +46,7 @@ class SummaryRentedVehicleHierarchicalExport implements FromArray, ShouldAutoSiz
 
         // Title Block
         $this->rows[] = ['PT. SURYA DARMA PERKASA'];
-        $subtitle = 'Summary of Rented Vehicle, Untaxed (Hierarchical)' . ($this->excludeOthersLt ? ' (Without Customer OTHERSLT)' : '');
+        $subtitle = 'Summary of Rented Vehicle, Untaxed (Hierarchical)';
         $this->rows[] = [$subtitle];
 
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');

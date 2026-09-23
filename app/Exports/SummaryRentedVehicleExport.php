@@ -42,7 +42,7 @@ class SummaryRentedVehicleExport implements FromArray, ShouldAutoSize, WithEvent
 
         // Title Block
         $this->rows[] = ['PT. SURYA DARMA PERKASA'];
-        $subtitle = 'Summary of Rented Vehicle, Untaxed' . ($this->excludeOthersLt ? ' (Without Customer OTHERSLT)' : '');
+        $subtitle = 'Summary of Rented Vehicle, Untaxed';
         $this->rows[] = [$subtitle];
 
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');
