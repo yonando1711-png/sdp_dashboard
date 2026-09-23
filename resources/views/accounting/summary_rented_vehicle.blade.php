@@ -350,28 +350,96 @@
                                 </td>
                             </tr>
 
-                            <!-- Expandable Vehicle Breakdown Row -->
-                            <tr x-show="expandedRows['{{ $index }}']" x-cloak class="bg-indigo-50/40 dark:bg-indigo-950/20 border-y border-indigo-100 dark:border-indigo-900/40">
-                                <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="p-3 pl-8">
-                                    <div class="space-y-2">
-                                        <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            <!-- Active Contract Vehicles Banner Row (when expanded) -->
+                            <tr x-show="expandedRows['{{ $index }}']" x-cloak class="bg-indigo-50/70 dark:bg-indigo-950/40 border-y border-indigo-100 dark:border-indigo-900/50">
+                                <td :colspan="{{ count($reportData['month_keys']) * 2 + 3 }}" class="py-2 px-3 pl-8 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="p-1 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                            </div>
                                             <span>Active Contract Vehicles ({{ count($customer['vehicles'] ?? []) }} Units)</span>
                                         </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                            @foreach($customer['vehicles'] ?? [] as $v)
-                                                <div class="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] shadow-xs">
-                                                    <div class="flex items-center justify-between">
-                                                        <span class="font-extrabold font-mono text-slate-800 dark:text-slate-100">{{ $v['nopol'] }}</span>
-                                                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">{{ $v['so'] }}</span>
-                                                    </div>
-                                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5" title="{{ $v['product'] }}">
-                                                        {{ $v['product'] }}
+                                        <span class="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                            Normalized monthly rate: <span class="font-medium text-slate-700 dark:text-slate-200">Yearly ÷ 12, Quarterly ÷ 3, Bi-monthly ÷ 2</span>
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- Each Vehicle as a Direct Row in the Main Table for Perfect Column Alignment -->
+                            @foreach($customer['vehicles'] ?? [] as $v)
+                                <tr x-show="expandedRows['{{ $index }}']" x-cloak class="bg-slate-50/40 dark:bg-slate-900/40 hover:bg-indigo-50/30 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                                    <!-- Customer Column: Sticky Left (Nopol, SO, Vehicle Model) -->
+                                    <td class="py-2 px-3 sticky left-0 z-10 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 pl-8 shadow-sm">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-mono font-black text-slate-800 dark:text-slate-100 text-[11px] whitespace-nowrap">{{ $v['nopol'] }}</span>
+                                            <span class="text-[9px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1 py-0.5 rounded whitespace-nowrap font-semibold">{{ $v['so'] }}</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[210px] mt-0.5" title="{{ $v['product'] }}">
+                                            {{ $v['product'] }}
+                                        </div>
+                                    </td>
+
+                                    <!-- Monthly Qty & Value Columns (EXACT same columns as parent table) -->
+                                    @foreach($reportData['month_keys'] as $mKey)
+                                        @php $mUnit = $v['months'][$mKey] ?? null; @endphp
+                                        <!-- Qty Column (directly aligns under QTY header) -->
+                                        <td class="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-700/50 font-mono text-[11px] {{ $mUnit && !empty($mUnit['active']) ? 'text-slate-700 dark:text-slate-300 font-semibold' : 'text-slate-300 dark:text-slate-600' }}">
+                                            {{ $mUnit && !empty($mUnit['active']) ? '1' : '-' }}
+                                        </td>
+                                        <!-- Value Column (directly aligns under VALUE (IDR) header) -->
+                                        <td class="py-2 px-2 text-right border-r border-slate-200 dark:border-slate-700 font-mono text-[11px]">
+                                            @if($mUnit && !empty($mUnit['active']))
+                                                <div class="flex flex-col items-end">
+                                                    <span class="font-bold text-slate-800 dark:text-slate-100">
+                                                        {{ number_format($mUnit['monthly_rate']) }}
+                                                    </span>
+                                                    <div class="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-semibold border shadow-2xs {{ $mUnit['period'] === 'Yearly' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : ($mUnit['period'] === 'Quarterly' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-500/30' : ($mUnit['period'] === 'Bi-monthly' ? 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-500/30' : 'bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600')) }}">
+                                                        @if(!empty($mUnit['period_change']))
+                                                            <span title="{{ $mUnit['period_change'] }}" class="cursor-help text-[10px] leading-none" role="img" aria-label="Period change">🔄</span>
+                                                        @endif
+                                                        @if(!empty($mUnit['price_change']))
+                                                            <span title="{{ $mUnit['price_change'] }}" class="cursor-help text-[10px] leading-none" role="img" aria-label="Price change">💲</span>
+                                                        @endif
+                                                        <span>{{ $mUnit['period'] }}{{ $mUnit['rental_qty'] > 1 ? ' (÷'.(int)$mUnit['rental_qty'].')' : '' }}</span>
                                                     </div>
                                                 </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
+                                            @else
+                                                <span class="text-slate-300 dark:text-slate-600 font-mono">-</span>
+                                            @endif
+                                        </td>
+                                    @endforeach
+
+                                    <!-- Period Total Max Qty (directly aligns under Max Qty header) -->
+                                    <td class="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono text-[11px] text-slate-400 bg-slate-50/30 dark:bg-slate-800/30">
+                                        {{ $v['total_value'] > 0 ? '1' : '-' }}
+                                    </td>
+                                    <!-- Period Total Value (directly aligns under Total Value header) -->
+                                    <td class="py-2 px-2 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400 text-[11px] bg-slate-50/30 dark:bg-slate-800/30">
+                                        Rp {{ number_format($v['total_value']) }}
+                                    </td>
+                                </tr>
+                            @endforeach
+
+                            <!-- Customer Subtotal Row (at the bottom of vehicles list) -->
+                            <tr x-show="expandedRows['{{ $index }}']" x-cloak class="border-b-2 border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/30 dark:bg-slate-800/70 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                <td class="py-2 px-3 sticky left-0 z-10 bg-indigo-50/80 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 pl-8 uppercase tracking-wider text-[10px] text-slate-500 dark:text-slate-400 shadow-sm">
+                                    ↳ Subtotal ({{ count($customer['vehicles'] ?? []) }} Units)
+                                </td>
+                                @foreach($reportData['month_keys'] as $mKey)
+                                    <td class="py-2 px-2 text-center border-r border-slate-100 dark:border-slate-700/50 font-mono">
+                                        {{ $customer['months'][$mKey]['qty'] > 0 ? $customer['months'][$mKey]['qty'] : '-' }}
+                                    </td>
+                                    <td class="py-2 px-2 text-right border-r border-slate-200 dark:border-slate-700 font-mono">
+                                        {{ $customer['months'][$mKey]['value'] > 0 ? number_format($customer['months'][$mKey]['value']) : '-' }}
+                                    </td>
+                                @endforeach
+                                <td class="py-2 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-mono">
+                                    {{ $customer['max_qty'] }}
+                                </td>
+                                <td class="py-2 px-2 text-right font-mono text-indigo-600 dark:text-indigo-400">
+                                    Rp {{ number_format($customer['total_value']) }}
                                 </td>
                             </tr>
                         @empty

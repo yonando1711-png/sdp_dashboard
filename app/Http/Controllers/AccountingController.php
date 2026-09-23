@@ -38,7 +38,7 @@ class AccountingController extends Controller
         $reportData = null;
 
         if ($hasQuery) {
-            $cacheKey = "accounting_srv_{$startMonth}_{$endMonth}_" . md5($search);
+            $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
 
             // If user clicked Re-fetch, bust cache
             if ($request->boolean('refresh')) {

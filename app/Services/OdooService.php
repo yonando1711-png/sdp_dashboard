@@ -3064,94 +3064,131 @@ class OdooService
                 $soPeriods = $periods[$soId] ?? [];
                 if (empty($soPeriods)) continue;
 
-                $prevMonthData = null;
+                // Group periods by lot/vehicle to support multi-vehicle contracts
+                $periodsByLot = [];
+                foreach ($soPeriods as $p) {
+                    $lotKey = !empty($p['lot_id'][0]) ? 'lot_' . $p['lot_id'][0] : ('line_' . ($p['id'] ?? uniqid()));
+                    $periodsByLot[$lotKey][] = $p;
+                }
 
-                foreach ($monthKeys as $mKey) {
-                    $mStartDt = \Carbon\Carbon::parse("$mKey-01")->startOfMonth();
-                    $mEndDt = \Carbon\Carbon::parse("$mKey-01")->endOfMonth();
+                foreach ($periodsByLot as $lotKey => $lotPeriods) {
+                    $prevMonthData = null;
 
-                    // Find matching line in invoice periods
-                    $matching = null;
-                    foreach ($soPeriods as $p) {
-                        $pStart = \Carbon\Carbon::parse($p['start_rental_period_date']);
-                        $pEnd = \Carbon\Carbon::parse($p['end_rental_period_date']);
-                        if ($pStart <= $mEndDt && $pEnd >= $mStartDt) {
-                            $matching = $p;
-                            break;
-                        }
-                    }
+                    foreach ($monthKeys as $mKey) {
+                        $mStartDt = \Carbon\Carbon::parse("$mKey-01")->startOfMonth();
+                        $mEndDt = \Carbon\Carbon::parse("$mKey-01")->endOfMonth();
 
-                    if ($matching) {
-                        $rentalQty = max(1, (float)($matching['rental_qty'] ?? 1));
-                        $rawPrice = (float)($matching['price_unit'] ?? 0);
-                        $monthlyRate = round($rawPrice / $rentalQty);
-
-                        $periodName = match ((int)$rentalQty) {
-                            1 => 'Monthly',
-                            2 => 'Bi-monthly',
-                            3 => 'Quarterly',
-                            6 => 'Semester',
-                            12 => 'Yearly',
-                            default => "{$rentalQty}-mo",
-                        };
-
-                        $hasPeriodChange = false;
-                        $hasPriceChange = false;
-                        $periodChangeNote = '';
-                        $priceChangeNote = '';
-
-                        if ($prevMonthData) {
-                            if ($prevMonthData['periodName'] !== $periodName) {
-                                $hasPeriodChange = true;
-                                $periodChangeNote = "{$prevMonthData['periodName']} -> {$periodName}";
-                                $customerReport[$customerKey]['has_any_period_change'] = true;
-                                $periodChangeCount++;
-                            }
-                            if ($prevMonthData['monthlyRate'] != $monthlyRate) {
-                                $hasPriceChange = true;
-                                $diff = $monthlyRate - $prevMonthData['monthlyRate'];
-                                $pct = round(($diff / ($prevMonthData['monthlyRate'] ?: 1)) * 100, 1);
-                                $sign = $diff > 0 ? '+' : '';
-                                $priceChangeNote = "Rp " . number_format($prevMonthData['monthlyRate']) . " -> Rp " . number_format($monthlyRate) . " ({$sign}{$pct}%)";
-                                $customerReport[$customerKey]['has_any_price_change'] = true;
-                                $priceChangeCount++;
+                        // Find matching line in invoice periods for this lot/vehicle
+                        $matching = null;
+                        foreach ($lotPeriods as $p) {
+                            $pStart = \Carbon\Carbon::parse($p['start_rental_period_date']);
+                            $pEnd = \Carbon\Carbon::parse($p['end_rental_period_date']);
+                            if ($pStart <= $mEndDt && $pEnd >= $mStartDt) {
+                                $matching = $p;
+                                break;
                             }
                         }
 
-                        $customerReport[$customerKey]['months'][$mKey]['qty'] += 1;
-                        $customerReport[$customerKey]['months'][$mKey]['value'] += $monthlyRate;
-                        if ($hasPeriodChange) $customerReport[$customerKey]['months'][$mKey]['has_period_change'] = true;
-                        if ($hasPriceChange) $customerReport[$customerKey]['months'][$mKey]['has_price_change'] = true;
+                        if ($matching) {
+                            $rentalQty = max(1, (float)($matching['rental_qty'] ?? 1));
+                            $rawPrice = (float)($matching['price_unit'] ?? 0);
+                            $monthlyRate = round($rawPrice / $rentalQty);
 
-                        $lotName = $matching['lot_id'][1] ?? '-';
-                        $productName = $matching['product_id'][1] ?? '-';
+                            $periodName = match ((int)$rentalQty) {
+                                1 => 'Monthly',
+                                2 => 'Bi-monthly',
+                                3 => 'Quarterly',
+                                6 => 'Semester',
+                                12 => 'Yearly',
+                                default => "{$rentalQty}-mo",
+                            };
 
-                        $customerReport[$customerKey]['months'][$mKey]['units'][] = [
-                            'so' => $order['name'],
-                            'nopol' => $lotName,
-                            'product' => $productName,
-                            'period' => $periodName,
-                            'rental_qty' => $rentalQty,
-                            'raw_price' => $rawPrice,
-                            'monthly_rate' => $monthlyRate,
-                            'period_change' => $periodChangeNote,
-                            'price_change' => $priceChangeNote,
-                        ];
+                            $hasPeriodChange = false;
+                            $hasPriceChange = false;
+                            $periodChangeNote = '';
+                            $priceChangeNote = '';
 
-                        if (!isset($customerReport[$customerKey]['vehicles'][$lotName])) {
-                            $customerReport[$customerKey]['vehicles'][$lotName] = [
+                            if ($prevMonthData) {
+                                if ($prevMonthData['periodName'] !== $periodName) {
+                                    $hasPeriodChange = true;
+                                    $periodChangeNote = "{$prevMonthData['periodName']} -> {$periodName}";
+                                    $customerReport[$customerKey]['has_any_period_change'] = true;
+                                    $periodChangeCount++;
+                                }
+                                if ($prevMonthData['monthlyRate'] != $monthlyRate) {
+                                    $hasPriceChange = true;
+                                    $diff = $monthlyRate - $prevMonthData['monthlyRate'];
+                                    $pct = round(($diff / ($prevMonthData['monthlyRate'] ?: 1)) * 100, 1);
+                                    $sign = $diff > 0 ? '+' : '';
+                                    $priceChangeNote = "Rp " . number_format($prevMonthData['monthlyRate']) . " -> Rp " . number_format($monthlyRate) . " ({$sign}{$pct}%)";
+                                    $customerReport[$customerKey]['has_any_price_change'] = true;
+                                    $priceChangeCount++;
+                                }
+                            }
+
+                            $customerReport[$customerKey]['months'][$mKey]['qty'] += 1;
+                            $customerReport[$customerKey]['months'][$mKey]['value'] += $monthlyRate;
+                            if ($hasPeriodChange) $customerReport[$customerKey]['months'][$mKey]['has_period_change'] = true;
+                            if ($hasPriceChange) $customerReport[$customerKey]['months'][$mKey]['has_price_change'] = true;
+
+                            $lotName = $matching['lot_id'][1] ?? '-';
+                            $productName = $matching['product_id'][1] ?? '-';
+
+                            $customerReport[$customerKey]['months'][$mKey]['units'][] = [
+                                'so' => $order['name'],
                                 'nopol' => $lotName,
                                 'product' => $productName,
-                                'so' => $order['name'],
+                                'period' => $periodName,
+                                'rental_qty' => $rentalQty,
+                                'raw_price' => $rawPrice,
+                                'monthly_rate' => $monthlyRate,
+                                'period_change' => $periodChangeNote,
+                                'price_change' => $priceChangeNote,
                             ];
-                        }
 
-                        $prevMonthData = [
-                            'periodName' => $periodName,
-                            'monthlyRate' => $monthlyRate
-                        ];
-                    } else {
-                        $prevMonthData = null;
+                            $vKey = ($lotName !== '-' && $lotName !== '') ? $lotName : ($order['name'] . '_' . $lotKey);
+
+                            if (!isset($customerReport[$customerKey]['vehicles'][$vKey])) {
+                                $vDefaultMonths = [];
+                                foreach ($monthKeys as $mk) {
+                                    $vDefaultMonths[$mk] = [
+                                        'active' => false,
+                                        'period' => '-',
+                                        'rental_qty' => 1,
+                                        'raw_price' => 0,
+                                        'monthly_rate' => 0,
+                                        'period_change' => '',
+                                        'price_change' => '',
+                                    ];
+                                }
+
+                                $customerReport[$customerKey]['vehicles'][$vKey] = [
+                                    'so' => $order['name'],
+                                    'nopol' => $lotName,
+                                    'product' => $productName,
+                                    'months' => $vDefaultMonths,
+                                    'total_value' => 0,
+                                ];
+                            }
+
+                            $customerReport[$customerKey]['vehicles'][$vKey]['months'][$mKey] = [
+                                'active' => true,
+                                'period' => $periodName,
+                                'rental_qty' => $rentalQty,
+                                'raw_price' => $rawPrice,
+                                'monthly_rate' => $monthlyRate,
+                                'period_change' => $periodChangeNote,
+                                'price_change' => $priceChangeNote,
+                            ];
+                            $customerReport[$customerKey]['vehicles'][$vKey]['total_value'] += $monthlyRate;
+
+                            $prevMonthData = [
+                                'periodName' => $periodName,
+                                'monthlyRate' => $monthlyRate
+                            ];
+                        } else {
+                            $prevMonthData = null;
+                        }
                     }
                 }
             }
@@ -3176,6 +3213,14 @@ class OdooService
                 $cData['max_qty'] = $maxQ;
                 $cData['total_value'] = $sumVal;
                 $grandTotalValue += $sumVal;
+
+                if (!empty($cData['vehicles'])) {
+                    $vehiclesArr = array_values($cData['vehicles']);
+                    usort($vehiclesArr, fn($a, $b) => strcmp($a['nopol'] ?? '', $b['nopol'] ?? ''));
+                    $cData['vehicles'] = $vehiclesArr;
+                } else {
+                    $cData['vehicles'] = [];
+                }
             }
             unset($cData);
 
