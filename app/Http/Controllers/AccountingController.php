@@ -159,4 +159,83 @@ class AccountingController extends Controller
             $fileName
         );
     }
+
+    /**
+     * Export Summary of Rented Vehicles to PDF (.pdf)
+     */
+    public function exportSummaryRentedVehiclePdf(Request $request)
+    {
+        if (!auth()->user()->canViewSummaryRentedVehicle()) {
+            abort(403, 'Access Denied: You do not have permission to export this report.');
+        }
+
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $startMonth = $request->input('start_month', now()->format('Y-m'));
+        $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
+        $excludeOthersLt = true;
+        $search = trim((string) $request->input('search', ''));
+        $changesOnly = $request->boolean('changes_only', false);
+
+        $reportData = $this->odooService->fetchSummaryRentedVehicle(
+            $startMonth,
+            $endMonth,
+            $excludeOthersLt,
+            $search !== '' ? $search : null
+        );
+
+        if ($changesOnly && !empty($reportData['customers'])) {
+            $filteredCustomers = array_filter($reportData['customers'], function ($c) {
+                return !empty($c['has_any_period_change']) || !empty($c['has_any_price_change']);
+            });
+            $reportData['customers'] = array_values($filteredCustomers);
+
+            $newMonthTotals = [];
+            foreach ($reportData['month_keys'] as $mk) {
+                $newMonthTotals[$mk] = ['qty' => 0, 'value' => 0];
+            }
+            $newGrandTotal = 0;
+            foreach ($reportData['customers'] as $c) {
+                foreach ($reportData['month_keys'] as $mk) {
+                    $newMonthTotals[$mk]['qty'] += $c['months'][$mk]['qty'] ?? 0;
+                    $newMonthTotals[$mk]['value'] += $c['months'][$mk]['value'] ?? 0;
+                }
+                $newGrandTotal += $c['total_value'] ?? 0;
+            }
+            $reportData['totals']['months'] = $newMonthTotals;
+            $reportData['totals']['grand_total_value'] = $newGrandTotal;
+        }
+
+        $options = new \Dompdf\Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+        $options->set('isPhpEnabled', true);
+
+        $dompdf = new \Dompdf\Dompdf($options);
+
+        $html = view('exports.summary_rented_vehicle_pdf', [
+            'customers' => $reportData['customers'] ?? [],
+            'totals' => $reportData['totals'] ?? [],
+            'monthKeys' => $reportData['month_keys'] ?? [],
+            'monthLabels' => $reportData['month_labels'] ?? [],
+            'startMonth' => $startMonth,
+            'endMonth' => $endMonth,
+            'search' => $search,
+            'changesOnly' => $changesOnly,
+        ])->render();
+
+        $dompdf->loadHtml($html);
+        $paperSize = count($reportData['month_keys'] ?? []) > 6 ? 'A3' : 'A4';
+        $dompdf->setPaper($paperSize, 'landscape');
+        $dompdf->render();
+
+        $fileName = sprintf('Summary_Rented_Vehicle_%s_to_%s.pdf', $startMonth, $endMonth);
+
+        return response()->streamDownload(
+            fn () => print($dompdf->output()),
+            $fileName,
+            ['Content-Type' => 'application/pdf']
+        );
+    }
 }

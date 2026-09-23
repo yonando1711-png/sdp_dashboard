@@ -114,6 +114,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware([CheckMenuPermission::class . ':summary-rented-vehicle'])->group(function () {
             Route::get('/accounting/summary-rented-vehicle', [AccountingController::class, 'summaryRentedVehicle'])->name('accounting.summary-rented-vehicle');
             Route::get('/accounting/summary-rented-vehicle/export', [AccountingController::class, 'exportSummaryRentedVehicle'])->name('accounting.summary-rented-vehicle.export');
+            Route::get('/accounting/summary-rented-vehicle/export-pdf', [AccountingController::class, 'exportSummaryRentedVehiclePdf'])->name('accounting.summary-rented-vehicle.export-pdf');
         });
     });
 
