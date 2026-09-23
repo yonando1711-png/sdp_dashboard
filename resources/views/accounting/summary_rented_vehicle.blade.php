@@ -387,7 +387,7 @@
                     <span>{{ $hasQuery ? 'Apply Filter' : 'Generate Report' }}</span>
                 </button>
                 @if($hasQuery)
-                    <a href="{{ route('accounting.summary-rented-vehicle') }}" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all">
+                    <a href="{{ route('accounting.summary-rented-vehicle', ['year' => $year]) }}" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all">
                         Reset
                     </a>
                 @endif
