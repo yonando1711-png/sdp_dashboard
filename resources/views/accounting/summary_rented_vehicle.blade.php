@@ -42,10 +42,10 @@
                     <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
                 <div x-show="openYear" x-cloak style="display: none;"
-                     class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 text-xs divide-y divide-slate-100 dark:divide-slate-700/60">
+                     class="absolute left-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 text-xs divide-y divide-slate-100 dark:divide-slate-700/60">
                     <div class="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Fiscal Year</div>
                     <div class="py-1 space-y-1">
-                        @foreach([2026, 2025, 2024] as $yOpt)
+                        @foreach(range(max((int)$year, now()->year), 2024) as $yOpt)
                             <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->except(['year', 'sync_type']), ['year' => $yOpt])) }}"
                                class="flex items-center justify-between px-2.5 py-1.5 rounded-lg {{ $yOpt == $year ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200' }}">
                                 <span>{{ $yOpt }}{{ $yOpt == now()->year ? ' (Current)' : '' }}</span>
@@ -66,7 +66,7 @@
                     <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
                 <div x-show="openSync" x-cloak style="display: none;"
-                     class="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                     class="absolute left-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
                     <div class="p-1 space-y-1">
                         <!-- Fast Sync -->
                         <button type="button" @click="openSync = false; startSync('fast', {{ $year }})"
@@ -414,7 +414,7 @@
             <form method="GET" action="{{ route('accounting.summary-rented-vehicle') }}" class="max-w-md mx-auto space-y-4">
                 <input type="hidden" name="sync_type" value="full">
                 <div class="flex items-center justify-center gap-2 flex-wrap">
-                    @foreach([2026, 2025, 2024] as $yOpt)
+                    @foreach(range(max((int)$year, now()->year), 2024) as $yOpt)
                         <label class="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border cursor-pointer select-none text-xs font-bold transition-all {{ $yOpt == $year ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400' }}">
                             <input type="radio" name="year" value="{{ $yOpt }}" {{ $yOpt == $year ? 'checked' : '' }} onchange="this.form.submit()" class="sr-only">
                             <span>{{ $yOpt }}{{ $yOpt == now()->year ? ' (Current Year)' : '' }}</span>

@@ -111,7 +111,7 @@ class AccountingController extends Controller
      */
     public function triggerSync(Request $request)
     {
-        $year = (int)$request->input('year', 2026);
+        $year = (int)$request->input('year', now()->year);
         $syncType = $request->input('sync_type', 'fast'); // 'fast' or 'full'
         $progressKey = "accounting_sync_progress_{$year}";
 
@@ -207,7 +207,7 @@ class AccountingController extends Controller
      */
     public function getSyncProgress(Request $request)
     {
-        $year = (int)$request->input('year', 2026);
+        $year = (int)$request->input('year', now()->year);
         $progressKey = "accounting_sync_progress_{$year}";
 
         $progress = \Illuminate\Support\Facades\Cache::get($progressKey, [
