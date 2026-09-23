@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="p-4 md:p-6 w-full space-y-5" x-data="{ expandedRows: {} }">
+<div class="p-4 md:p-6 w-full space-y-5" x-data="summaryRentedVehiclePage()">
 
     <!-- Header & Action Bar -->
     <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
@@ -15,7 +15,8 @@
                     Accounting Report
                 </span>
                 @if($isYearCached)
-                    <span class="px-2 py-0.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5" title="Synced at: {{ $lastSyncedAt }}">
+                    <span class="px-2 py-0.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5" 
+                          title="Synced at: {{ $lastSyncedAt ? \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->setTimezone(config('app.timezone', 'Asia/Jakarta'))->format('d M Y H:i:s T') : '-' }}">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span>Synced: {{ $lastSyncFormatted }}</span>
                     </span>
@@ -68,23 +69,23 @@
                      class="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
                     <div class="p-1 space-y-1">
                         <!-- Fast Sync -->
-                        <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['sync_type' => 'fast', 'year' => $year])) }}"
-                           class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-100 transition-colors">
+                        <button type="button" @click="openSync = false; startSync('fast', {{ $year }})"
+                                class="w-full text-left flex items-start gap-2.5 p-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-100 transition-colors cursor-pointer">
                             <span class="text-base leading-none mt-0.5">⚡</span>
                             <div>
                                 <div class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Fast Incremental Sync</div>
                                 <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">Checks Odoo write_date for modified contracts in 1–2s.</p>
                             </div>
-                        </a>
+                        </button>
                         <!-- Full Re-fetch -->
-                        <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['sync_type' => 'full', 'year' => $year])) }}"
-                           class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-800 dark:text-slate-100 transition-colors">
+                        <button type="button" @click="openSync = false; startSync('full', {{ $year }})"
+                                class="w-full text-left flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-800 dark:text-slate-100 transition-colors cursor-pointer">
                             <span class="text-base leading-none mt-0.5">🔄</span>
                             <div>
                                 <div class="text-xs font-bold text-slate-700 dark:text-slate-200">Full Re-fetch Year {{ $year }}</div>
                                 <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">Batched 500 records at once. Guaranteed zero timeouts.</p>
                             </div>
-                        </a>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -422,7 +423,7 @@
                 </div>
 
                 <div>
-                    <button type="submit" class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2">
+                    <button type="button" @click="startSync('full', {{ $year }})" class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
@@ -735,9 +736,281 @@
         </div>
     @endif
 
+    <!-- Live Synchronization Progress Modal -->
+    <div x-show="syncModal.show" 
+         x-cloak 
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0">
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden transition-all transform p-6 sm:p-7 relative space-y-6"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+             x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+             x-transition:leave-end="opacity-0 scale-95 -translate-y-2"
+             @click.outside="if (syncModal.status === 'completed' || syncModal.status === 'error') closeModal()">
+
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors"
+                         :class="{
+                             'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400': syncModal.status === 'running',
+                             'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400': syncModal.status === 'completed',
+                             'bg-rose-500/10 text-rose-600 dark:text-rose-400': syncModal.status === 'error'
+                         }">
+                        <!-- Running Spinner -->
+                        <template x-if="syncModal.status === 'running'">
+                            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </template>
+                        <!-- Completed Icon -->
+                        <template x-if="syncModal.status === 'completed'">
+                            <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </template>
+                        <!-- Error Icon -->
+                        <template x-if="syncModal.status === 'error'">
+                            <svg class="w-6 h-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                        </template>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <span x-text="syncModal.status === 'completed' ? 'Synchronization Complete' : (syncModal.status === 'error' ? 'Sync Encountered An Error' : 'Syncing with Odoo')"></span>
+                            <span class="px-2 py-0.5 text-[10px] font-extrabold rounded-md uppercase tracking-wider"
+                                  :class="syncModal.type === 'fast' ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300' : 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'"
+                                  x-text="syncModal.type + ' sync'"></span>
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Fiscal Year <span class="font-bold text-slate-700 dark:text-slate-300" x-text="syncModal.year"></span> &bull; 
+                            <span x-show="syncModal.status === 'running'">Elapsed: <span class="font-mono font-semibold" x-text="formatTime(syncModal.secondsElapsed)"></span></span>
+                            <span x-show="syncModal.status === 'completed'">Took <span class="font-semibold" x-text="syncModal.secondsElapsed + 's'"></span></span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Close Button (available when finished or error) -->
+                <button type="button" 
+                        x-show="syncModal.status === 'completed' || syncModal.status === 'error'"
+                        @click="closeModal()" 
+                        class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Progress Bar & Percentage -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-semibold">
+                    <span class="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full" 
+                              :class="{
+                                  'bg-indigo-500 animate-pulse': syncModal.status === 'running',
+                                  'bg-emerald-500': syncModal.status === 'completed',
+                                  'bg-rose-500': syncModal.status === 'error'
+                              }"></span>
+                        <span class="capitalize" x-text="syncModal.stage || 'Processing'"></span>
+                    </span>
+                    <span class="font-bold text-sm font-mono" 
+                          :class="syncModal.status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'"
+                          x-text="syncModal.percent + '%'"></span>
+                </div>
+
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700/80 shadow-inner">
+                    <div class="h-full rounded-full transition-all duration-300 ease-out"
+                         :class="{
+                             'bg-gradient-to-r from-indigo-500 via-indigo-600 to-emerald-500': syncModal.status === 'running',
+                             'bg-emerald-500': syncModal.status === 'completed',
+                             'bg-rose-500': syncModal.status === 'error'
+                         }"
+                         :style="'width: ' + Math.min(100, Math.max(5, syncModal.percent)) + '%'">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Details Card -->
+            <div class="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+                <div class="flex items-start gap-2.5">
+                    <svg class="w-4 h-4 text-slate-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium break-words" x-text="syncModal.message || 'Processing records...'"></p>
+                </div>
+
+                <!-- Record counter badge if total is known -->
+                <div x-show="syncModal.total > 0" class="pt-2 border-t border-slate-200/60 dark:border-slate-700/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <span>Records processed:</span>
+                    <span class="font-mono font-bold text-slate-700 dark:text-slate-200">
+                        <span x-text="syncModal.records"></span> / <span x-text="syncModal.total"></span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="flex items-center justify-end gap-3 pt-2">
+                <button type="button" 
+                        x-show="syncModal.status === 'error'"
+                        @click="closeModal()" 
+                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition-all cursor-pointer">
+                    Dismiss
+                </button>
+
+                <button type="button" 
+                        x-show="syncModal.status === 'completed'"
+                        @click="reloadPage()" 
+                        class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    <span>View Updated Report</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
 </div>
 
 <script>
+function summaryRentedVehiclePage() {
+    return {
+        expandedRows: {},
+        syncModal: {
+            show: false,
+            year: {{ (int)$year }},
+            type: 'fast',
+            status: 'idle', // 'idle' | 'running' | 'completed' | 'error'
+            percent: 0,
+            stage: '',
+            message: '',
+            records: 0,
+            total: 0,
+            secondsElapsed: 0,
+            timerInterval: null,
+            pollInterval: null,
+        },
+        startSync(type, year) {
+            this.syncModal.year = year || {{ (int)$year }};
+            this.syncModal.type = type;
+            this.syncModal.status = 'running';
+            this.syncModal.percent = 5;
+            this.syncModal.stage = 'Connecting';
+            this.syncModal.message = 'Connecting to Odoo server...';
+            this.syncModal.records = 0;
+            this.syncModal.total = 0;
+            this.syncModal.secondsElapsed = 0;
+            this.syncModal.show = true;
+
+            // Start timer
+            if (this.syncModal.timerInterval) clearInterval(this.syncModal.timerInterval);
+            this.syncModal.timerInterval = setInterval(() => {
+                this.syncModal.secondsElapsed++;
+            }, 1000);
+
+            // Start Polling every 700ms
+            if (this.syncModal.pollInterval) clearInterval(this.syncModal.pollInterval);
+            this.syncModal.pollInterval = setInterval(() => {
+                this.pollProgress();
+            }, 700);
+
+            // Send trigger POST request
+            fetch("{{ route('accounting.summary-rented-vehicle.sync') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    year: this.syncModal.year,
+                    sync_type: this.syncModal.type
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'completed') {
+                    this.syncModal.percent = 100;
+                    this.syncModal.status = 'completed';
+                    this.syncModal.stage = 'completed';
+                    this.syncModal.message = data.message || 'Sync completed successfully!';
+                    this.stopPolling();
+                } else if (data.status === 'error') {
+                    this.syncModal.status = 'error';
+                    this.syncModal.message = data.message || 'An error occurred during synchronization.';
+                    this.stopPolling();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                this.syncModal.status = 'error';
+                this.syncModal.message = err.message || 'Network connection failed.';
+                this.stopPolling();
+            });
+        },
+        pollProgress() {
+            fetch("{{ route('accounting.summary-rented-vehicle.sync-progress') }}?year=" + this.syncModal.year, {
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.status) {
+                    if (data.percent !== undefined && data.percent > this.syncModal.percent) {
+                        this.syncModal.percent = data.percent;
+                    }
+                    if (data.stage) this.syncModal.stage = data.stage;
+                    if (data.message) this.syncModal.message = data.message;
+                    if (data.records !== undefined) this.syncModal.records = data.records;
+                    if (data.total !== undefined) this.syncModal.total = data.total;
+
+                    if (data.status === 'completed') {
+                        this.syncModal.percent = 100;
+                        this.syncModal.status = 'completed';
+                        this.syncModal.stage = 'completed';
+                        this.stopPolling();
+                    } else if (data.status === 'error') {
+                        this.syncModal.status = 'error';
+                        this.stopPolling();
+                    }
+                }
+            })
+            .catch(e => console.warn('Progress poll tick failed:', e));
+        },
+        stopPolling() {
+            if (this.syncModal.timerInterval) {
+                clearInterval(this.syncModal.timerInterval);
+                this.syncModal.timerInterval = null;
+            }
+            if (this.syncModal.pollInterval) {
+                clearInterval(this.syncModal.pollInterval);
+                this.syncModal.pollInterval = null;
+            }
+        },
+        formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        },
+        reloadPage() {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('sync_type');
+            url.searchParams.set('year', this.syncModal.year);
+            window.location.href = url.toString();
+        },
+        closeModal() {
+            this.stopPolling();
+            this.syncModal.show = false;
+        }
+    };
+}
+
 function monthPicker(name, initialValue) {
     const fullMonths = [
         'January', 'February', 'March', 'April', 'May', 'June',

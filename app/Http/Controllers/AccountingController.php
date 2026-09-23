@@ -57,7 +57,7 @@ class AccountingController extends Controller
         if ($isYearCached) {
             $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year);
             $lastSyncedAt = $masterData['last_synced_at'] ?? null;
-            $lastSyncFormatted = $lastSyncedAt ? \Carbon\Carbon::parse($lastSyncedAt)->diffForHumans() : 'Never';
+            $lastSyncFormatted = $lastSyncedAt ? \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->diffForHumans() : 'Never';
 
             $reportData = $this->odooService->computeSummaryRentedVehiclePivot(
                 $masterData,
@@ -104,6 +104,122 @@ class AccountingController extends Controller
             'search' => $search,
             'changesOnly' => $changesOnly,
         ]);
+    }
+
+    /**
+     * Trigger synchronization with live progress reporting for Accounting Report
+     */
+    public function triggerSync(Request $request)
+    {
+        $year = (int)$request->input('year', 2026);
+        $syncType = $request->input('sync_type', 'fast'); // 'fast' or 'full'
+        $progressKey = "accounting_sync_progress_{$year}";
+
+        // Prevent concurrent sync jobs for the same year
+        $currentProgress = \Illuminate\Support\Facades\Cache::get($progressKey);
+        if ($currentProgress && ($currentProgress['status'] ?? '') === 'running') {
+            $startedAt = $currentProgress['started_timestamp'] ?? 0;
+            if (time() - $startedAt < 600) {
+                return response()->json([
+                    'status' => 'running',
+                    'message' => 'Sync is already running for year ' . $year,
+                    'percent' => $currentProgress['percent'] ?? 0,
+                    'stage' => $currentProgress['stage'] ?? 'running',
+                    'records' => $currentProgress['records'] ?? 0,
+                    'total' => $currentProgress['total'] ?? 0,
+                ]);
+            }
+        }
+
+        // Initialize progress state
+        \Illuminate\Support\Facades\Cache::put($progressKey, [
+            'status' => 'running',
+            'percent' => 5,
+            'stage' => 'init',
+            'message' => 'Initiating sync with Odoo for fiscal year ' . $year . '...',
+            'records' => 0,
+            'total' => 0,
+            'started_timestamp' => time(),
+            'updated_at' => microtime(true),
+        ], 600);
+
+        try {
+            $onProgress = function (string $stage, int $percent, int $records, int $total, string $message) use ($progressKey) {
+                \Illuminate\Support\Facades\Cache::put($progressKey, [
+                    'status' => $percent >= 100 ? 'completed' : 'running',
+                    'percent' => $percent,
+                    'stage' => $stage,
+                    'records' => $records,
+                    'total' => $total,
+                    'message' => $message,
+                    'updated_at' => microtime(true),
+                ], 600);
+            };
+
+            $isFull = ($syncType === 'full');
+            $masterData = $this->odooService->fetchAccountingSubscriptionMaster(
+                $year,
+                forceFull: $isFull,
+                incremental: !$isFull,
+                onProgress: $onProgress
+            );
+
+            \Illuminate\Support\Facades\Cache::put($progressKey, [
+                'status' => 'completed',
+                'percent' => 100,
+                'stage' => 'completed',
+                'records' => count($masterData['orders'] ?? []),
+                'total' => count($masterData['orders'] ?? []),
+                'message' => $masterData['sync_message'] ?? 'Sync completed successfully.',
+                'updated_at' => microtime(true),
+            ], 600);
+
+            return response()->json([
+                'status' => 'completed',
+                'message' => $masterData['sync_message'] ?? 'Sync completed successfully.',
+                'total_orders' => count($masterData['orders'] ?? []),
+                'last_synced_at' => $masterData['last_synced_at'] ?? null,
+                'last_sync_formatted' => !empty($masterData['last_synced_at']) ? \Carbon\Carbon::parse($masterData['last_synced_at'], 'UTC')->diffForHumans() : 'Just now',
+            ]);
+
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Accounting sync error for year {$year}: " . $e->getMessage());
+
+            \Illuminate\Support\Facades\Cache::put($progressKey, [
+                'status' => 'error',
+                'percent' => 0,
+                'stage' => 'error',
+                'records' => 0,
+                'total' => 0,
+                'message' => 'Sync failed: ' . $e->getMessage(),
+                'updated_at' => microtime(true),
+            ], 600);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sync failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get real-time sync progress for Accounting Report
+     */
+    public function getSyncProgress(Request $request)
+    {
+        $year = (int)$request->input('year', 2026);
+        $progressKey = "accounting_sync_progress_{$year}";
+
+        $progress = \Illuminate\Support\Facades\Cache::get($progressKey, [
+            'status' => 'idle',
+            'percent' => 0,
+            'stage' => 'idle',
+            'records' => 0,
+            'total' => 0,
+            'message' => 'No active synchronization.',
+        ]);
+
+        return response()->json($progress);
     }
 
     /**

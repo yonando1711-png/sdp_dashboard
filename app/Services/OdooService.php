@@ -3266,9 +3266,10 @@ class OdooService
      * @param int $year
      * @param bool $forceFull
      * @param bool $incremental
+     * @param callable|null $onProgress
      * @return array
      */
-    public function fetchAccountingSubscriptionMaster(int $year, bool $forceFull = false, bool $incremental = false): array
+    public function fetchAccountingSubscriptionMaster(int $year, bool $forceFull = false, bool $incremental = false, ?callable $onProgress = null): array
     {
         $cacheKey = "accounting_subscription_master_{$year}";
         $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
@@ -3278,12 +3279,16 @@ class OdooService
         }
 
         if ($incremental && !empty($cached) && !empty($cached['orders'])) {
-            return $this->syncAccountingSubscriptionIncremental($year, $cached);
+            return $this->syncAccountingSubscriptionIncremental($year, $cached, $onProgress);
         }
 
         // Full batched sync (500 data per request to guarantee zero timeouts)
         set_time_limit(300);
         ini_set('memory_limit', '512M');
+
+        if ($onProgress) {
+            $onProgress('init', 5, 0, 0, 'Connecting to Odoo and querying contracts...');
+        }
 
         $yearStart = "{$year}-01-01";
         $yearEnd = "{$year}-12-31";
@@ -3296,6 +3301,11 @@ class OdooService
             ['rental_return_date', '=', false],
             ['rental_return_date', '>=', "{$yearStart} 00:00:00"]
         ];
+
+        $totalOrdersCount = (int)$this->execute('sale.order', 'search_count', [$orderDomain]);
+        if ($onProgress) {
+            $onProgress('contracts', 8, 0, $totalOrdersCount, "Found {$totalOrdersCount} active contracts. Fetching batches...");
+        }
 
         $limit = 500;
         $offset = 0;
@@ -3329,6 +3339,12 @@ class OdooService
             }
 
             $offset += $limit;
+            $loadedOrders = count($orders);
+            $batchPct = $totalOrdersCount > 0 ? min(45, (int)(8 + (37 * ($offset / max(1, $totalOrdersCount))))) : 45;
+            if ($onProgress) {
+                $onProgress('contracts', $batchPct, $loadedOrders, $totalOrdersCount, "Fetched {$loadedOrders} of {$totalOrdersCount} contracts...");
+            }
+
             if (count($batch) < $limit) break;
         }
 
@@ -3337,6 +3353,11 @@ class OdooService
             ['start_rental_period_date', '<=', $yearEnd],
             ['end_rental_period_date', '>=', $yearStart]
         ];
+
+        $totalPeriodsCount = (int)$this->execute('rental.period.invoice', 'search_count', [$periodDomain]);
+        if ($onProgress) {
+            $onProgress('periods', 48, 0, $totalPeriodsCount, "Querying {$totalPeriodsCount} invoice periods for fiscal year {$year}...");
+        }
 
         $offset = 0;
         $periodsByOrder = [];
@@ -3364,10 +3385,20 @@ class OdooService
             }
 
             $offset += $limit;
+            $batchPct = $totalPeriodsCount > 0 ? min(85, (int)(48 + (37 * ($offset / max(1, $totalPeriodsCount))))) : 85;
+            if ($onProgress) {
+                $onProgress('periods', $batchPct, $periodCount, $totalPeriodsCount, "Fetched {$periodCount} matching invoice periods...");
+            }
+
             if (count($batch) < $limit) break;
         }
 
         // 3. Fetch partners in 200-item chunks
+        $partnerCount = count($allPartnerIds);
+        if ($onProgress) {
+            $onProgress('partners', 88, 0, $partnerCount, "Resolving customer details for {$partnerCount} partners...");
+        }
+
         $partners = [];
         $partnerChunks = array_chunk(array_keys($allPartnerIds), 200);
         foreach ($partnerChunks as $pChunk) {
@@ -3377,6 +3408,14 @@ class OdooService
             foreach ($res as $p) {
                 $partners[$p['id']] = $p;
             }
+        }
+
+        if ($onProgress) {
+            $onProgress('partners', 93, count($partners), $partnerCount, "Customer details resolved.");
+        }
+
+        if ($onProgress) {
+            $onProgress('caching', 97, count($orders), $periodCount, "Compiling and storing master dataset in cache...");
         }
 
         $nowUtc = gmdate('Y-m-d H:i:s');
@@ -3392,6 +3431,10 @@ class OdooService
 
         \Illuminate\Support\Facades\Cache::forever($cacheKey, $masterData);
 
+        if ($onProgress) {
+            $onProgress('completed', 100, count($orders), $periodCount, "Full sync complete: " . count($orders) . " active contracts and {$periodCount} periods synced for {$year}.");
+        }
+
         return $masterData;
     }
 
@@ -3400,14 +3443,19 @@ class OdooService
      *
      * @param int $year
      * @param array $masterData
+     * @param callable|null $onProgress
      * @return array
      */
-    protected function syncAccountingSubscriptionIncremental(int $year, array $masterData): array
+    protected function syncAccountingSubscriptionIncremental(int $year, array $masterData, ?callable $onProgress = null): array
     {
         $lastSyncedAt = $masterData['last_synced_at'] ?? gmdate('Y-m-d 00:00:00');
         $nowUtc = gmdate('Y-m-d H:i:s');
         $yearStart = "{$year}-01-01";
         $yearEnd = "{$year}-12-31";
+
+        if ($onProgress) {
+            $onProgress('checking', 15, 0, 0, "Checking Odoo for records modified since " . \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->diffForHumans() . "...");
+        }
 
         // Check for modified subscription orders
         $modifiedOrders = $this->execute('sale.order', 'search_read', [[
@@ -3445,10 +3493,17 @@ class OdooService
         }
 
         if (empty($affectedOrderIds)) {
-            $masterData['sync_message'] = "Data is already up to date (no changes in Odoo since " . \Carbon\Carbon::parse($lastSyncedAt)->diffForHumans() . ").";
+            $masterData['sync_message'] = "Data is already up to date (no changes in Odoo since " . \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->diffForHumans() . ").";
             $masterData['last_synced_at'] = $nowUtc;
             \Illuminate\Support\Facades\Cache::forever("accounting_subscription_master_{$year}", $masterData);
+            if ($onProgress) {
+                $onProgress('completed', 100, 0, 0, "Data is already up to date. No changes found in Odoo.");
+            }
             return $masterData;
+        }
+
+        if ($onProgress) {
+            $onProgress('updating', 40, count($affectedOrderIds), count($affectedOrderIds), "Updating " . count($affectedOrderIds) . " modified contracts and periods...");
         }
 
         // Update affected orders in masterData
@@ -3490,6 +3545,9 @@ class OdooService
 
         // Fetch any missing partner records
         if (!empty($newPartnerIds)) {
+            if ($onProgress) {
+                $onProgress('partners', 80, count($newPartnerIds), count($newPartnerIds), "Updating customer details...");
+            }
             $res = $this->execute('res.partner', 'search_read', [
                 [['id', 'in', array_keys($newPartnerIds)]]
             ], ['fields' => ['id', 'name', 'ref']]);
@@ -3498,10 +3556,18 @@ class OdooService
             }
         }
 
+        if ($onProgress) {
+            $onProgress('caching', 95, count($affectedOrderIds), count($affectedOrderIds), "Saving updated records to cache...");
+        }
+
         $count = count($affectedOrderIds);
         $masterData['last_synced_at'] = $nowUtc;
         $masterData['sync_message'] = "Fast Sync complete: {$count} " . ($count === 1 ? 'contract' : 'contracts') . " updated from Odoo.";
         \Illuminate\Support\Facades\Cache::forever("accounting_subscription_master_{$year}", $masterData);
+
+        if ($onProgress) {
+            $onProgress('completed', 100, $count, $count, $masterData['sync_message']);
+        }
 
         return $masterData;
     }
