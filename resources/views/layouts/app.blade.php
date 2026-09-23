@@ -337,7 +337,7 @@
                 @if(auth()->check() && auth()->user()->canAccessAccountingReport())
                 <div x-data="{ open: {{ request()->routeIs('accounting.*') ? 'true' : 'false' }} }" class="space-y-1">
                     <button type="button" @click="open = !open"
-                        class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all group {{ request()->routeIs('accounting.*') ? 'active' : '' }}"
+                        class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ request()->routeIs('accounting.*') ? 'active' : '' }}"
                         title="Accounting Report">
                         <div class="flex items-center gap-3">
                             <svg class="w-6 h-6 shrink-0 transition-transform duration-300 group-hover:scale-110" fill="none"
@@ -356,7 +356,7 @@
                     <div x-show="open && !sidebarCollapsed" x-transition class="pl-11 space-y-1">
                         @if(auth()->user()->canViewSummaryRentedVehicle())
                         <a href="{{ route('accounting.summary-rented-vehicle') }}"
-                            class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('accounting.summary-rented-vehicle*') ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/30' : '' }}">
+                            class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('accounting.summary-rented-vehicle*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
                             Summary Rented Vehicle
                         </a>
                         @endif
