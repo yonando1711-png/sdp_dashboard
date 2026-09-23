@@ -113,6 +113,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware([CheckMenuPermission::class . ':accounting-report'])->group(function () {
         Route::middleware([CheckMenuPermission::class . ':summary-rented-vehicle'])->group(function () {
             Route::get('/accounting/summary-rented-vehicle', [AccountingController::class, 'summaryRentedVehicle'])->name('accounting.summary-rented-vehicle');
+            Route::post('/accounting/summary-rented-vehicle/sync', [AccountingController::class, 'triggerSync'])->name('accounting.summary-rented-vehicle.sync');
+            Route::get('/accounting/summary-rented-vehicle/sync-progress', [AccountingController::class, 'getSyncProgress'])->name('accounting.summary-rented-vehicle.sync-progress');
             Route::get('/accounting/summary-rented-vehicle/export', [AccountingController::class, 'exportSummaryRentedVehicle'])->name('accounting.summary-rented-vehicle.export');
             Route::get('/accounting/summary-rented-vehicle/export-pdf', [AccountingController::class, 'exportSummaryRentedVehiclePdf'])->name('accounting.summary-rented-vehicle.export-pdf');
         });

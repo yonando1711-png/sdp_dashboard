@@ -1,29 +1,26 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="p-4 md:p-6 w-full space-y-5" x-data="{ expandedRows: {}, showChangesOnly: {{ $changesOnly ? 'true' : 'false' }} }">
+<div class="p-4 md:p-6 w-full space-y-5" x-data="{ expandedRows: {} }">
 
     <!-- Header & Action Bar -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
-            <div class="flex flex-wrap items-center gap-2.5">
-                <h1 class="text-2xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Summary of Rented Vehicle</h1>
-                <span class="px-2.5 py-0.5 text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-full">
+            <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">Summary of Rented Vehicle</h1>
+                <span class="px-2 py-0.5 text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-full">
                     Untaxed
                 </span>
-                <span class="px-2.5 py-0.5 text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
+                <span class="px-2 py-0.5 text-[11px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
                     Accounting Report
                 </span>
-                <span class="px-2.5 py-0.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-full">
-                    Fiscal Year {{ $year }}
-                </span>
                 @if($isYearCached)
-                    <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5" title="Synced at: {{ $lastSyncedAt }}">
+                    <span class="px-2 py-0.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5" title="Synced at: {{ $lastSyncedAt }}">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span>Synced: {{ $lastSyncFormatted }}</span>
                     </span>
                 @else
-                    <span class="px-2.5 py-0.5 text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1.5">
+                    <span class="px-2 py-0.5 text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                         <span>Not Synced</span>
                     </span>
@@ -34,11 +31,12 @@
             </p>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap">
+        <!-- Controls & Actions (Single row with clean divider) -->
+        <div class="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
             <!-- Year Selector Dropdown -->
             <div class="relative" x-data="{ openYear: false }" @click.outside="openYear = false">
                 <button type="button" @click="openYear = !openYear"
-                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all">
+                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all whitespace-nowrap">
                     <span>📅 Year: {{ $year }}</span>
                     <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
@@ -62,7 +60,7 @@
             <!-- Sync Controls Dropdown -->
             <div class="relative" x-data="{ openSync: false }" @click.outside="openSync = false">
                 <button type="button" @click="openSync = !openSync"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-xs transition-all">
+                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-xs transition-all whitespace-nowrap">
                     <span>⚡ Sync</span>
                     <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
@@ -92,17 +90,19 @@
             </div>
 
             @if($isYearCached)
+                <!-- Divider -->
+                <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-0.5"></div>
 
                 <!-- Export to Excel Dropdown -->
                 <div class="relative" x-data="{ openExport: false }" @click.outside="openExport = false">
                     <button type="button" 
                             @click="openExport = !openExport"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                         <span>Export Excel</span>
-                        <svg class="w-3.5 h-3.5 text-emerald-100 transition-transform duration-200" :class="{ 'rotate-180': openExport }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-emerald-100 transition-transform duration-200" :class="{ 'rotate-180': openExport }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                         </svg>
                     </button>
@@ -127,7 +127,7 @@
                             <!-- Option B: Multi-Tab (Recommended) -->
                             <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'multitab', 'year' => $year])) }}"
                                @click="openExport = false"
-                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
+                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
                                 <div class="mt-0.5 p-2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800 transition-colors shrink-0">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
@@ -148,7 +148,7 @@
                             <!-- Option A: Hierarchical -->
                             <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'hierarchical', 'year' => $year])) }}"
                                @click="openExport = false"
-                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
+                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
                                 <div class="mt-0.5 p-2 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800 transition-colors shrink-0">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
@@ -171,12 +171,12 @@
                 <div class="relative" x-data="{ openPdf: false }" @click.outside="openPdf = false">
                     <button type="button" 
                             @click="openPdf = !openPdf"
-                            class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                         </svg>
                         <span>Export PDF</span>
-                        <svg class="w-3.5 h-3.5 text-rose-100 transition-transform duration-200" :class="{ 'rotate-180': openPdf }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-3 h-3 text-rose-100 transition-transform duration-200" :class="{ 'rotate-180': openPdf }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                         </svg>
                     </button>
@@ -241,8 +241,8 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        @endif
+            @endif
+        </div>
     </div>
 
     @if(!empty($syncMessage))
