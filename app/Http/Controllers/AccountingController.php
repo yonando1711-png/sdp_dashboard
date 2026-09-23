@@ -214,6 +214,9 @@ class AccountingController extends Controller
 
         $dompdf = new \Dompdf\Dompdf($options);
 
+        $type = $request->input('type', 'detailed');
+        $includeVehicles = ($type === 'detailed') || $request->boolean('details', true);
+
         $html = view('exports.summary_rented_vehicle_pdf', [
             'customers' => $reportData['customers'] ?? [],
             'totals' => $reportData['totals'] ?? [],
@@ -223,6 +226,7 @@ class AccountingController extends Controller
             'endMonth' => $endMonth,
             'search' => $search,
             'changesOnly' => $changesOnly,
+            'includeVehicles' => $includeVehicles,
         ])->render();
 
         $dompdf->loadHtml($html);
@@ -230,7 +234,12 @@ class AccountingController extends Controller
         $dompdf->setPaper($paperSize, 'landscape');
         $dompdf->render();
 
-        $fileName = sprintf('Summary_Rented_Vehicle_%s_to_%s.pdf', $startMonth, $endMonth);
+        $fileName = sprintf(
+            'Summary_Rented_Vehicle_%s_%s_to_%s.pdf',
+            $includeVehicles ? 'Detailed' : 'Summary',
+            $startMonth,
+            $endMonth
+        );
 
         return response()->streamDownload(
             fn () => print($dompdf->output()),

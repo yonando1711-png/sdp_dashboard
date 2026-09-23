@@ -112,16 +112,80 @@
                     </div>
                 </div>
 
-                <!-- Export to PDF Button -->
-                <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', request()->all()) }}" 
-                   target="_blank"
-                   class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all"
-                   title="Export printable A4 Landscape PDF">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                    </svg>
-                    <span>Export PDF</span>
-                </a>
+                <!-- Export to PDF Dropdown -->
+                <div class="relative" x-data="{ openPdf: false }" @click.outside="openPdf = false">
+                    <button type="button" 
+                            @click="openPdf = !openPdf"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Export PDF</span>
+                        <svg class="w-3.5 h-3.5 text-rose-100 transition-transform duration-200" :class="{ 'rotate-180': openPdf }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- PDF Dropdown Menu -->
+                    <div x-show="openPdf"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 scale-95 translate-y-1"
+                         x-cloak
+                         style="display: none;"
+                         class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                        
+                        <div class="px-3 py-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Choose PDF Format
+                        </div>
+
+                        <div class="py-1 space-y-1">
+                            <!-- Option 1: Detailed PDF (with Vehicle Breakdown) -->
+                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'detailed'])) }}"
+                               target="_blank"
+                               @click="openPdf = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 rounded-lg group-hover:bg-rose-200 dark:group-hover:bg-rose-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-rose-700 dark:group-hover:text-rose-400">Detailed PDF (with Vehicles)</span>
+                                        <span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-900/80 dark:text-rose-300 text-[9px] font-bold rounded">Full Breakdown</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Hierarchical view: Each customer with their rented vehicles, license plates, and monthly rates.
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Option 2: Summary PDF (Customer Overview) -->
+                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'summary'])) }}"
+                               target="_blank"
+                               @click="openPdf = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
+                                <div class="mt-0.5 p-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg group-hover:bg-slate-200 dark:group-hover:bg-slate-600 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white">Summary PDF (Overview)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Executive overview: Customer total quantities and contract values only (faster).
+                                    </p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
     </div>

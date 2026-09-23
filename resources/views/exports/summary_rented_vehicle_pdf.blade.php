@@ -130,6 +130,22 @@
         table.data-table tr:nth-child(even) td {
             background-color: #f8fafc;
         }
+        table.data-table tr.cust-row td {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            border-top: 1px solid #cbd5e1;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        table.data-table tr.veh-row td {
+            background-color: #ffffff;
+            font-size: 6.8px;
+            color: #475569;
+            border-color: #f1f5f9;
+            padding: 2px 4px;
+        }
+        table.data-table tr.veh-row:nth-child(even) td {
+            background-color: #fafafa;
+        }
         table.data-table tfoot tr td {
             background-color: #e2e8f0;
             font-weight: bold;
@@ -148,7 +164,7 @@
             <tr>
                 <td>
                     <div class="company-name">PT. SURYA DARMA PERKASA</div>
-                    <div class="report-title">Summary of Rented Vehicle (Untaxed)</div>
+                    <div class="report-title">Summary of Rented Vehicle (Untaxed){{ !empty($includeVehicles) ? ' — Detailed Fleet Breakdown' : ' — Customer Summary' }}</div>
                     @if($changesOnly)
                         <div class="badge-filter">Filtered: Period & Price Changes Only</div>
                     @endif
@@ -199,8 +215,8 @@
         </thead>
         <tbody>
             @forelse ($customers as $c)
-                <tr>
-                    <td class="customer-name">{{ $c['customer_key'] ?? $c['customer_name'] }}</td>
+                <tr @if(!empty($includeVehicles)) class="cust-row" @endif>
+                    <td class="customer-name" @if(!empty($includeVehicles)) style="font-weight: bold;" @endif>{{ $c['customer_key'] ?? $c['customer_name'] }}</td>
                     @foreach ($monthKeys as $mKey)
                         @php $mInfo = $c['months'][$mKey] ?? ['qty' => 0, 'value' => 0]; @endphp
                         <td class="number">{{ number_format($mInfo['qty'] ?? 0) }}</td>
@@ -209,6 +225,31 @@
                     <td class="number" style="font-weight: bold;">{{ number_format($c['max_qty'] ?? 0) }}</td>
                     <td class="number" style="font-weight: bold;">Rp {{ number_format($c['total_value'] ?? 0, 0, ',', '.') }}</td>
                 </tr>
+
+                @if(!empty($includeVehicles) && !empty($c['vehicles']))
+                    @foreach ($c['vehicles'] as $v)
+                        <tr class="veh-row">
+                            <td style="padding-left: 12px;">
+                                ↳ <strong>{{ $v['nopol'] ?? '-' }}</strong>
+                                @if(!empty($v['so'])) <span style="color: #64748b;">[{{ $v['so'] }}]</span> @endif
+                                @if(!empty($v['product'])) <span style="color: #475569;">{{ $v['product'] }}</span> @endif
+                            </td>
+                            @foreach ($monthKeys as $mKey)
+                                @php
+                                    $mU = $v['months'][$mKey] ?? null;
+                                    $active = !empty($mU['active']);
+                                    $rate = $active ? ($mU['monthly_rate'] ?? 0) : 0;
+                                @endphp
+                                <td class="number" style="{{ $active ? 'font-weight: 600;' : 'color: #94a3b8;' }}">{{ $active ? 1 : 0 }}</td>
+                                <td class="number" style="{{ $active ? 'color: #1e293b;' : 'color: #94a3b8;' }}">
+                                    {{ $active ? 'Rp ' . number_format($rate, 0, ',', '.') : '-' }}
+                                </td>
+                            @endforeach
+                            <td class="number" style="font-weight: 500;">{{ ($v['total_value'] ?? 0) > 0 ? 1 : 0 }}</td>
+                            <td class="number" style="font-weight: 500;">Rp {{ number_format($v['total_value'] ?? 0, 0, ',', '.') }}</td>
+                        </tr>
+                    @endforeach
+                @endif
             @empty
                 <tr>
                     <td colspan="{{ 1 + (count($monthKeys) * 2) + 2 }}" style="text-align: center; padding: 15px; color: #64748b;">
