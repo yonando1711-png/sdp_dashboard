@@ -410,15 +410,14 @@
                 </p>
             </div>
 
-            <!-- Year Selection Form -->
-            <form method="GET" action="{{ route('accounting.summary-rented-vehicle') }}" class="max-w-md mx-auto space-y-4">
-                <input type="hidden" name="sync_type" value="full">
+            <!-- Year Selection Buttons -->
+            <div class="max-w-md mx-auto space-y-4">
                 <div class="flex items-center justify-center gap-2 flex-wrap">
                     @foreach(range(max((int)$year, now()->year), 2024) as $yOpt)
-                        <label class="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border cursor-pointer select-none text-xs font-bold transition-all {{ $yOpt == $year ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400' }}">
-                            <input type="radio" name="year" value="{{ $yOpt }}" {{ $yOpt == $year ? 'checked' : '' }} onchange="this.form.submit()" class="sr-only">
+                        <a href="{{ route('accounting.summary-rented-vehicle', ['year' => $yOpt]) }}"
+                           class="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border select-none text-xs font-bold transition-all {{ $yOpt == $year ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400' }}">
                             <span>{{ $yOpt }}{{ $yOpt == now()->year ? ' (Current Year)' : '' }}</span>
-                        </label>
+                        </a>
                     @endforeach
                 </div>
 
@@ -430,7 +429,7 @@
                         <span>Sync Year {{ $year }} from Odoo</span>
                     </button>
                 </div>
-            </form>
+            </div>
         </div>
 
     @elseif(!$hasQuery)
