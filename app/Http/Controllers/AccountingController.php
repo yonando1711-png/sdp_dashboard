@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Services\OdooService;
 use App\Exports\SummaryRentedVehicleExport;
+use App\Exports\SummaryRentedVehicleHierarchicalExport;
+use App\Exports\SummaryRentedVehicleMultiTabExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 
@@ -132,10 +134,28 @@ class AccountingController extends Controller
             $reportData['totals']['grand_total_value'] = $newGrandTotal;
         }
 
-        $fileName = sprintf('Summary_Rented_Vehicle_%s_to_%s.xlsx', $startMonth, $endMonth);
+        $format = $request->input('format', 'multitab');
 
+        if ($format === 'hierarchical') {
+            $fileName = sprintf('Summary_Rented_Vehicle_Hierarchical_%s_to_%s.xlsx', $startMonth, $endMonth);
+            return Excel::download(
+                new SummaryRentedVehicleHierarchicalExport($reportData, $startMonth, $endMonth, $excludeOthersLt),
+                $fileName
+            );
+        }
+
+        if ($format === 'classic') {
+            $fileName = sprintf('Summary_Rented_Vehicle_%s_to_%s.xlsx', $startMonth, $endMonth);
+            return Excel::download(
+                new SummaryRentedVehicleExport($reportData, $startMonth, $endMonth, $excludeOthersLt),
+                $fileName
+            );
+        }
+
+        // Default: Multi-Tab (Option B: 2 Sheets - Customer Summary + Flat Vehicle Details)
+        $fileName = sprintf('Summary_Rented_Vehicle_MultiTab_%s_to_%s.xlsx', $startMonth, $endMonth);
         return Excel::download(
-            new SummaryRentedVehicleExport($reportData, $startMonth, $endMonth, $excludeOthersLt),
+            new SummaryRentedVehicleMultiTabExport($reportData, $startMonth, $endMonth, $excludeOthersLt),
             $fileName
         );
     }

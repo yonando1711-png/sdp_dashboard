@@ -38,14 +38,79 @@
                     <span>Re-fetch Odoo</span>
                 </a>
 
-                <!-- Export to Excel Button -->
-                <a href="{{ route('accounting.summary-rented-vehicle.export', request()->all()) }}" 
-                   class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span>Export Excel</span>
-                </a>
+                <!-- Export to Excel Dropdown -->
+                <div class="relative" x-data="{ openExport: false }" @click.outside="openExport = false">
+                    <button type="button" 
+                            @click="openExport = !openExport"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Export Excel</span>
+                        <svg class="w-3.5 h-3.5 text-emerald-100 transition-transform duration-200" :class="{ 'rotate-180': openExport }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div x-show="openExport"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 scale-95 translate-y-1"
+                         x-cloak
+                         style="display: none;"
+                         class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                        
+                        <div class="px-3 py-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Choose Export Format
+                        </div>
+
+                        <div class="py-1 space-y-1">
+                            <!-- Option B: Multi-Tab (Recommended) -->
+                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'multitab'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Multi-Tab Excel (2 Sheets)</span>
+                                        <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300 text-[9px] font-bold rounded">Recommended</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        <strong>Sheet 1:</strong> Customer Summary<br>
+                                        <strong>Sheet 2:</strong> Flat Vehicle Details (Pivot-ready)
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Option A: Hierarchical -->
+                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'hierarchical'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-400">Hierarchical Excel (1 Sheet)</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Single sheet with collapsible vehicle rows (+ / - groupings) nested under customers.
+                                    </p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
     </div>

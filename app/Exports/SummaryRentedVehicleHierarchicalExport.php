@@ -52,7 +52,7 @@ class SummaryRentedVehicleHierarchicalExport implements FromArray, ShouldAutoSiz
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');
         $toFmt = Carbon::parse("{$this->endMonth}-01")->format('M Y');
         $this->rows[] = ["Period Range: {$fromFmt} to {$toFmt} (Normalized monthly rates)"];
-        $this->rows[] = []; // Blank separator
+        $this->rows[] = ['']; // Blank separator (Row 4)
 
         // Header Row (Row 5)
         $header = ['Customer / Vehicle'];

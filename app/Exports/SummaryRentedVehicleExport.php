@@ -48,7 +48,7 @@ class SummaryRentedVehicleExport implements FromArray, ShouldAutoSize, WithEvent
         $fromFmt = Carbon::parse("{$this->startMonth}-01")->format('M Y');
         $toFmt = Carbon::parse("{$this->endMonth}-01")->format('M Y');
         $this->rows[] = ["Period Range: {$fromFmt} to {$toFmt}"];
-        $this->rows[] = []; // Blank separator
+        $this->rows[] = ['']; // Blank separator (Row 4)
 
         // Header Row
         $header = ['Customer'];
