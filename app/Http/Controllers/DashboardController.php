@@ -46,6 +46,9 @@ class DashboardController extends Controller
             if ($user->hasMenuPermission('surat-kuasa')) {
                 return redirect()->route('surat-kuasa.index');
             }
+            if ($user->canAccessAccountingReport()) {
+                return redirect()->route('accounting.summary-rented-vehicle');
+            }
             abort(403, 'Access Denied: You do not have permission to view any dashboard pages.');
         }
 

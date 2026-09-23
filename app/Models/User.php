@@ -27,6 +27,8 @@ class User extends Authenticatable
         'can_export_lor_smd',
         'can_view_et_report',
         'can_export_disposal',
+        'can_view_accounting_report',
+        'can_view_summary_rented_vehicle',
         'allowed_salespersons',
         'allowed_sales_teams',
     ];
@@ -57,6 +59,8 @@ class User extends Authenticatable
             'can_export_lor_smd' => 'boolean',
             'can_view_et_report' => 'boolean',
             'can_export_disposal' => 'boolean',
+            'can_view_accounting_report' => 'boolean',
+            'can_view_summary_rented_vehicle' => 'boolean',
             'allowed_salespersons' => 'array',
             'allowed_sales_teams' => 'array',
         ];
@@ -111,6 +115,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user can access Accounting Report menu
+     */
+    public function canAccessAccountingReport(): bool
+    {
+        return $this->isItAdmin() || (bool) $this->can_view_accounting_report;
+    }
+
+    /**
+     * Check if user can view Summary Rented Vehicle under Accounting Report
+     */
+    public function canViewSummaryRentedVehicle(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessAccountingReport() && (bool) $this->can_view_summary_rented_vehicle);
+    }
+
+    /**
      * Get allowed salespersons array
      */
     public function getAllowedSalespersons(): array
@@ -152,6 +172,14 @@ class User extends Authenticatable
 
         if ($key === 'et-report' || $key === 'lor-et-report') {
             return $this->canViewEtReport();
+        }
+
+        if ($key === 'accounting-report' || $key === 'accounting') {
+            return $this->canAccessAccountingReport();
+        }
+
+        if ($key === 'summary-rented-vehicle' || $key === 'accounting-summary-rented') {
+            return $this->canViewSummaryRentedVehicle();
         }
 
         // If custom menu_permissions array exists for this account, strictly enforce it!

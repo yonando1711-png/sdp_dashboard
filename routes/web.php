@@ -11,6 +11,7 @@ use App\Http\Controllers\LorController;
 use App\Http\Controllers\SuratKuasaController;
 use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\AccountingController;
 use App\Http\Middleware\CheckItAdmin;
 use App\Http\Middleware\CheckMenuPermission;
 
@@ -106,6 +107,17 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/disposal/export', [DisposalController::class, 'export'])->name('disposal.export');
         Route::post('/disposal/sync', [DisposalController::class, 'sync'])->name('disposal.sync');
         Route::post('/settings/disposal-password', [DisposalController::class, 'updatePassword'])->name('disposal.settings.update');
+    });
+
+    // Accounting Report Module Routes (Protected by two-tier permissions)
+    Route::middleware([CheckMenuPermission::class . ':accounting-report'])->group(function () {
+        Route::middleware([CheckMenuPermission::class . ':summary-rented-vehicle'])->group(function () {
+            Route::get('/accounting/summary-rented-vehicle', [AccountingController::class, 'summaryRentedVehicle'])->name('accounting.summary-rented-vehicle');
+            Route::post('/accounting/summary-rented-vehicle/sync', [AccountingController::class, 'triggerSync'])->name('accounting.summary-rented-vehicle.sync');
+            Route::get('/accounting/summary-rented-vehicle/sync-progress', [AccountingController::class, 'getSyncProgress'])->name('accounting.summary-rented-vehicle.sync-progress');
+            Route::get('/accounting/summary-rented-vehicle/export', [AccountingController::class, 'exportSummaryRentedVehicle'])->name('accounting.summary-rented-vehicle.export');
+            Route::get('/accounting/summary-rented-vehicle/export-pdf', [AccountingController::class, 'exportSummaryRentedVehiclePdf'])->name('accounting.summary-rented-vehicle.export-pdf');
+        });
     });
 
     // IT Admin Only Routes (Utilities & User Management)
