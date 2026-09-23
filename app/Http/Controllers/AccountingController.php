@@ -28,33 +28,44 @@ class AccountingController extends Controller
             abort(403, 'Access Denied: You do not have permission to view the Summary of Rented Vehicle report.');
         }
 
-        // Only query Odoo if the user explicitly submitted a month range or clicked a preset
-        $hasQuery = $request->filled('start_month') || $request->filled('end_month') || $request->boolean('generate');
-
         $startMonth = $request->input('start_month', now()->format('Y-m'));
         $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
+        $year = (int) $request->input('year', substr($startMonth, 0, 4) ?: now()->year);
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
         $excludeOthersLt = true; // Always excluded per business rule
 
+        $syncType = $request->input('sync_type');
+        $syncMessage = null;
+
+        if ($syncType === 'fast') {
+            $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year, forceFull: false, incremental: true);
+            $syncMessage = $masterData['sync_message'] ?? 'Fast Sync complete.';
+        } elseif ($syncType === 'full' || $request->boolean('refresh')) {
+            $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year, forceFull: true, incremental: false);
+            $syncMessage = $masterData['sync_message'] ?? 'Full Sync complete.';
+        }
+
+        $cacheKey = "accounting_subscription_master_{$year}";
+        $isYearCached = \Illuminate\Support\Facades\Cache::has($cacheKey);
+
+        $hasQuery = $request->filled('start_month') || $request->filled('end_month') || $request->boolean('generate') || $syncType !== null;
         $reportData = null;
+        $lastSyncedAt = null;
+        $lastSyncFormatted = 'Not synced';
 
-        if ($hasQuery) {
-            $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
+        if ($isYearCached) {
+            $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year);
+            $lastSyncedAt = $masterData['last_synced_at'] ?? null;
+            $lastSyncFormatted = $lastSyncedAt ? \Carbon\Carbon::parse($lastSyncedAt)->diffForHumans() : 'Never';
 
-            // If user clicked Re-fetch, bust cache
-            if ($request->boolean('refresh')) {
-                \Illuminate\Support\Facades\Cache::forget($cacheKey);
-            }
-
-            $reportData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($startMonth, $endMonth, $excludeOthersLt, $search) {
-                return $this->odooService->fetchSummaryRentedVehicle(
-                    $startMonth,
-                    $endMonth,
-                    $excludeOthersLt,
-                    $search !== '' ? $search : null
-                );
-            });
+            $reportData = $this->odooService->computeSummaryRentedVehiclePivot(
+                $masterData,
+                $startMonth,
+                $endMonth,
+                $excludeOthersLt,
+                $search !== '' ? $search : null
+            );
 
             if ($changesOnly && !empty($reportData['customers'])) {
                 $filteredCustomers = array_filter($reportData['customers'], function ($c) {
@@ -81,10 +92,15 @@ class AccountingController extends Controller
         }
 
         return view('accounting.summary_rented_vehicle', [
-            'hasQuery' => $hasQuery,
+            'hasQuery' => $hasQuery || $isYearCached,
             'reportData' => $reportData,
             'startMonth' => $startMonth,
             'endMonth' => $endMonth,
+            'year' => $year,
+            'isYearCached' => $isYearCached,
+            'lastSyncedAt' => $lastSyncedAt,
+            'lastSyncFormatted' => $lastSyncFormatted,
+            'syncMessage' => $syncMessage,
             'search' => $search,
             'changesOnly' => $changesOnly,
         ]);
@@ -101,19 +117,20 @@ class AccountingController extends Controller
 
         $startMonth = $request->input('start_month', now()->format('Y-m'));
         $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
+        $year = (int) $request->input('year', substr($startMonth, 0, 4) ?: now()->year);
         $excludeOthersLt = $request->boolean('exclude_others_lt', true);
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
 
-        $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
-        $reportData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($startMonth, $endMonth, $excludeOthersLt, $search) {
-            return $this->odooService->fetchSummaryRentedVehicle(
-                $startMonth,
-                $endMonth,
-                $excludeOthersLt,
-                $search !== '' ? $search : null
-            );
-        });
+        // Retrieve from cached year master data and compute pivot instantly
+        $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year);
+        $reportData = $this->odooService->computeSummaryRentedVehiclePivot(
+            $masterData,
+            $startMonth,
+            $endMonth,
+            $excludeOthersLt,
+            $search !== '' ? $search : null
+        );
 
         if ($changesOnly && !empty($reportData['customers'])) {
             $filteredCustomers = array_filter($reportData['customers'], function ($c) {
@@ -177,19 +194,20 @@ class AccountingController extends Controller
 
         $startMonth = $request->input('start_month', now()->format('Y-m'));
         $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
+        $year = (int) $request->input('year', substr($startMonth, 0, 4) ?: now()->year);
         $excludeOthersLt = true;
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
 
-        $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
-        $reportData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($startMonth, $endMonth, $excludeOthersLt, $search) {
-            return $this->odooService->fetchSummaryRentedVehicle(
-                $startMonth,
-                $endMonth,
-                $excludeOthersLt,
-                $search !== '' ? $search : null
-            );
-        });
+        // Retrieve from cached year master data and compute pivot instantly
+        $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year);
+        $reportData = $this->odooService->computeSummaryRentedVehiclePivot(
+            $masterData,
+            $startMonth,
+            $endMonth,
+            $excludeOthersLt,
+            $search !== '' ? $search : null
+        );
 
         if ($changesOnly && !empty($reportData['customers'])) {
             $filteredCustomers = array_filter($reportData['customers'], function ($c) {

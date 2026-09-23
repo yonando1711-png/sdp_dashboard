@@ -14,29 +14,84 @@
                 <span class="px-2.5 py-0.5 text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
                     Accounting Report
                 </span>
-                @if($hasQuery)
-                    <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
+                <span class="px-2.5 py-0.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-full">
+                    Fiscal Year {{ $year }}
+                </span>
+                @if($isYearCached)
+                    <span class="px-2.5 py-0.5 text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5" title="Synced at: {{ $lastSyncedAt }}">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Live Odoo Data
+                        <span>Synced: {{ $lastSyncFormatted }}</span>
+                    </span>
+                @else
+                    <span class="px-2.5 py-0.5 text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        <span>Not Synced</span>
                     </span>
                 @endif
             </div>
             <p class="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Multi-month revenue pivot normalized by billing period (Bi-monthly, Quarterly, Semester, Yearly) with automatic change detection.
+                Multi-month revenue pivot normalized by billing period with automatic change detection & vehicle fleet breakdown.
             </p>
         </div>
 
-        @if($hasQuery)
-            <div class="flex items-center gap-2">
-                <!-- Refresh Button -->
-                <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['refresh' => 1])) }}"
-                   class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all"
-                   title="Reload fresh data from Odoo">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    <span>Re-fetch Odoo</span>
-                </a>
+        <div class="flex items-center gap-2 flex-wrap">
+            <!-- Year Selector Dropdown -->
+            <div class="relative" x-data="{ openYear: false }" @click.outside="openYear = false">
+                <button type="button" @click="openYear = !openYear"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all">
+                    <span>📅 Year: {{ $year }}</span>
+                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div x-show="openYear" x-cloak style="display: none;"
+                     class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 text-xs divide-y divide-slate-100 dark:divide-slate-700/60">
+                    <div class="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Fiscal Year</div>
+                    <div class="py-1 space-y-1">
+                        @foreach([2026, 2025, 2024] as $yOpt)
+                            <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->except(['year', 'sync_type']), ['year' => $yOpt])) }}"
+                               class="flex items-center justify-between px-2.5 py-1.5 rounded-lg {{ $yOpt == $year ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200' }}">
+                                <span>{{ $yOpt }}{{ $yOpt == now()->year ? ' (Current)' : '' }}</span>
+                                @if(\Illuminate\Support\Facades\Cache::has("accounting_subscription_master_{$yOpt}"))
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500" title="Synced in Cache"></span>
+                                @endif
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Controls Dropdown -->
+            <div class="relative" x-data="{ openSync: false }" @click.outside="openSync = false">
+                <button type="button" @click="openSync = !openSync"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-xs transition-all">
+                    <span>⚡ Sync</span>
+                    <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div x-show="openSync" x-cloak style="display: none;"
+                     class="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                    <div class="p-1 space-y-1">
+                        <!-- Fast Sync -->
+                        <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['sync_type' => 'fast', 'year' => $year])) }}"
+                           class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-100 transition-colors">
+                            <span class="text-base leading-none mt-0.5">⚡</span>
+                            <div>
+                                <div class="text-xs font-bold text-indigo-600 dark:text-indigo-400">Fast Incremental Sync</div>
+                                <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">Checks Odoo write_date for modified contracts in 1–2s.</p>
+                            </div>
+                        </a>
+                        <!-- Full Re-fetch -->
+                        <a href="{{ route('accounting.summary-rented-vehicle', array_merge(request()->all(), ['sync_type' => 'full', 'year' => $year])) }}"
+                           class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-800 dark:text-slate-100 transition-colors">
+                            <span class="text-base leading-none mt-0.5">🔄</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-700 dark:text-slate-200">Full Re-fetch Year {{ $year }}</div>
+                                <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">Batched 500 records at once. Guaranteed zero timeouts.</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            @if($isYearCached)
 
                 <!-- Export to Excel Dropdown -->
                 <div class="relative" x-data="{ openExport: false }" @click.outside="openExport = false">
@@ -70,7 +125,7 @@
 
                         <div class="py-1 space-y-1">
                             <!-- Option B: Multi-Tab (Recommended) -->
-                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'multitab'])) }}"
+                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'multitab', 'year' => $year])) }}"
                                @click="openExport = false"
                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
                                 <div class="mt-0.5 p-2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800 transition-colors shrink-0">
@@ -91,7 +146,7 @@
                             </a>
 
                             <!-- Option A: Hierarchical -->
-                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'hierarchical'])) }}"
+                            <a href="{{ route('accounting.summary-rented-vehicle.export', array_merge(request()->all(), ['format' => 'hierarchical', 'year' => $year])) }}"
                                @click="openExport = false"
                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
                                 <div class="mt-0.5 p-2 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800 transition-colors shrink-0">
@@ -144,7 +199,7 @@
 
                         <div class="py-1 space-y-1">
                             <!-- Option 1: Detailed PDF (with Vehicle Breakdown) -->
-                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'detailed'])) }}"
+                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'detailed', 'year' => $year])) }}"
                                target="_blank"
                                @click="openPdf = false"
                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
@@ -165,7 +220,7 @@
                             </a>
 
                             <!-- Option 2: Summary PDF (Customer Overview) -->
-                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'summary'])) }}"
+                            <a href="{{ route('accounting.summary-rented-vehicle.export-pdf', array_merge(request()->all(), ['type' => 'summary', 'year' => $year])) }}"
                                target="_blank"
                                @click="openPdf = false"
                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
@@ -190,6 +245,13 @@
         @endif
     </div>
 
+    @if(!empty($syncMessage))
+        <div class="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300 text-xs shadow-xs">
+            <svg class="w-4 h-4 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <span class="font-semibold">{{ $syncMessage }}</span>
+        </div>
+    @endif
+
     @if(session('error'))
         <div class="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-2xl flex items-start gap-3 text-rose-700 dark:text-rose-300 text-xs shadow-sm">
             <svg class="w-5 h-5 shrink-0 text-rose-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,6 +267,7 @@
     <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700/80">
         <form id="filterForm" method="GET" action="{{ route('accounting.summary-rented-vehicle') }}" class="flex flex-wrap items-center justify-between gap-3">
             <input type="hidden" name="generate" value="1">
+            <input type="hidden" name="year" value="{{ $year }}">
 
             <div class="flex flex-wrap items-center gap-3 flex-1">
                 <!-- Search Input -->
@@ -331,7 +394,45 @@
         </form>
     </div>
 
-    @if(!$hasQuery)
+    @if(!$isYearCached)
+        <!-- Year Sync Selection Card (When requested year is not cached yet) -->
+        <div class="bg-gradient-to-br from-indigo-50/80 via-white to-blue-50/50 dark:from-slate-800/90 dark:via-slate-800/60 dark:to-indigo-950/40 rounded-3xl p-8 border border-indigo-100 dark:border-indigo-900/50 shadow-sm text-center space-y-5">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-600 text-white mx-auto flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <div class="space-y-2 max-w-md mx-auto">
+                <h2 class="text-xl font-extrabold text-slate-800 dark:text-slate-100">Sync Fiscal Year {{ $year }} from Odoo</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Data for Year <strong>{{ $year }}</strong> has not been cached yet. Click below to start the batched sync (500 records per batch) to load all subscription contracts and invoice periods.
+                </p>
+            </div>
+
+            <!-- Year Selection Form -->
+            <form method="GET" action="{{ route('accounting.summary-rented-vehicle') }}" class="max-w-md mx-auto space-y-4">
+                <input type="hidden" name="sync_type" value="full">
+                <div class="flex items-center justify-center gap-2 flex-wrap">
+                    @foreach([2026, 2025, 2024] as $yOpt)
+                        <label class="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border cursor-pointer select-none text-xs font-bold transition-all {{ $yOpt == $year ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-400' }}">
+                            <input type="radio" name="year" value="{{ $yOpt }}" {{ $yOpt == $year ? 'checked' : '' }} onchange="this.form.submit()" class="sr-only">
+                            <span>{{ $yOpt }}{{ $yOpt == now()->year ? ' (Current Year)' : '' }}</span>
+                        </label>
+                    @endforeach
+                </div>
+
+                <div>
+                    <button type="submit" class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/25 transition-all flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span>Sync Year {{ $year }} from Odoo</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    @elseif(!$hasQuery)
         <!-- Prompt State (When user just opens the page without query) -->
         <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-12 text-center border border-slate-200 dark:border-slate-700/80 shadow-sm">
             <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center mb-4">
@@ -339,9 +440,9 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                 </svg>
             </div>
-            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Ready to Generate Summary of Rented Vehicle</h3>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Ready to View Summary of Rented Vehicle</h3>
             <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1.5 leading-relaxed">
-                Select your desired Month & Year range above and click <span class="font-bold text-indigo-600 dark:text-indigo-400">"Generate Report"</span> to load live data from Odoo.
+                Year <strong>{{ $year }}</strong> master data is loaded and cached. Select your desired Month range above and click <span class="font-bold text-indigo-600 dark:text-indigo-400">"Apply Filter"</span> to display the report instantly.
             </p>
         </div>
 
