@@ -105,12 +105,15 @@ class AccountingController extends Controller
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
 
-        $reportData = $this->odooService->fetchSummaryRentedVehicle(
-            $startMonth,
-            $endMonth,
-            $excludeOthersLt,
-            $search !== '' ? $search : null
-        );
+        $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
+        $reportData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($startMonth, $endMonth, $excludeOthersLt, $search) {
+            return $this->odooService->fetchSummaryRentedVehicle(
+                $startMonth,
+                $endMonth,
+                $excludeOthersLt,
+                $search !== '' ? $search : null
+            );
+        });
 
         if ($changesOnly && !empty($reportData['customers'])) {
             $filteredCustomers = array_filter($reportData['customers'], function ($c) {
@@ -178,12 +181,15 @@ class AccountingController extends Controller
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
 
-        $reportData = $this->odooService->fetchSummaryRentedVehicle(
-            $startMonth,
-            $endMonth,
-            $excludeOthersLt,
-            $search !== '' ? $search : null
-        );
+        $cacheKey = "accounting_srv_v2_{$startMonth}_{$endMonth}_" . md5($search);
+        $reportData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($startMonth, $endMonth, $excludeOthersLt, $search) {
+            return $this->odooService->fetchSummaryRentedVehicle(
+                $startMonth,
+                $endMonth,
+                $excludeOthersLt,
+                $search !== '' ? $search : null
+            );
+        });
 
         if ($changesOnly && !empty($reportData['customers'])) {
             $filteredCustomers = array_filter($reportData['customers'], function ($c) {
@@ -207,15 +213,21 @@ class AccountingController extends Controller
             $reportData['totals']['grand_total_value'] = $newGrandTotal;
         }
 
+        $type = $request->input('type', 'summary');
+        $includeVehicles = ($type === 'detailed') || ($request->has('details') && $request->boolean('details'));
+
+        // Guard against memory exhaustion for unfiltered full fleet (3,450+ vehicles) in PDF
+        if ($includeVehicles && count($reportData['customers'] ?? []) > 60) {
+            return redirect()->route('accounting.summary-rented-vehicle', $request->all())
+                ->with('error', 'The complete fleet contains 3,450+ vehicles across ' . count($reportData['customers']) . ' customers, which exceeds browser PDF memory limits (>1 GB). Please use the "Export Excel" option (which instantly exports all 3,450+ vehicles in Hierarchical or Multi-Tab format), or filter by Customer Search / "Changes Only" before exporting to Detailed PDF.');
+        }
+
         $options = new \Dompdf\Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', true);
         $options->set('isPhpEnabled', true);
 
         $dompdf = new \Dompdf\Dompdf($options);
-
-        $type = $request->input('type', 'detailed');
-        $includeVehicles = ($type === 'detailed') || $request->boolean('details', true);
 
         $html = view('exports.summary_rented_vehicle_pdf', [
             'customers' => $reportData['customers'] ?? [],

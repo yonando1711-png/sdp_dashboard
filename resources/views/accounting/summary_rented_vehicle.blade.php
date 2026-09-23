@@ -159,7 +159,7 @@
                                         <span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-900/80 dark:text-rose-300 text-[9px] font-bold rounded">Full Breakdown</span>
                                     </div>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                        Hierarchical view: Each customer with their rented vehicles, license plates, and monthly rates.
+                                        Hierarchical view with vehicle rows. <em>Recommended for filtered search or &le; 50 customers</em> (for full 3,400+ fleet, use Excel).
                                     </p>
                                 </div>
                             </a>
@@ -189,6 +189,17 @@
             </div>
         @endif
     </div>
+
+    @if(session('error'))
+        <div class="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 rounded-2xl flex items-start gap-3 text-rose-700 dark:text-rose-300 text-xs shadow-sm">
+            <svg class="w-5 h-5 shrink-0 text-rose-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            <div class="flex-1 font-medium leading-relaxed">
+                {{ session('error') }}
+            </div>
+        </div>
+    @endif
 
     <!-- Filters Bar (Always visible) -->
     <div class="bg-white dark:bg-slate-800/90 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700/80">
