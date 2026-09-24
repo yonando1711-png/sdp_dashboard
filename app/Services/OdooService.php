@@ -3414,8 +3414,95 @@ class OdooService
             $onProgress('partners', 93, count($partners), $partnerCount, "Customer details resolved.");
         }
 
+        // 4. Resolve fallback contract rates from sale.order.line for zero-price periods
+        $zeroOrderIds = [];
+        foreach ($periodsByOrder as $soId => $pList) {
+            foreach ($pList as $p) {
+                if ((float)($p['price_unit'] ?? 0) <= 0) {
+                    $zeroOrderIds[$soId] = true;
+                    break;
+                }
+            }
+        }
+
+        $orderRates = [];
+        if (!empty($zeroOrderIds)) {
+            if ($onProgress) {
+                $onProgress('rates', 94, 0, count($zeroOrderIds), "Resolving fallback rates for upfront invoiced contracts...");
+            }
+            $zeroChunks = array_chunk(array_keys($zeroOrderIds), 200);
+            foreach ($zeroChunks as $zChunk) {
+                $lines = $this->execute('sale.order.line', 'search_read', [
+                    [['order_id', 'in', $zChunk]]
+                ], ['fields' => ['id', 'order_id', 'duration_price', 'price_unit', 'reserved_lot_ids']]);
+                foreach ($lines as $l) {
+                    $soId = $l['order_id'][0] ?? null;
+                    $dPrice = (float)($l['duration_price'] ?: $l['price_unit'] ?: 0);
+                    if ($soId && $dPrice > 0) {
+                        if (!empty($l['reserved_lot_ids'])) {
+                            foreach ($l['reserved_lot_ids'] as $rLot) {
+                                $orderRates[$soId][$rLot] = $dPrice;
+                            }
+                        }
+                        if (!isset($orderRates[$soId]['default'])) {
+                            $orderRates[$soId]['default'] = $dPrice;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Ingest regular rentals active during the fiscal year
         if ($onProgress) {
-            $onProgress('caching', 97, count($orders), $periodCount, "Compiling and storing master dataset in cache...");
+            $onProgress('regular', 96, 0, 0, "Ingesting short-term / regular rentals for fiscal year {$year}...");
+        }
+        $regularDomain = [
+            ['rental_type', '=', 'regular'],
+            ['state', 'in', ['sale', 'done']],
+            '|',
+            ['rental_return_date', '=', false],
+            ['rental_return_date', '>=', "{$yearStart} 00:00:00"]
+        ];
+
+        $regularOrders = $this->execute('sale.order', 'search_read', [$regularDomain], [
+            'fields' => [
+                'id', 'name', 'partner_id', 'rental_type', 'state',
+                'actual_start_rental', 'actual_end_rental', 'rental_start_date', 'rental_return_date',
+                'amount_untaxed', 'order_line'
+            ],
+            'limit' => 500,
+            'order' => 'id asc'
+        ]);
+
+        $filteredRegularOrders = [];
+        $newRegPartnerIds = [];
+        foreach ($regularOrders as $ro) {
+            $rStart = $ro['actual_start_rental'] ?: $ro['rental_start_date'];
+            $rEnd = $ro['actual_end_rental'] ?: $ro['rental_return_date'];
+            if ($rStart && substr($rStart, 0, 10) > $yearEnd) continue;
+            if ($rEnd && substr($rEnd, 0, 10) < $yearStart) continue;
+
+            $filteredRegularOrders[$ro['id']] = $ro;
+            $pId = $ro['partner_id'][0] ?? null;
+            if ($pId && !isset($partners[$pId])) {
+                $newRegPartnerIds[$pId] = true;
+            }
+        }
+
+        if (!empty($newRegPartnerIds)) {
+            $pChunks = array_chunk(array_keys($newRegPartnerIds), 200);
+            foreach ($pChunks as $pChunk) {
+                $res = $this->execute('res.partner', 'search_read', [
+                    [['id', 'in', $pChunk]]
+                ], ['fields' => ['id', 'name', 'ref']]);
+                foreach ($res as $p) {
+                    $partners[$p['id']] = $p;
+                }
+            }
+        }
+
+        if ($onProgress) {
+            $onProgress('caching', 98, count($orders), $periodCount, "Compiling and storing master dataset in cache...");
         }
 
         $nowUtc = gmdate('Y-m-d H:i:s');
@@ -3425,7 +3512,9 @@ class OdooService
             'orders' => $orders,
             'periods' => $periodsByOrder,
             'partners' => $partners,
-            'sync_message' => "Full sync complete: " . count($orders) . " active contracts and {$periodCount} periods synced for {$year}.",
+            'order_rates' => $orderRates,
+            'regular_orders' => $filteredRegularOrders,
+            'sync_message' => "Full sync complete: " . count($orders) . " active contracts, {$periodCount} periods, and " . count($filteredRegularOrders) . " regular rentals synced for {$year}.",
             'cached_at' => now()->toDateTimeString(),
         ];
 
@@ -3452,6 +3541,13 @@ class OdooService
         $nowUtc = gmdate('Y-m-d H:i:s');
         $yearStart = "{$year}-01-01";
         $yearEnd = "{$year}-12-31";
+
+        if (!isset($masterData['order_rates'])) {
+            $masterData['order_rates'] = [];
+        }
+        if (!isset($masterData['regular_orders'])) {
+            $masterData['regular_orders'] = [];
+        }
 
         if ($onProgress) {
             $onProgress('checking', 15, 0, 0, "Checking Odoo for records modified since " . \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->diffForHumans() . "...");
@@ -3614,6 +3710,8 @@ class OdooService
         $orders = $masterData['orders'] ?? [];
         $periods = $masterData['periods'] ?? [];
         $partners = $masterData['partners'] ?? [];
+        $orderRates = $masterData['order_rates'] ?? [];
+        $regularOrders = $masterData['regular_orders'] ?? [];
 
         $customerReport = [];
         $periodChangeCount = 0;
@@ -3699,15 +3797,67 @@ class OdooService
                     if ($matching) {
                         $rentalQty = max(1, (float)($matching['rental_qty'] ?? 1));
                         $rawPrice = (float)($matching['price_unit'] ?? 0);
-                        $monthlyRate = round($rawPrice / $rentalQty);
 
-                        $periodName = match ((int)$rentalQty) {
+                        // 1. Date Span Normalization: Normalize multi-month period lump sums
+                        $pStart = \Carbon\Carbon::parse($matching['start_rental_period_date']);
+                        $pEnd = \Carbon\Carbon::parse($matching['end_rental_period_date']);
+                        $periodDays = max(1, $pStart->diffInDays($pEnd) + 1);
+                        $dateSpanMonths = max(1.0, round($periodDays / 30.4375));
+                        $effectiveCycles = max($rentalQty, $dateSpanMonths);
+
+                        // 2. Zero-Price Fallback: Restore upfront paid subscriptions
+                        if ($rawPrice <= 0) {
+                            // Tier 1: Retrieve master contract duration_price / price_unit from sale.order.line cache
+                            if (!empty($orderRates[$soId])) {
+                                $lotIdInt = $matching['lot_id'][0] ?? null;
+                                if ($lotIdInt && isset($orderRates[$soId][$lotIdInt])) {
+                                    $rawPrice = (float)$orderRates[$soId][$lotIdInt];
+                                    $effectiveCycles = 1;
+                                } elseif (isset($orderRates[$soId]['default'])) {
+                                    $rawPrice = (float)$orderRates[$soId]['default'];
+                                    $effectiveCycles = 1;
+                                }
+                            }
+                            // Tier 2: Look for other non-zero periods on the same vehicle
+                            if ($rawPrice <= 0) {
+                                foreach ($lotPeriods as $op) {
+                                    $opPrice = (float)($op['price_unit'] ?? 0);
+                                    if ($opPrice > 0) {
+                                        $opDays = max(1, \Carbon\Carbon::parse($op['start_rental_period_date'])->diffInDays(\Carbon\Carbon::parse($op['end_rental_period_date'])) + 1);
+                                        $opSpan = max((float)($op['rental_qty'] ?? 1), round($opDays / 30.4375));
+                                        $rawPrice = round($opPrice / max(1, $opSpan));
+                                        $effectiveCycles = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        $baseMonthlyRate = ($effectiveCycles > 1) ? round($rawPrice / $effectiveCycles) : $rawPrice;
+
+                        // 3. Mid-Month Daily Proration: Prorate partial month starts/returns
+                        $effectiveStart = ($start && \Carbon\Carbon::parse($start) > $mStartDt)
+                            ? \Carbon\Carbon::parse($start)
+                            : $mStartDt;
+                        $effectiveEnd = ($end && \Carbon\Carbon::parse($end) < $mEndDt)
+                            ? \Carbon\Carbon::parse($end)
+                            : $mEndDt;
+                        $daysInMonth = $mStartDt->daysInMonth;
+                        $activeDays = max(0, $effectiveStart->diffInDays($effectiveEnd) + 1);
+
+                        if ($activeDays > 0 && $activeDays < $daysInMonth) {
+                            $monthlyRate = round($baseMonthlyRate * ($activeDays / $daysInMonth));
+                        } else {
+                            $monthlyRate = $baseMonthlyRate;
+                        }
+
+                        $periodName = match ((int)$effectiveCycles) {
                             1 => 'Monthly',
                             2 => 'Bi-monthly',
                             3 => 'Quarterly',
                             6 => 'Semester',
                             12 => 'Yearly',
-                            default => "{$rentalQty}-mo",
+                            default => "{$effectiveCycles}-mo",
                         };
 
                         $hasPeriodChange = false;
@@ -3795,6 +3945,134 @@ class OdooService
                         ];
                     } else {
                         $prevMonthData = null;
+                    }
+                }
+            }
+        }
+
+        // 4. Ingest Regular / Short-Term Rentals
+        if (!empty($regularOrders)) {
+            foreach ($regularOrders as $ro) {
+                $rStart = $ro['actual_start_rental'] ?: $ro['rental_start_date'];
+                $rEnd = $ro['actual_end_rental'] ?: $ro['rental_return_date'];
+                if (!$rStart) continue;
+                if ($rStart && substr($rStart, 0, 10) > $endDateStr) continue;
+                if ($rEnd && substr($rEnd, 0, 10) < $startDateStr) continue;
+
+                $pName = $ro['partner_id'][1] ?? '';
+                if ($excludeOthersLt && (str_contains(strtoupper($pName), 'OTHERSLT') || str_contains(strtoupper($pName), 'OTHERS LT'))) {
+                    continue;
+                }
+
+                $pId = $ro['partner_id'][0] ?? null;
+                $partnerRec = $partners[$pId] ?? null;
+                $ref = trim($partnerRec['ref'] ?? '');
+                $name = trim($partnerRec['name'] ?? $pName);
+
+                $isCorporate = preg_match('/^\[[A-Z0-9\-\.\_]+\]/', $pName) || ($ref && !str_starts_with($ref, 'OTHER'));
+
+                if ($isCorporate) {
+                    $cleanRef = $ref ?: (preg_match('/^\[([A-Z0-9\-\.\_]+)\]\s*(.*)$/', $pName, $pm) ? $pm[1] : '');
+                    $cleanName = $name ?: (preg_match('/^\[([A-Z0-9\-\.\_]+)\]\s*(.*)$/', $pName, $pm) ? $pm[2] : $pName);
+                    $custKey = $cleanRef ? "$cleanRef/$cleanName" : $cleanName;
+                } else {
+                    $cleanRef = 'OTHER5STEM';
+                    $cleanName = 'OTHERS 5 SHORT TERM';
+                    $custKey = 'OTHER5STEM/OTHERS 5 SHORT TERM';
+                }
+
+                if ($customerSearch) {
+                    $searchTerm = strtolower(trim($customerSearch));
+                    if (!str_contains(strtolower($cleanName), $searchTerm) && !str_contains(strtolower($cleanRef), $searchTerm)) {
+                        continue;
+                    }
+                }
+
+                if (!isset($customerReport[$custKey])) {
+                    $defaultMonths = [];
+                    foreach ($monthKeys as $mk) {
+                        $defaultMonths[$mk] = [
+                            'qty' => 0,
+                            'value' => 0,
+                            'units' => [],
+                            'has_period_change' => false,
+                            'has_price_change' => false,
+                        ];
+                    }
+
+                    $customerReport[$custKey] = [
+                        'customer_key' => $custKey,
+                        'customer_name' => $cleanName,
+                        'customer_ref' => $cleanRef,
+                        'months' => $defaultMonths,
+                        'total_value' => 0,
+                        'max_qty' => 0,
+                        'has_any_period_change' => false,
+                        'has_any_price_change' => false,
+                        'vehicles' => [],
+                    ];
+                }
+
+                $orderVal = (float)($ro['amount_untaxed'] ?? 0);
+                $units = max(1, count($ro['order_line'] ?? []));
+
+                $roStartDt = \Carbon\Carbon::parse($rStart);
+                $roEndDt = $rEnd ? \Carbon\Carbon::parse($rEnd) : $roStartDt;
+                $totalRentDays = max(1, $roStartDt->diffInDays($roEndDt) + 1);
+
+                foreach ($monthKeys as $mKey) {
+                    $mStartDt = \Carbon\Carbon::parse("$mKey-01")->startOfMonth();
+                    $mEndDt = \Carbon\Carbon::parse("$mKey-01")->endOfMonth();
+
+                    if ($roStartDt <= $mEndDt && $roEndDt >= $mStartDt) {
+                        $actStart = $roStartDt > $mStartDt ? $roStartDt : $mStartDt;
+                        $actEnd = $roEndDt < $mEndDt ? $roEndDt : $mEndDt;
+                        $actDays = max(1, $actStart->diffInDays($actEnd) + 1);
+
+                        $monthVal = ($totalRentDays > 31)
+                            ? round($orderVal * ($actDays / $totalRentDays))
+                            : ($roStartDt >= $mStartDt && $roStartDt <= $mEndDt ? $orderVal : 0);
+
+                        if ($monthVal == 0 && $orderVal > 0 && $actDays > 0) {
+                            $monthVal = round($orderVal * ($actDays / $totalRentDays));
+                        }
+
+                        $customerReport[$custKey]['months'][$mKey]['qty'] += $units;
+                        $customerReport[$custKey]['months'][$mKey]['value'] += $monthVal;
+
+                        $vKey = $ro['name'];
+                        if (!isset($customerReport[$custKey]['vehicles'][$vKey])) {
+                            $vDefaultMonths = [];
+                            foreach ($monthKeys as $mk) {
+                                $vDefaultMonths[$mk] = [
+                                    'active' => false,
+                                    'period' => 'Daily/Regular',
+                                    'rental_qty' => 1,
+                                    'raw_price' => 0,
+                                    'monthly_rate' => 0,
+                                    'period_change' => '',
+                                    'price_change' => '',
+                                ];
+                            }
+                            $customerReport[$custKey]['vehicles'][$vKey] = [
+                                'so' => $ro['name'],
+                                'nopol' => 'Regular Rental',
+                                'product' => 'Short Term Rental',
+                                'months' => $vDefaultMonths,
+                                'total_value' => 0,
+                            ];
+                        }
+
+                        $customerReport[$custKey]['vehicles'][$vKey]['months'][$mKey] = [
+                            'active' => true,
+                            'period' => 'Daily/Regular',
+                            'rental_qty' => 1,
+                            'raw_price' => $monthVal,
+                            'monthly_rate' => $monthVal,
+                            'period_change' => '',
+                            'price_change' => '',
+                        ];
+                        $customerReport[$custKey]['vehicles'][$vKey]['total_value'] += $monthVal;
                     }
                 }
             }
