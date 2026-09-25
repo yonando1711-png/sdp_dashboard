@@ -516,7 +516,7 @@
                 <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
                 </button>
-                <div class="flex-1 px-4 max-w-lg" x-data="{
+                <div class="flex-1 px-4 max-w-xl" x-data="{
                     query: '',
                     suggestions: [],
                     selectedIndex: -1,
@@ -559,53 +559,62 @@
                         }
                     }
                 }" @click.outside="showSuggestions = false">
-                    <form action="{{ route('details') }}" method="GET" class="w-full relative" @submit.prevent="handleSubmit()">
+                    <form action="{{ route('details') }}" method="GET" class="w-full flex items-center gap-2" @submit.prevent="handleSubmit()">
                         <input type="hidden" name="category" value="search">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg class="w-5 h-5 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        </div>
-                        <input type="text" name="q" x-model="query" 
-                               @input.debounce.300ms="fetchSuggestions()"
-                               @keydown.arrow-down.prevent="if (suggestions.length) { selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1); showSuggestions = true; }"
-                               @keydown.arrow-up.prevent="if (suggestions.length) { selectedIndex = Math.max(selectedIndex - 1, -1); showSuggestions = true; }"
-                               @keydown.escape="showSuggestions = false"
-                               @focus="if (suggestions.length > 0) showSuggestions = true"
-                               autocomplete="off"
-                               class="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-400 dark:border-slate-500 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-700 placeholder:text-slate-900 placeholder:opacity-100 dark:placeholder:text-slate-300 text-sm" 
-                               placeholder="Global Search (Lot, Customer, Product, Location)...">
+                        
+                        <div class="relative flex-1">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-5 h-5 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </div>
+                            <input type="text" name="q" x-model="query" 
+                                   @input.debounce.300ms="fetchSuggestions()"
+                                   @keydown.arrow-down.prevent="if (suggestions.length) { selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1); showSuggestions = true; }"
+                                   @keydown.arrow-up.prevent="if (suggestions.length) { selectedIndex = Math.max(selectedIndex - 1, -1); showSuggestions = true; }"
+                                   @keydown.escape="showSuggestions = false"
+                                   @focus="if (suggestions.length > 0) showSuggestions = true"
+                                   autocomplete="off"
+                                   class="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-400 dark:border-slate-500 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-700 placeholder:text-slate-900 placeholder:opacity-100 dark:placeholder:text-slate-300 text-sm" 
+                                   placeholder="Global Search (Lot, Customer, Product, Location)...">
 
-                        <!-- Loading Indicator -->
-                        <div x-show="isLoading" class="absolute right-3 top-2.5" x-cloak style="display: none;">
-                            <svg class="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                            </svg>
-                        </div>
+                            <!-- Loading Indicator -->
+                            <div x-show="isLoading" class="absolute right-3 top-2.5" x-cloak style="display: none;">
+                                <svg class="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                            </div>
 
-                        <!-- Recommendations Dropdown -->
-                        <div x-show="showSuggestions && suggestions.length > 0" x-cloak style="display: none;"
-                             class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto custom-scrollbar">
-                            <template x-for="(item, index) in suggestions" :key="index">
-                                <div @click="selectSuggestion(index)"
-                                     @mouseenter="selectedIndex = index"
-                                     :class="{'bg-indigo-50 dark:bg-indigo-900/30': selectedIndex === index, 'border-indigo-500': selectedIndex === index}"
-                                     class="px-3.5 py-2.5 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all flex items-center justify-between gap-3">
-                                    <div class="flex flex-col min-w-0 flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate" x-text="item.title || item.lot_number"></span>
-                                            <span x-show="item.type === 'customer'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
-                                                🏢 Customer
-                                            </span>
-                                            <span x-show="item.type === 'vehicle'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
-                                                🚗 Vehicle
-                                            </span>
+                            <!-- Recommendations Dropdown -->
+                            <div x-show="showSuggestions && suggestions.length > 0" x-cloak style="display: none;"
+                                 class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto custom-scrollbar">
+                                <template x-for="(item, index) in suggestions" :key="index">
+                                    <div @click="selectSuggestion(index)"
+                                         @mouseenter="selectedIndex = index"
+                                         :class="{'bg-indigo-50 dark:bg-indigo-900/30': selectedIndex === index, 'border-indigo-500': selectedIndex === index}"
+                                         class="px-3.5 py-2.5 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all flex items-center justify-between gap-3">
+                                        <div class="flex flex-col min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate" x-text="item.title || item.lot_number"></span>
+                                                <span x-show="item.type === 'customer'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                                                    🏢 Customer
+                                                </span>
+                                                <span x-show="item.type === 'vehicle'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                                                    🚗 Vehicle
+                                                </span>
+                                            </div>
+                                            <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5" x-text="item.subtitle || item.product"></span>
                                         </div>
-                                        <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5" x-text="item.subtitle || item.product"></span>
+                                        <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                     </div>
-                                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                </div>
-                            </template>
+                                </template>
+                            </div>
                         </div>
+
+                        <!-- Search Button -->
+                        <button type="submit" 
+                                class="px-5 py-2 bg-slate-800 dark:bg-indigo-600 hover:bg-slate-700 dark:hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors shadow-md shadow-slate-200 dark:shadow-indigo-900/20 shrink-0 cursor-pointer">
+                            Search
+                        </button>
                     </form>
                 </div>
 
