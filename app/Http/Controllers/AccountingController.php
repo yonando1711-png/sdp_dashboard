@@ -403,11 +403,263 @@ class AccountingController extends Controller
             abort(403, 'Access Denied: You do not have permission to view the Uninvoiced Accounting report.');
         }
 
-        $startMonth = $request->input('start_month', now()->format('Y-m'));
-        $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
-        $year = (int) $request->input('year', substr($startMonth, 0, 4) ?: now()->year);
-        $search = trim((string) $request->input('search', ''));
+        $year = (int)$request->input('year', now()->year);
+        $startMonth = $request->input('start_month', "{$year}-01");
+        $endMonth = $request->input('end_month', $year == now()->year ? now()->format('Y-m') : "{$year}-12");
+        
+        // Default Cutoff Date: end of the selected $endMonth
+        $defaultCutoff = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth()->format('Y-m-d');
+        $cutoffDate = $request->input('cutoff_date', $defaultCutoff);
+        if (empty($cutoffDate)) {
+            $cutoffDate = $defaultCutoff;
+        }
 
-        return view('accounting.uninvoiced', compact('startMonth', 'endMonth', 'year', 'search'));
+        $search = trim((string)$request->input('search', ''));
+        $status = $request->input('status', 'all');
+        $activeTab = $request->input('tab', 'detailed');
+
+        // Check cache for this year's master data
+        $masterCacheKey = "uninvoiced_accounting_master_{$year}";
+        $isYearCached = \Illuminate\Support\Facades\Cache::has($masterCacheKey);
+        $lastSyncedAt = \Illuminate\Support\Facades\Cache::get("uninvoiced_last_synced_{$year}");
+        $lastSyncFormatted = !empty($lastSyncedAt) ? \Carbon\Carbon::parse($lastSyncedAt, 'UTC')->diffForHumans() : 'Never';
+
+        $reportData = null;
+        if ($isYearCached) {
+            $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);
+            $reportData = $this->odooService->compileUninvoicedReport(
+                $masterData,
+                $cutoffDate,
+                $startMonth,
+                $endMonth,
+                $search,
+                $status
+            );
+        }
+
+        return view('accounting.uninvoiced', [
+            'year' => $year,
+            'startMonth' => $startMonth,
+            'endMonth' => $endMonth,
+            'cutoffDate' => $cutoffDate,
+            'search' => $search,
+            'status' => $status,
+            'activeTab' => $activeTab,
+            'isYearCached' => $isYearCached,
+            'lastSyncedAt' => $lastSyncedAt,
+            'lastSyncFormatted' => $lastSyncFormatted,
+            'reportData' => $reportData,
+        ]);
+    }
+
+    /**
+     * Trigger synchronization with live progress reporting for Uninvoiced Accounting
+     */
+    public function triggerUninvoicedSync(Request $request)
+    {
+        $year = (int)$request->input('year', now()->year);
+        $progressKey = "uninvoiced_sync_progress_{$year}";
+
+        // Prevent concurrent sync jobs for the same year
+        $currentProgress = \Illuminate\Support\Facades\Cache::get($progressKey);
+        if ($currentProgress && ($currentProgress['status'] ?? '') === 'running') {
+            $startedAt = $currentProgress['started_timestamp'] ?? 0;
+            if (time() - $startedAt < 600) {
+                return response()->json([
+                    'status' => 'running',
+                    'message' => 'Sync is already running for year ' . $year,
+                    'percent' => $currentProgress['percent'] ?? 0,
+                    'stage' => $currentProgress['stage'] ?? 'running',
+                    'records' => $currentProgress['records'] ?? 0,
+                    'total' => $currentProgress['total'] ?? 0,
+                ]);
+            }
+        }
+
+        // Initialize progress state
+        \Illuminate\Support\Facades\Cache::put($progressKey, [
+            'status' => 'running',
+            'percent' => 5,
+            'stage' => 'init',
+            'message' => 'Initiating sync with Odoo for fiscal year ' . $year . '...',
+            'records' => 0,
+            'total' => 0,
+            'started_timestamp' => time(),
+            'updated_at' => microtime(true),
+        ], 600);
+
+        try {
+            $onProgress = function (string $stage, int $percent, int $records, int $total, string $message) use ($progressKey) {
+                \Illuminate\Support\Facades\Cache::put($progressKey, [
+                    'status' => $percent >= 100 ? 'completed' : 'running',
+                    'percent' => $percent,
+                    'stage' => $stage,
+                    'records' => $records,
+                    'total' => $total,
+                    'message' => $message,
+                    'updated_at' => microtime(true),
+                ], 600);
+            };
+
+            $masterData = $this->odooService->fetchUninvoicedAccountingMaster(
+                $year,
+                forceFull: true,
+                onProgress: $onProgress
+            );
+
+            \Illuminate\Support\Facades\Cache::put($progressKey, [
+                'status' => 'completed',
+                'percent' => 100,
+                'stage' => 'completed',
+                'records' => count($masterData['periods'] ?? []),
+                'total' => count($masterData['periods'] ?? []),
+                'message' => $masterData['sync_message'] ?? 'Sync completed successfully.',
+                'updated_at' => microtime(true),
+            ], 600);
+
+            return response()->json([
+                'status' => 'completed',
+                'message' => $masterData['sync_message'] ?? 'Sync completed successfully.',
+                'total_periods' => count($masterData['periods'] ?? []),
+                'last_synced_at' => $masterData['last_synced_at'] ?? null,
+                'last_sync_formatted' => !empty($masterData['last_synced_at']) ? \Carbon\Carbon::parse($masterData['last_synced_at'], 'UTC')->diffForHumans() : 'Just now',
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Uninvoiced sync error for year {$year}: " . $e->getMessage());
+
+            \Illuminate\Support\Facades\Cache::put($progressKey, [
+                'status' => 'error',
+                'percent' => 0,
+                'stage' => 'error',
+                'records' => 0,
+                'total' => 0,
+                'message' => 'Sync failed: ' . $e->getMessage(),
+                'updated_at' => microtime(true),
+            ], 600);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sync failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get live sync progress for Uninvoiced Accounting modal
+     */
+    public function getUninvoicedSyncProgress(Request $request)
+    {
+        $year = (int)$request->input('year', now()->year);
+        $progressKey = "uninvoiced_sync_progress_{$year}";
+
+        $progress = \Illuminate\Support\Facades\Cache::get($progressKey);
+
+        if (!$progress) {
+            return response()->json([
+                'status' => 'idle',
+                'percent' => 0,
+                'stage' => 'idle',
+                'message' => 'No sync currently in progress.',
+                'records' => 0,
+                'total' => 0,
+            ]);
+        }
+
+        return response()->json($progress);
+    }
+
+    /**
+     * Export Uninvoiced Accounting Report to CSV matching the exact 17 columns
+     */
+    public function exportUninvoiced(Request $request)
+    {
+        if (!auth()->user()->canViewUninvoicedAccounting()) {
+            abort(403, 'Access Denied.');
+        }
+
+        $year = (int)$request->input('year', now()->year);
+        $startMonth = $request->input('start_month', "{$year}-01");
+        $endMonth = $request->input('end_month', $year == now()->year ? now()->format('Y-m') : "{$year}-12");
+        $defaultCutoff = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth()->format('Y-m-d');
+        $cutoffDate = $request->input('cutoff_date', $defaultCutoff);
+        $search = trim((string)$request->input('search', ''));
+        $status = $request->input('status', 'all');
+
+        $masterCacheKey = "uninvoiced_accounting_master_{$year}";
+        $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);
+
+        if (empty($masterData)) {
+            $masterData = $this->odooService->fetchUninvoicedAccountingMaster($year);
+        }
+
+        $reportData = $this->odooService->compileUninvoicedReport(
+            $masterData,
+            $cutoffDate,
+            $startMonth,
+            $endMonth,
+            $search,
+            $status
+        );
+
+        $fileName = sprintf(
+            'Uninvoiced_Accounting_Cutoff_%s_%s_to_%s.csv',
+            str_replace('-', '', $cutoffDate),
+            str_replace('-', '', $startMonth),
+            str_replace('-', '', $endMonth)
+        );
+
+        $columns = [
+            'No.',
+            'Kode Cust',
+            'Nama Customer',
+            'Nomor SO',
+            'Nomor PO / Kontrak',
+            'Nopol',
+            'No. Rangka (Chassis)',
+            'Model Kendaraan',
+            'Tahun Mobil',
+            'Start Period',
+            'End Period',
+            'Status per Cutoff',
+            'Nomor Invoice Odoo',
+            'Tanggal Invoice Odoo',
+            'Nilai Sewa (IDR)',
+            'Rental Status',
+            'Area Pemakaian'
+        ];
+
+        return response()->streamDownload(function () use ($columns, $reportData) {
+            $handle = fopen('php://output', 'w');
+            // Add UTF-8 BOM for Excel compatibility
+            fputs($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $columns);
+
+            foreach ($reportData['items'] as $item) {
+                fputcsv($handle, [
+                    $item['no'],
+                    $item['kode_cust'],
+                    $item['nama_customer'],
+                    $item['nomor_so'],
+                    $item['nomor_po'],
+                    $item['nopol'],
+                    $item['chassis'],
+                    $item['model'],
+                    $item['tahun'],
+                    $item['start_period_formatted'],
+                    $item['end_period_formatted'],
+                    $item['status_label'],
+                    $item['invoice_number'],
+                    $item['invoice_date'],
+                    $item['price_unit'],
+                    $item['rental_status'],
+                    $item['area_pemakaian'],
+                ]);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ]);
     }
 }

@@ -4131,5 +4131,486 @@ class OdooService
             ]
         ];
     }
+
+    // =========================================================================
+    // UNINVOICED ACCOUNTING MODULE (STRICTLY ISOLATED FROM OTHER MODULES)
+    // =========================================================================
+
+    /**
+     * Fetch and cache Uninvoiced Accounting Master Data for a given fiscal year.
+     * Isolated cache key: uninvoiced_accounting_master_{year}
+     */
+    public function fetchUninvoicedAccountingMaster(
+        int $year,
+        bool $forceFull = false,
+        ?callable $onProgress = null
+    ): array {
+        $cacheKey = "uninvoiced_accounting_master_{$year}";
+
+        if (!$forceFull) {
+            $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+            if (!empty($cached) && !empty($cached['periods'])) {
+                if ($onProgress) {
+                    $onProgress('cached', 100, count($cached['periods']), count($cached['periods']), 'Loaded cached master data.');
+                }
+                return $cached;
+            }
+        }
+
+        $yearStart = "{$year}-01-01";
+        $yearEnd = "{$year}-12-31";
+
+        if ($onProgress) {
+            $onProgress('init', 5, 0, 0, "Querying billing periods for fiscal year {$year}...");
+        }
+
+        // 1. Fetch rental.period.invoice records for the year where price_unit > 0
+        $periodDomain = [
+            ['start_rental_period_date', '<=', $yearEnd],
+            ['start_rental_period_date', '>=', $yearStart],
+            ['price_unit', '>', 0],
+        ];
+
+        $totalPeriodsCount = (int)$this->execute('rental.period.invoice', 'search_count', [$periodDomain]);
+        if ($onProgress) {
+            $onProgress('periods', 10, 0, $totalPeriodsCount, "Found {$totalPeriodsCount} billing periods in {$year}. Fetching details...");
+        }
+
+        $limit = 500;
+        $offset = 0;
+        $rawPeriods = [];
+        $soIdsMap = [];
+        $invoiceIdsMap = [];
+        $lotIdsMap = [];
+
+        while (true) {
+            $batch = $this->execute('rental.period.invoice', 'search_read', [$periodDomain], [
+                'fields' => [
+                    'id', 'rental_order_id', 'invoice_id', 'invoice_date',
+                    'start_rental_period_date', 'end_rental_period_date',
+                    'price_unit', 'rental_qty', 'rental_uom',
+                    'lot_id', 'product_id', 'area_id', 'write_date'
+                ],
+                'limit' => $limit,
+                'offset' => $offset,
+                'order' => 'start_rental_period_date asc, id asc',
+            ]);
+
+            if (empty($batch)) break;
+
+            foreach ($batch as $p) {
+                $rawPeriods[] = $p;
+                if (!empty($p['rental_order_id'][0])) {
+                    $soIdsMap[$p['rental_order_id'][0]] = true;
+                }
+                if (!empty($p['invoice_id'][0])) {
+                    $invoiceIdsMap[$p['invoice_id'][0]] = true;
+                }
+                if (!empty($p['lot_id'][0])) {
+                    $lotIdsMap[$p['lot_id'][0]] = true;
+                }
+            }
+
+            $offset += $limit;
+            $periodProgress = $totalPeriodsCount > 0 ? min(45, (int)(10 + (35 * ($offset / $totalPeriodsCount)))) : 45;
+            if ($onProgress) {
+                $onProgress('periods', $periodProgress, count($rawPeriods), $totalPeriodsCount, "Fetched " . count($rawPeriods) . " of {$totalPeriodsCount} periods...");
+            }
+
+            if (count($batch) < $limit) break;
+        }
+
+        // 2. Fetch linked sale.order records in 200-item chunks
+        $soCount = count($soIdsMap);
+        if ($onProgress) {
+            $onProgress('orders', 48, 0, $soCount, "Resolving contracts for {$soCount} rental orders...");
+        }
+
+        $orders = [];
+        $partnerIdsMap = [];
+        $soChunks = array_chunk(array_keys($soIdsMap), 200);
+        foreach ($soChunks as $sChunk) {
+            $res = $this->execute('sale.order', 'search_read', [
+                [['id', 'in', $sChunk]]
+            ], [
+                'fields' => ['id', 'name', 'partner_id', 'client_order_ref', 'rental_contract_id', 'actual_start_rental', 'actual_end_rental', 'rental_status', 'invoice_ids']
+            ]);
+            foreach ($res as $o) {
+                $orders[$o['id']] = $o;
+                if (!empty($o['partner_id'][0])) {
+                    $partnerIdsMap[$o['partner_id'][0]] = true;
+                }
+                if (!empty($o['invoice_ids'])) {
+                    foreach ($o['invoice_ids'] as $invId) {
+                        $invoiceIdsMap[$invId] = true;
+                    }
+                }
+            }
+        }
+
+        // 3. Fetch linked res.partner in 200-item chunks
+        $partnerCount = count($partnerIdsMap);
+        if ($onProgress) {
+            $onProgress('partners', 65, 0, $partnerCount, "Resolving customer information for {$partnerCount} partners...");
+        }
+
+        $partners = [];
+        $partnerChunks = array_chunk(array_keys($partnerIdsMap), 200);
+        foreach ($partnerChunks as $pChunk) {
+            $res = $this->execute('res.partner', 'search_read', [
+                [['id', 'in', $pChunk]]
+            ], [
+                'fields' => ['id', 'name', 'ref', 'vat']
+            ]);
+            foreach ($res as $p) {
+                $partners[$p['id']] = $p;
+            }
+        }
+
+        // 4. Fetch linked stock.lot (Nopol & Chassis Number) in 200-item chunks
+        $lotCount = count($lotIdsMap);
+        if ($onProgress) {
+            $onProgress('lots', 75, 0, $lotCount, "Resolving vehicle chassis & specifications for {$lotCount} units...");
+        }
+
+        $lots = [];
+        $lotChunks = array_chunk(array_keys($lotIdsMap), 200);
+        foreach ($lotChunks as $lChunk) {
+            $res = $this->execute('stock.lot', 'search_read', [
+                [['id', 'in', $lChunk]]
+            ], [
+                'fields' => ['id', 'name', 'ref', 'vehicle_year']
+            ]);
+            foreach ($res as $l) {
+                $lots[$l['id']] = $l;
+            }
+        }
+
+        // 5. Fetch linked account.move (Invoices) in 200-item chunks
+        $invCount = count($invoiceIdsMap);
+        if ($onProgress) {
+            $onProgress('invoices', 85, 0, $invCount, "Resolving {$invCount} invoice records from accounting journal...");
+        }
+
+        $invoices = [];
+        $invChunks = array_chunk(array_keys($invoiceIdsMap), 200);
+        foreach ($invChunks as $iChunk) {
+            $res = $this->execute('account.move', 'search_read', [
+                [['id', 'in', $iChunk]]
+            ], [
+                'fields' => ['id', 'name', 'state', 'payment_state', 'move_type', 'invoice_date', 'create_date']
+            ]);
+            foreach ($res as $inv) {
+                $invoices[$inv['id']] = $inv;
+            }
+        }
+
+        if ($onProgress) {
+            $onProgress('caching', 95, count($rawPeriods), count($rawPeriods), "Compiling and storing dataset in cache...");
+        }
+
+        $nowUtc = gmdate('Y-m-d H:i:s');
+        $masterData = [
+            'year' => $year,
+            'last_synced_at' => $nowUtc,
+            'periods' => $rawPeriods,
+            'orders' => $orders,
+            'partners' => $partners,
+            'lots' => $lots,
+            'invoices' => $invoices,
+            'sync_message' => "Sync complete: " . count($rawPeriods) . " billing periods and " . count($orders) . " contracts cached for fiscal year {$year}.",
+            'cached_at' => now()->toDateTimeString(),
+        ];
+
+        \Illuminate\Support\Facades\Cache::forever($cacheKey, $masterData);
+        \Illuminate\Support\Facades\Cache::put("uninvoiced_last_synced_{$year}", $nowUtc, 86400 * 30);
+
+        if ($onProgress) {
+            $onProgress('completed', 100, count($rawPeriods), count($rawPeriods), "Master sync complete.");
+        }
+
+        return $masterData;
+    }
+
+    /**
+     * Compile Uninvoiced Accounting Report applying Point-in-Time Cutoff Date logic.
+     * Evaluates every period against $cutoffDate, filters by month range and search.
+     */
+    public function compileUninvoicedReport(
+        array $masterData,
+        string $cutoffDate,
+        string $startMonth,
+        string $endMonth,
+        string $search = '',
+        string $statusFilter = 'all'
+    ): array {
+        $periods = $masterData['periods'] ?? [];
+        $orders = $masterData['orders'] ?? [];
+        $partners = $masterData['partners'] ?? [];
+        $lots = $masterData['lots'] ?? [];
+        $invoices = $masterData['invoices'] ?? [];
+
+        // Build month keys in range (e.g. ['2026-01', '2026-02', ...])
+        $startDt = \Carbon\Carbon::parse($startMonth . '-01')->startOfMonth();
+        $endDt = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth();
+        $monthKeys = [];
+        $monthLabels = [];
+        $cur = $startDt->copy();
+        while ($cur->lte($endDt)) {
+            $mKey = $cur->format('Y-m');
+            $monthKeys[] = $mKey;
+            $monthLabels[$mKey] = $cur->format('M Y');
+            $cur->addMonth();
+        }
+
+        $items = [];
+        $pivotCustomers = [];
+        $kpi = [
+            'total_unbilled_value' => 0,
+            'total_pending_units' => 0,
+            'draft_units' => 0,
+            'draft_value' => 0,
+            'post_cutoff_units' => 0,
+            'post_cutoff_value' => 0,
+            'returned_unbilled_units' => 0,
+            'returned_unbilled_value' => 0,
+            'uninvoiced_units' => 0,
+            'uninvoiced_value' => 0,
+            'reversed_units' => 0,
+            'reversed_value' => 0,
+        ];
+
+        $distinctNopols = [];
+        $searchLower = strtolower(trim($search));
+
+        $itemIndex = 1;
+        foreach ($periods as $p) {
+            $startRentalPeriod = $p['start_rental_period_date'] ?? '';
+            if (empty($startRentalPeriod)) continue;
+
+            // 1. Must satisfy Point-in-Time Cutoff: start_rental_period_date <= Cutoff Date
+            if ($startRentalPeriod > $cutoffDate) {
+                continue;
+            }
+
+            // 2. Month range check: month of start_rental_period_date must fall within selected month range
+            $pMonth = substr($startRentalPeriod, 0, 7);
+            if ($pMonth < $startMonth || $pMonth > $endMonth) {
+                continue;
+            }
+
+            $soId = $p['rental_order_id'][0] ?? null;
+            $so = $soId ? ($orders[$soId] ?? []) : [];
+            $partnerId = $so['partner_id'][0] ?? null;
+            $partner = $partnerId ? ($partners[$partnerId] ?? []) : [];
+            $lotId = $p['lot_id'][0] ?? null;
+            $lot = $lotId ? ($lots[$lotId] ?? []) : [];
+
+            $customerCode = $partner['ref'] ?? '';
+            $customerName = $partner['name'] ?? 'Unknown Customer';
+            $soNumber = $so['name'] ?? ($p['rental_order_id'][1] ?? '');
+            $poNumber = $so['client_order_ref'] ?? '';
+            $nopol = $lot['name'] ?? ($p['lot_id'][1] ?? '-');
+            $chassis = $lot['ref'] ?? '';
+            $vehicleModel = $p['product_id'][1] ?? '';
+            $vehicleYear = $lot['vehicle_year'] ?? '';
+            $priceUnit = (float)($p['price_unit'] ?? 0);
+            $rentalStatus = $so['rental_status'] ?? 'pickedup';
+            $areaName = $p['area_id'][1] ?? '';
+
+            // 3. Evaluate Status as of Cutoff Date (The Point-in-Time Matrix)
+            $invId = $p['invoice_id'][0] ?? null;
+            $inv = $invId ? ($invoices[$invId] ?? null) : null;
+            $invDate = $inv['invoice_date'] ?? $p['invoice_date'] ?? null;
+            $invState = $inv['state'] ?? '';
+            $payState = $inv['payment_state'] ?? '';
+            $invNumber = $inv['name'] ?? '';
+
+            $status = '';
+            $statusLabel = '';
+            $statusBadgeClass = '';
+
+            if (!$invId || empty($inv)) {
+                // Scenario A: No invoice created at all
+                $status = 'uninvoiced';
+                $statusLabel = 'Belum Ada Invoice';
+                $statusBadgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800';
+            } elseif ($invDate && $invDate > $cutoffDate) {
+                // Scenario B: Invoice was created/posted AFTER Cutoff Date (The Backdate Case!)
+                $status = 'post_cutoff';
+                $invDateFmt = \Carbon\Carbon::parse($invDate)->format('d/m/Y');
+                $statusLabel = "Dicetak Pasca-Cutoff ({$invDateFmt})";
+                $statusBadgeClass = 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+            } elseif ($invState === 'draft') {
+                // Scenario C: Invoice exists but is Draft as of Cutoff Date
+                $status = 'draft';
+                $statusLabel = 'Draft Belum Posted';
+                $statusBadgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200 dark:border-amber-800';
+            } elseif ($payState === 'reversed' || $invState === 'cancel') {
+                // Scenario D: Reversed / Cancelled invoice
+                // Check if replacement invoice exists prior to cutoff
+                $hasReplacement = false;
+                if (!empty($so['invoice_ids'])) {
+                    foreach ($so['invoice_ids'] as $otherInvId) {
+                        if ($otherInvId == $invId) continue;
+                        $otherInv = $invoices[$otherInvId] ?? null;
+                        if ($otherInv && ($otherInv['move_type'] ?? '') === 'out_invoice' && ($otherInv['state'] ?? '') === 'posted') {
+                            $otherDate = $otherInv['invoice_date'] ?? '';
+                            if ($otherDate && $otherDate >= ($invDate ?: $startRentalPeriod) && $otherDate <= $cutoffDate) {
+                                $hasReplacement = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if ($hasReplacement) {
+                    continue; // Legitimate replacement exists on or before cutoff; already billed!
+                }
+                $status = 'reversed';
+                $statusLabel = 'Reversed (Perlu Cetak Ulang)';
+                $statusBadgeClass = 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border-purple-200 dark:border-purple-800';
+            } elseif ($invState === 'posted' && $invDate && $invDate <= $cutoffDate) {
+                // Scenario E: Legitimately invoiced on or before Cutoff!
+                // EXCLUDE from Uninvoiced Accounting Report!
+                continue;
+            } else {
+                // Fallback: treated as uninvoiced
+                $status = 'uninvoiced';
+                $statusLabel = 'Belum Ada Invoice';
+                $statusBadgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800';
+            }
+
+            // Status Filter Check
+            if ($statusFilter !== 'all' && $status !== $statusFilter) {
+                continue;
+            }
+
+            // Search Filter Check
+            if (!empty($searchLower)) {
+                $searchable = strtolower("{$customerCode} {$customerName} {$soNumber} {$poNumber} {$nopol} {$chassis} {$vehicleModel}");
+                if (!str_contains($searchable, $searchLower)) {
+                    continue;
+                }
+            }
+
+            // Accumulate KPIs
+            $kpi['total_unbilled_value'] += $priceUnit;
+            $distinctNopols[$nopol] = true;
+
+            if ($status === 'draft') {
+                $kpi['draft_units']++;
+                $kpi['draft_value'] += $priceUnit;
+            } elseif ($status === 'post_cutoff') {
+                $kpi['post_cutoff_units']++;
+                $kpi['post_cutoff_value'] += $priceUnit;
+            } elseif ($status === 'reversed') {
+                $kpi['reversed_units']++;
+                $kpi['reversed_value'] += $priceUnit;
+            } else {
+                $kpi['uninvoiced_units']++;
+                $kpi['uninvoiced_value'] += $priceUnit;
+            }
+
+            if (in_array(strtolower($rentalStatus), ['returned', 'return'])) {
+                $kpi['returned_unbilled_units']++;
+                $kpi['returned_unbilled_value'] += $priceUnit;
+            }
+
+            // Format 17-column flat row
+            $itemRow = [
+                'no' => $itemIndex++,
+                'kode_cust' => $customerCode,
+                'nama_customer' => $customerName,
+                'nomor_so' => $soNumber,
+                'nomor_po' => $poNumber,
+                'nopol' => $nopol,
+                'chassis' => $chassis,
+                'model' => $vehicleModel,
+                'tahun' => $vehicleYear,
+                'start_period' => $startRentalPeriod,
+                'start_period_formatted' => \Carbon\Carbon::parse($startRentalPeriod)->format('d/m/Y'),
+                'end_period' => $p['end_rental_period_date'] ?? '',
+                'end_period_formatted' => !empty($p['end_rental_period_date']) ? \Carbon\Carbon::parse($p['end_rental_period_date'])->format('d/m/Y') : '',
+                'status' => $status,
+                'status_label' => $statusLabel,
+                'status_badge_class' => $statusBadgeClass,
+                'invoice_number' => $invNumber ?: '-',
+                'invoice_date' => $invDate ? \Carbon\Carbon::parse($invDate)->format('d/m/Y') : '-',
+                'price_unit' => $priceUnit,
+                'price_unit_formatted' => 'Rp ' . number_format($priceUnit, 0, ',', '.'),
+                'rental_status' => in_array(strtolower($rentalStatus), ['returned', 'return']) ? 'Returned' : 'Active on Rent',
+                'area_pemakaian' => $areaName ?: '-',
+            ];
+            $items[] = $itemRow;
+
+            // Accumulate Pivot Row
+            $custKey = $customerCode ?: $customerName;
+            if (!isset($pivotCustomers[$custKey])) {
+                $pivotCustomers[$custKey] = [
+                    'customer_key' => $custKey,
+                    'customer_name' => $customerName,
+                    'customer_ref' => $customerCode,
+                    'months' => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0]),
+                    'vehicles' => [],
+                    'total_qty' => 0,
+                    'total_value' => 0,
+                ];
+            }
+
+            $pivotCustomers[$custKey]['months'][$pMonth]['qty']++;
+            $pivotCustomers[$custKey]['months'][$pMonth]['value'] += $priceUnit;
+            $pivotCustomers[$custKey]['total_value'] += $priceUnit;
+
+            // Vehicle sub-row
+            if (!isset($pivotCustomers[$custKey]['vehicles'][$nopol])) {
+                $pivotCustomers[$custKey]['vehicles'][$nopol] = [
+                    'nopol' => $nopol,
+                    'so' => $soNumber,
+                    'model' => $vehicleModel,
+                    'chassis' => $chassis,
+                    'months' => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0, 'status' => '', 'status_label' => '']),
+                    'total_value' => 0,
+                ];
+            }
+
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['qty']++;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['value'] += $priceUnit;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status'] = $status;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status_label'] = $statusLabel;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['total_value'] += $priceUnit;
+        }
+
+        // Finalize pivot counts & sort
+        $kpi['total_pending_units'] = count($distinctNopols);
+        $monthTotals = array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0]);
+
+        foreach ($pivotCustomers as &$c) {
+            $c['total_qty'] = count($c['vehicles']);
+            foreach ($monthKeys as $mKey) {
+                $monthTotals[$mKey]['qty'] += $c['months'][$mKey]['qty'];
+                $monthTotals[$mKey]['value'] += $c['months'][$mKey]['value'];
+            }
+            $c['vehicles'] = array_values($c['vehicles']);
+            usort($c['vehicles'], fn($a, $b) => strcmp($a['nopol'], $b['nopol']));
+        }
+        unset($c);
+
+        uasort($pivotCustomers, fn($a, $b) => $b['total_value'] <=> $a['total_value']);
+
+        return [
+            'success' => true,
+            'cutoff_date' => $cutoffDate,
+            'cutoff_date_formatted' => \Carbon\Carbon::parse($cutoffDate)->format('d/m/Y'),
+            'start_month' => $startMonth,
+            'end_month' => $endMonth,
+            'month_keys' => $monthKeys,
+            'month_labels' => $monthLabels,
+            'items' => $items,
+            'pivot_customers' => array_values($pivotCustomers),
+            'month_totals' => $monthTotals,
+            'kpis' => $kpi,
+            'total_records' => count($items),
+        ];
+    }
 }
 
