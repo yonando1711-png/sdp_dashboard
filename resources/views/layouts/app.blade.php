@@ -516,6 +516,7 @@
                 <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
                 </button>
+                @if(auth()->check() && request()->routeIs('dashboard', 'rental.pairs', 'total.stock', 'details', 'active-rentals.*', 'summary'))
                 <div class="flex-1 px-4 max-w-xl" x-data="{
                     query: '',
                     suggestions: [],
@@ -617,6 +618,9 @@
                         </button>
                     </form>
                 </div>
+                @else
+                <div class="flex-1"></div>
+                @endif
 
                 @if(auth()->check() && auth()->user()->isNationwide() && !request()->routeIs('lor.*') && !request()->routeIs('surat-kuasa.*') && !request()->routeIs('disposal.*'))
                 @php
