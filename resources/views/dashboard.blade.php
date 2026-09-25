@@ -44,7 +44,7 @@
 
                 <!-- Suggestions Dropdown -->
                 <div x-show="search.showSuggestions" x-cloak
-                     class="absolute z-50 w-full mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-300 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
+                     class="absolute left-0 z-50 w-full sm:min-w-[480px] md:min-w-[620px] max-w-[90vw] mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
                     <div class="max-h-[340px] overflow-y-auto custom-scrollbar">
                         <template x-for="(suggestion, index) in search.suggestions" :key="index">
                             <div @click="selectSuggestion(index)"
@@ -52,8 +52,8 @@
                                  :class="{'bg-indigo-50 dark:bg-indigo-900/30': search.selectedIndex === index, 'border-indigo-500': search.selectedIndex === index}"
                                  class="px-4 py-2.5 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all flex items-center justify-between gap-3">
                                 <div class="flex flex-col min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" x-text="suggestion.title || suggestion.lot_number"></span>
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100 break-words whitespace-normal leading-snug" x-text="suggestion.title || suggestion.lot_number"></span>
                                         <span x-show="suggestion.type === 'customer'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
                                             🏢 Customer
                                         </span>
@@ -61,7 +61,7 @@
                                             🚗 Vehicle
                                         </span>
                                     </div>
-                                    <span class="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5" x-text="suggestion.subtitle || suggestion.product"></span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 break-words whitespace-normal mt-0.5" x-text="suggestion.subtitle || suggestion.product"></span>
                                 </div>
                                 <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             </div>

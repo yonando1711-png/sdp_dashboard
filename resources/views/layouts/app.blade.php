@@ -587,15 +587,15 @@
 
                             <!-- Recommendations Dropdown -->
                             <div x-show="showSuggestions && suggestions.length > 0" x-cloak style="display: none;"
-                                 class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto custom-scrollbar">
+                                 class="absolute left-0 w-full min-w-[340px] sm:min-w-[480px] md:min-w-[620px] max-w-[90vw] mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto custom-scrollbar">
                                 <template x-for="(item, index) in suggestions" :key="index">
                                     <div @click="selectSuggestion(index)"
                                          @mouseenter="selectedIndex = index"
                                          :class="{'bg-indigo-50 dark:bg-indigo-900/30': selectedIndex === index, 'border-indigo-500': selectedIndex === index}"
                                          class="px-3.5 py-2.5 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all flex items-center justify-between gap-3">
                                         <div class="flex flex-col min-w-0 flex-1">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate" x-text="item.title || item.lot_number"></span>
+                                            <div class="flex items-start justify-between gap-2">
+                                                <span class="text-xs font-bold text-slate-800 dark:text-slate-100 break-words whitespace-normal leading-snug" x-text="item.title || item.lot_number"></span>
                                                 <span x-show="item.type === 'customer'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
                                                     🏢 Customer
                                                 </span>
@@ -603,7 +603,7 @@
                                                     🚗 Vehicle
                                                 </span>
                                             </div>
-                                            <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5" x-text="item.subtitle || item.product"></span>
+                                            <span class="text-[11px] text-slate-500 dark:text-slate-400 break-words whitespace-normal mt-0.5" x-text="item.subtitle || item.product"></span>
                                         </div>
                                         <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                                     </div>
