@@ -385,6 +385,8 @@ class DashboardController extends Controller
             $query->where(function($q) use ($searchQuery) {
                 $q->where('lot_number', 'like', "%$searchQuery%")
                   ->orWhere('product', 'like', "%$searchQuery%")
+                  ->orWhere('current_customer', 'like', "%$searchQuery%")
+                  ->orWhere('last_customer', 'like', "%$searchQuery%")
                   ->orWhere('location', 'like', "%$searchQuery%")
                   ->orWhere('internal_reference', 'like', "%$searchQuery%");
             });
@@ -810,25 +812,68 @@ class DashboardController extends Controller
     }
 
     /**
-     * Fetch search suggestions (lot_number and product) based on query.
+     * Fetch search suggestions (lot_number, product, and customer) based on query.
      */
     public function suggestions(Request $request)
     {
-        $q = $request->query('q');
+        $q = trim($request->query('q', ''));
         if (!$q || strlen($q) < 2) {
             return response()->json([]);
         }
 
-        $suggestions = Item::forUserBranch()->where(function($query) use ($q) {
+        $results = [];
+
+        // 1. Fetch matching Customers
+        $customerMatches = Item::forUserBranch()
+            ->whereNotNull('current_customer')
+            ->where('current_customer', '!=', '')
+            ->where('current_customer', 'like', "%$q%")
+            ->select('current_customer', \Illuminate\Support\Facades\DB::raw('count(*) as unit_count'))
+            ->groupBy('current_customer')
+            ->orderByDesc('unit_count')
+            ->limit(5)
+            ->get();
+
+        foreach ($customerMatches as $cust) {
+            $results[] = [
+                'type' => 'customer',
+                'title' => $cust->current_customer,
+                'subtitle' => 'Customer • ' . $cust->unit_count . ' ' . ($cust->unit_count === 1 ? 'unit' : 'units'),
+                'value' => $cust->current_customer,
+                'lot_number' => $cust->current_customer, // fallback
+                'product' => 'Customer (' . $cust->unit_count . ' units)', // fallback
+            ];
+        }
+
+        // 2. Fetch matching Vehicles (lot_number, product)
+        $vehicleLimit = count($results) > 0 ? (12 - count($results)) : 10;
+        $vehicleMatches = Item::forUserBranch()
+            ->where(function($query) use ($q) {
                 $query->where('lot_number', 'like', "%$q%")
                       ->orWhere('product', 'like', "%$q%");
             })
-            ->select('lot_number', 'product')
+            ->select('lot_number', 'product', 'current_customer')
             ->distinct()
-            ->limit(10)
+            ->limit($vehicleLimit)
             ->get();
 
-        return response()->json($suggestions);
+        foreach ($vehicleMatches as $veh) {
+            $subtitle = $veh->product;
+            if (!empty($veh->current_customer)) {
+                $subtitle .= ' • ' . $veh->current_customer;
+            }
+
+            $results[] = [
+                'type' => 'vehicle',
+                'title' => $veh->lot_number,
+                'subtitle' => $subtitle,
+                'value' => $veh->lot_number,
+                'lot_number' => $veh->lot_number,
+                'product' => $veh->product,
+            ];
+        }
+
+        return response()->json($results);
     }
 }
 

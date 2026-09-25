@@ -40,21 +40,30 @@
                        @focus="if(search.suggestions.length > 0) search.showSuggestions = true"
                        autocomplete="off"
                        class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-400 dark:border-slate-500 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-slate-900 placeholder:opacity-100 dark:placeholder:text-slate-300" 
-                       placeholder="Search lot number, product...">
+                       placeholder="Search lot number, customer, product...">
 
                 <!-- Suggestions Dropdown -->
                 <div x-show="search.showSuggestions" x-cloak
-                     class="absolute z-50 w-full mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-300 dark:border-slate-600 overflow-hidden">
-                    <div class="max-height-[300px] overflow-y-auto">
+                     class="absolute z-50 w-full mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-300 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
+                    <div class="max-h-[340px] overflow-y-auto">
                         <template x-for="(suggestion, index) in search.suggestions" :key="index">
                             <div @click="selectSuggestion(index)"
                                  @mouseenter="search.selectedIndex = index"
                                  :class="{'bg-indigo-50 dark:bg-indigo-900/30': search.selectedIndex === index, 'border-indigo-500': search.selectedIndex === index}"
-                                 class="px-4 py-3 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all">
-                                <div class="flex flex-col">
-                                    <span class="text-sm font-bold text-slate-800 dark:text-slate-100" x-text="suggestion.lot_number"></span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-400" x-text="suggestion.product"></span>
+                                 class="px-4 py-2.5 cursor-pointer border-l-4 border-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all flex items-center justify-between gap-3">
+                                <div class="flex flex-col min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate" x-text="suggestion.title || suggestion.lot_number"></span>
+                                        <span x-show="suggestion.type === 'customer'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                                            🏢 Customer
+                                        </span>
+                                        <span x-show="suggestion.type === 'vehicle'" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+                                            🚗 Vehicle
+                                        </span>
+                                    </div>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5" x-text="suggestion.subtitle || suggestion.product"></span>
                                 </div>
+                                <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             </div>
                         </template>
                     </div>
@@ -1231,9 +1240,10 @@
                 selectSuggestion(index) {
                     if (index >= 0 && index < this.search.suggestions.length) {
                         const suggestion = this.search.suggestions[index];
-                        this.search.query = suggestion.lot_number;
+                        const val = suggestion.value || suggestion.lot_number;
+                        this.search.query = val;
                         this.search.showSuggestions = false;
-                        window.location.href = `/details?category=search&q=${encodeURIComponent(suggestion.lot_number)}`;
+                        window.location.href = `/details?category=search&q=${encodeURIComponent(val)}`;
                     }
                 },
                 
