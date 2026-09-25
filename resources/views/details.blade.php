@@ -827,6 +827,8 @@
                     if (term) {
                         matchesSearch = (item.lot_number && item.lot_number.toLowerCase().includes(term)) ||
                                         (item.product && item.product.toLowerCase().includes(term)) ||
+                                        (item.current_customer && item.current_customer.toLowerCase().includes(term)) ||
+                                        (item.last_customer && item.last_customer.toLowerCase().includes(term)) ||
                                         (item.location && item.location.toLowerCase().includes(term)) ||
                                         (item.rental_id && item.rental_id.toLowerCase().includes(term)) ||
                                         (item.internal_reference && item.internal_reference.toLowerCase().includes(term)) ||
