@@ -393,4 +393,21 @@ class AccountingController extends Controller
             ['Content-Type' => 'application/pdf']
         );
     }
+
+    /**
+     * Display Uninvoiced Accounting Report
+     */
+    public function uninvoiced(Request $request)
+    {
+        if (!auth()->user()->canViewUninvoicedAccounting()) {
+            abort(403, 'Access Denied: You do not have permission to view the Uninvoiced Accounting report.');
+        }
+
+        $startMonth = $request->input('start_month', now()->format('Y-m'));
+        $endMonth = $request->input('end_month', now()->addMonth()->format('Y-m'));
+        $year = (int) $request->input('year', substr($startMonth, 0, 4) ?: now()->year);
+        $search = trim((string) $request->input('search', ''));
+
+        return view('accounting.uninvoiced', compact('startMonth', 'endMonth', 'year', 'search'));
+    }
 }

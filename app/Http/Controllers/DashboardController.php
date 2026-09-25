@@ -47,7 +47,12 @@ class DashboardController extends Controller
                 return redirect()->route('surat-kuasa.index');
             }
             if ($user->canAccessAccountingReport()) {
-                return redirect()->route('accounting.summary-rented-vehicle');
+                if ($user->canViewSummaryRentedVehicle()) {
+                    return redirect()->route('accounting.summary-rented-vehicle');
+                }
+                if ($user->canViewUninvoicedAccounting()) {
+                    return redirect()->route('accounting.uninvoiced');
+                }
             }
             abort(403, 'Access Denied: You do not have permission to view any dashboard pages.');
         }

@@ -18,6 +18,7 @@
             'can_export_disposal' => (bool) $u->can_export_disposal,
             'can_view_accounting_report' => (bool) $u->can_view_accounting_report,
             'can_view_summary_rented_vehicle' => (bool) $u->can_view_summary_rented_vehicle,
+            'can_view_uninvoiced_accounting' => (bool) $u->can_view_uninvoiced_accounting,
             'allowed_salespersons' => $u->getAllowedSalespersons(),
             'allowed_sales_teams' => $u->getAllowedSalesTeams(),
         ];
@@ -47,6 +48,7 @@ function userManagementApp() {
             can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }},
             can_view_accounting_report: {{ old('can_view_accounting_report') ? 'true' : 'false' }},
             can_view_summary_rented_vehicle: {{ old('can_view_summary_rented_vehicle') ? 'true' : 'false' }},
+            can_view_uninvoiced_accounting: {{ old('can_view_uninvoiced_accounting') ? 'true' : 'false' }},
             allowed_salespersons: @json(old('allowed_salespersons', [])),
             allowed_sales_teams: @json(old('allowed_sales_teams', []))
         },
@@ -81,6 +83,7 @@ function userManagementApp() {
                 can_export_disposal: false,
                 can_view_accounting_report: false,
                 can_view_summary_rented_vehicle: false,
+                can_view_uninvoiced_accounting: false,
                 allowed_salespersons: [],
                 allowed_sales_teams: []
             };
@@ -105,6 +108,7 @@ function userManagementApp() {
                 can_export_disposal: Boolean(u.can_export_disposal),
                 can_view_accounting_report: Boolean(u.can_view_accounting_report),
                 can_view_summary_rented_vehicle: Boolean(u.can_view_summary_rented_vehicle),
+                can_view_uninvoiced_accounting: Boolean(u.can_view_uninvoiced_accounting),
                 allowed_salespersons: Array.isArray(u.allowed_salespersons) ? [...u.allowed_salespersons] : [],
                 allowed_sales_teams: Array.isArray(u.allowed_sales_teams) ? [...u.allowed_sales_teams] : []
             };
@@ -233,6 +237,7 @@ function userManagementApp() {
                                         <span class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/80 inline-flex items-center gap-1">
                                             Accounting
                                             @if($u->canViewSummaryRentedVehicle()) <span class="text-[9px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-200/60 dark:bg-emerald-800/40 px-1 rounded">(SRV)</span> @endif
+                                            @if($u->canViewUninvoicedAccounting()) <span class="text-[9px] font-bold text-teal-800 dark:text-teal-200 bg-teal-200/60 dark:bg-teal-800/40 px-1 rounded">(Uninvoiced)</span> @endif
                                         </span> 
                                     @endif
                                 </div>
@@ -445,7 +450,7 @@ function userManagementApp() {
                         </label>
                         <!-- Accounting Report Navigation Item Checkbox -->
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300 border border-emerald-500/20 bg-emerald-500/5">
-                            <input type="checkbox" name="can_view_accounting_report" value="1" x-model="form.can_view_accounting_report" @change="if(!form.can_view_accounting_report) { form.can_view_summary_rented_vehicle = false; }" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-indigo-500">
+                            <input type="checkbox" name="can_view_accounting_report" value="1" x-model="form.can_view_accounting_report" @change="if(!form.can_view_accounting_report) { form.can_view_summary_rented_vehicle = false; form.can_view_uninvoiced_accounting = false; }" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-bold text-emerald-600 dark:text-emerald-400">Accounting Report</span>
                                 <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">ACC</span>
@@ -513,6 +518,13 @@ function userManagementApp() {
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-200">Summary Rented Vehicle</span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing Summary Rented Vehicle report under Accounting Report</span>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-emerald-500/50 transition-colors">
+                                <input type="checkbox" name="can_view_uninvoiced_accounting" value="1" x-model="form.can_view_uninvoiced_accounting" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-indigo-500">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">Uninvoiced Accounting</span>
+                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing Uninvoiced Accounting report under Accounting Report</span>
                                 </div>
                             </label>
                         </div>

@@ -118,6 +118,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/accounting/summary-rented-vehicle/export', [AccountingController::class, 'exportSummaryRentedVehicle'])->name('accounting.summary-rented-vehicle.export');
             Route::get('/accounting/summary-rented-vehicle/export-pdf', [AccountingController::class, 'exportSummaryRentedVehiclePdf'])->name('accounting.summary-rented-vehicle.export-pdf');
         });
+
+        Route::middleware([CheckMenuPermission::class . ':uninvoiced-accounting'])->group(function () {
+            Route::get('/accounting/uninvoiced', [AccountingController::class, 'uninvoiced'])->name('accounting.uninvoiced');
+        });
     });
 
     // IT Admin Only Routes (Utilities & User Management)

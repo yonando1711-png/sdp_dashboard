@@ -360,6 +360,13 @@
                             Summary Rented Vehicle
                         </a>
                         @endif
+
+                        @if(auth()->user()->canViewUninvoicedAccounting())
+                        <a href="{{ route('accounting.uninvoiced') }}"
+                            class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('accounting.uninvoiced*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
+                            Uninvoiced Accounting
+                        </a>
+                        @endif
                     </div>
                 </div>
                 @endif

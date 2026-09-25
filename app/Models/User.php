@@ -29,6 +29,7 @@ class User extends Authenticatable
         'can_export_disposal',
         'can_view_accounting_report',
         'can_view_summary_rented_vehicle',
+        'can_view_uninvoiced_accounting',
         'allowed_salespersons',
         'allowed_sales_teams',
     ];
@@ -61,6 +62,7 @@ class User extends Authenticatable
             'can_export_disposal' => 'boolean',
             'can_view_accounting_report' => 'boolean',
             'can_view_summary_rented_vehicle' => 'boolean',
+            'can_view_uninvoiced_accounting' => 'boolean',
             'allowed_salespersons' => 'array',
             'allowed_sales_teams' => 'array',
         ];
@@ -131,6 +133,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user can view Uninvoiced Accounting under Accounting Report
+     */
+    public function canViewUninvoicedAccounting(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessAccountingReport() && (bool) $this->can_view_uninvoiced_accounting);
+    }
+
+    /**
      * Get allowed salespersons array
      */
     public function getAllowedSalespersons(): array
@@ -180,6 +190,10 @@ class User extends Authenticatable
 
         if ($key === 'summary-rented-vehicle' || $key === 'accounting-summary-rented') {
             return $this->canViewSummaryRentedVehicle();
+        }
+
+        if ($key === 'uninvoiced-accounting' || $key === 'accounting-uninvoiced' || $key === 'uninvoiced') {
+            return $this->canViewUninvoicedAccounting();
         }
 
         // If custom menu_permissions array exists for this account, strictly enforce it!
