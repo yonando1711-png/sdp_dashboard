@@ -512,7 +512,7 @@
         <!-- Main Content -->
         <main class="flex-1 min-w-0 overflow-hidden bg-slate-50/50 dark:bg-slate-950 flex flex-col theme-transition">
             <!-- Desktop Top Bar -->
-            <div class="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 p-4 hidden lg:flex items-center gap-4 sticky top-0 z-20">
+            <div class="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-700 p-4 hidden lg:flex items-center gap-4 sticky top-0 z-40">
                 <button @click="sidebarCollapsed = !sidebarCollapsed" class="p-2 text-slate-500 hover:text-indigo-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
                 </button>
@@ -584,7 +584,7 @@
 
                         <!-- Recommendations Dropdown -->
                         <div x-show="showSuggestions && suggestions.length > 0" x-cloak style="display: none;"
-                             class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto">
+                             class="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-300 dark:border-slate-600 overflow-hidden z-50 divide-y divide-slate-100 dark:divide-slate-700/60 max-h-[340px] overflow-y-auto custom-scrollbar">
                             <template x-for="(item, index) in suggestions" :key="index">
                                 <div @click="selectSuggestion(index)"
                                      @mouseenter="selectedIndex = index"

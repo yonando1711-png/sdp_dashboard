@@ -45,7 +45,7 @@
                 <!-- Suggestions Dropdown -->
                 <div x-show="search.showSuggestions" x-cloak
                      class="absolute z-50 w-full mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-300 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/60">
-                    <div class="max-h-[340px] overflow-y-auto">
+                    <div class="max-h-[340px] overflow-y-auto custom-scrollbar">
                         <template x-for="(suggestion, index) in search.suggestions" :key="index">
                             <div @click="selectSuggestion(index)"
                                  @mouseenter="search.selectedIndex = index"
