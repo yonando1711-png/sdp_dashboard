@@ -78,6 +78,7 @@ class AutoGenerateSuratKuasa extends Command
                         $existing->surat_kuasa_tracked = true;
                         if (!empty($rec['odoo_lot_id'])) $existing->odoo_lot_id = $rec['odoo_lot_id'];
                         if (!empty($rec['vehicle_category'])) $existing->vehicle_category = $rec['vehicle_category'];
+                        if (!empty($rec['color'])) $existing->color = $rec['color'];
                         // Tier 2: populate numbers immediately if Odoo has them and local DB is empty
                         if (empty($existing->internal_reference) && !empty($rec['internal_reference']))
                             $existing->internal_reference = $rec['internal_reference'];
@@ -91,6 +92,7 @@ class AutoGenerateSuratKuasa extends Command
                             'product'             => $rec['product'] ?? '',
                             'vehicle_category'    => $rec['vehicle_category'] ?? null,
                             'year'                => $rec['year'] ?? date('Y'),
+                            'color'               => $rec['color'] ?? null,
                             'location'            => $rec['location'] ?? '',
                             'bbn'                 => $rec['bbn'] ?? null,
                             'bbn_alamat'          => $rec['bbn_alamat'] ?? null,
@@ -134,6 +136,7 @@ class AutoGenerateSuratKuasa extends Command
                             if (!empty($row['internal_reference'])) $item->internal_reference = $row['internal_reference'];
                             if (!empty($row['engine_number']))      $item->engine_number = $row['engine_number'];
                             if (!empty($row['year']))               $item->year = $row['year'];
+                            if (!empty($row['color']))              $item->color = $row['color'];
                             if (!empty($row['vehicle_category']))   $item->vehicle_category = $row['vehicle_category'];
                             if (isset($row['bbn']))                 $item->bbn = $row['bbn'];
                             if (isset($row['bbn_alamat']))          $item->bbn_alamat = $row['bbn_alamat'];

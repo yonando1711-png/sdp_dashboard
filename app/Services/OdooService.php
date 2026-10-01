@@ -2345,6 +2345,7 @@ class OdooService
                 'engine_number',
                 'product_id',
                 'vehicle_year',
+                'color_id',
                 'location_id',
                 'x_studio_partnercust',
                 'is_vendor_rent',
@@ -2422,6 +2423,7 @@ class OdooService
                     ? $bbnMap['by_id'][$bbnId]
                     : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
+                $color = is_array($row['color_id']) ? ($row['color_id'][1] ?? null) : (is_string($row['color_id']) ? $row['color_id'] : null);
 
                 $records[] = [
                     'odoo_lot_id'        => $odooLotId,
@@ -2431,6 +2433,7 @@ class OdooService
                     'product'            => $product,
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
+                    'color'              => $color,
                     'location'           => $location,
                     'bbn'                => $bbnCode,
                     'bbn_alamat'         => $bbnAlamat,
@@ -2471,6 +2474,7 @@ class OdooService
                 'engine_number',
                 'product_id',
                 'vehicle_year',
+                'color_id',
                 'location_id',
                 'x_studio_partnercust',
                 'is_vendor_rent',
@@ -2524,6 +2528,7 @@ class OdooService
                     ? $bbnMap['by_id'][$bbnId]
                     : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
+                $color = is_array($row['color_id']) ? ($row['color_id'][1] ?? null) : (is_string($row['color_id']) ? $row['color_id'] : null);
 
                 $data[$odooId] = [
                     'odoo_lot_id'        => $odooId,
@@ -2533,6 +2538,7 @@ class OdooService
                     'product'            => $product,
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
+                    'color'              => $color,
                     'location'           => $location,
                     'bbn'                => $bbnCode,
                     'bbn_alamat'         => $bbnAlamat,
