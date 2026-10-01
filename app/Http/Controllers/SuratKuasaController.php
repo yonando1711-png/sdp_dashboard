@@ -403,6 +403,8 @@ class SuratKuasaController extends Controller
                         $existing->vehicle_category = $itemData['vehicle_category'];
                     if (!empty($itemData['year']) && $existing->year !== $itemData['year'])
                         $existing->year = $itemData['year'];
+                    if (!empty($itemData['color']) && $existing->color !== $itemData['color'])
+                        $existing->color = $itemData['color'];
                     if (!empty($itemData['location']))
                         $existing->location = $itemData['location'];
                     if (isset($itemData['bbn']) && $existing->bbn !== $itemData['bbn'])
@@ -449,6 +451,7 @@ class SuratKuasaController extends Controller
                         'product'            => $itemData['product'] ?? '',
                         'vehicle_category'   => $itemData['vehicle_category'] ?? null,
                         'year'               => $itemData['year'] ?? date('Y'),
+                        'color'              => $itemData['color'] ?? null,
                         'location'           => $itemData['location'] ?? '',
                         'bbn'                => $itemData['bbn'] ?? null,
                         'bbn_alamat'         => $itemData['bbn_alamat'] ?? null,
@@ -631,6 +634,10 @@ class SuratKuasaController extends Controller
                     $item->vehicle_category = $odooRow['vehicle_category'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year'])
                     $item->year = $odooRow['year'];
+                if (!empty($odooRow['color']) && $item->color !== $odooRow['color']) {
+                    $lotChanges[] = 'Warna: ' . $odooRow['color'];
+                    $item->color = $odooRow['color'];
+                }
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
@@ -687,6 +694,10 @@ class SuratKuasaController extends Controller
                     $item->vehicle_category = $odooRow['vehicle_category'];
                 if (!empty($odooRow['year']) && $item->year !== $odooRow['year'])
                     $item->year = $odooRow['year'];
+                if (!empty($odooRow['color']) && $item->color !== $odooRow['color']) {
+                    $lotChanges[] = 'Warna: ' . $odooRow['color'];
+                    $item->color = $odooRow['color'];
+                }
                 if (isset($odooRow['bbn']) && $item->bbn !== $odooRow['bbn']) {
                     $lotChanges[] = 'BBN: ' . ($odooRow['bbn'] ?: 'No BBN on Odoo');
                     $item->bbn = $odooRow['bbn'];
