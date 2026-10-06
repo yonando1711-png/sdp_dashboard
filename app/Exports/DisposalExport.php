@@ -12,10 +12,12 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class DisposalExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize
 {
     protected $items;
+    protected $asOfDate;
 
-    public function __construct($items)
+    public function __construct($items, $asOfDate = null)
     {
         $this->items = $items;
+        $this->asOfDate = $asOfDate ? \Carbon\Carbon::parse($asOfDate) : now();
     }
 
     public function collection()
@@ -28,6 +30,7 @@ class DisposalExport implements FromCollection, WithHeadings, WithMapping, WithS
         return [
             'No. Polisi / Lot Number',
             'Model / Kendaraan',
+            'Tahun Unit',
             'Current Location',
             'Current Customer',
             'Current Rental ID',
@@ -42,7 +45,8 @@ class DisposalExport implements FromCollection, WithHeadings, WithMapping, WithS
 
     public function map($item): array
     {
-        $statusLabel = match ($item->disposal_status) {
+        $status = $item->getDisposalStatusAt($this->asOfDate);
+        $statusLabel = match ($status) {
             'due' => 'Due for Disposal (>= 5 Thn)',
             'approaching' => 'Approaching 5 Years (<= 6 Bln)',
             'active' => 'Active (< 4.5 Thn)',
@@ -54,6 +58,7 @@ class DisposalExport implements FromCollection, WithHeadings, WithMapping, WithS
         return [
             $item->lot_number ?? '-',
             $item->product ?? '-',
+            $item->year ?? '-',
             $item->location ?? '-',
             $item->current_customer ?? '-',
             $item->rental_id ?? '-',
@@ -61,7 +66,7 @@ class DisposalExport implements FromCollection, WithHeadings, WithMapping, WithS
             $item->first_sent_as ?? '-',
             $item->first_start_sewa_date ? $item->first_start_sewa_date->format('d/m/Y') : '-',
             $item->disposal_due_date ? $item->disposal_due_date->format('d/m/Y') : '-',
-            $item->service_age_string,
+            $item->getServiceAgeStringAt($this->asOfDate),
             $statusLabel,
         ];
     }

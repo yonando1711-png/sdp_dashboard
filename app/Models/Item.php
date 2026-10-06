@@ -73,15 +73,26 @@ class Item extends Model
 
     public function getServiceAgeStringAttribute(): string
     {
+        return $this->getServiceAgeStringAt(now());
+    }
+
+    public function getServiceAgeStringAt(?\Carbon\Carbon $asOfDate = null): string
+    {
         if (!$this->first_start_sewa_date) {
             return '-';
         }
 
-        $diff = $this->first_start_sewa_date->diff(now());
+        $target = $asOfDate ?? now();
+        $diff = $this->first_start_sewa_date->diff($target);
         return "{$diff->y} Thn {$diff->m} Bln";
     }
 
     public function getDisposalStatusAttribute(): string
+    {
+        return $this->getDisposalStatusAt(now());
+    }
+
+    public function getDisposalStatusAt(?\Carbon\Carbon $asOfDate = null): string
     {
         $locUpper = strtoupper($this->location ?? '');
         if ($this->is_sold || str_contains($locUpper, 'SOLD') || str_contains($locUpper, 'DISPOSAL')) {
@@ -93,13 +104,13 @@ class Item extends Model
         }
 
         $dueDate = $this->disposal_due_date;
-        $now = now();
+        $target = $asOfDate ?? now();
 
-        if ($now->greaterThanOrEqualTo($dueDate)) {
+        if ($target->greaterThanOrEqualTo($dueDate)) {
             return 'due';
         }
 
-        if ($now->greaterThanOrEqualTo($dueDate->copy()->subMonths(6))) {
+        if ($target->greaterThanOrEqualTo($dueDate->copy()->subMonths(6))) {
             return 'approaching';
         }
 

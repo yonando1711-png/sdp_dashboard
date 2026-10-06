@@ -66,7 +66,11 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h1 class="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Fleet Lifecycle & Disposal</h1>
+                    @if($isCustomAsOf)
+                    <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Posisi: s.d. {{ $asOfDate->format('d M Y') }}</span>
+                    @else
                     <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">5-Year Due Tracking</span>
+                    @endif
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Tracks vehicle initial dispatch, Sent As (ORIGINAL vs RBO), 5-year due date, and service age</p>
             </div>
@@ -169,27 +173,47 @@
     </div>
 
     <!-- Filters & Search Bar -->
-    <div class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-lg">
-        <form action="{{ route('disposal.index') }}" method="GET" class="flex flex-col lg:flex-row items-center gap-4">
+    <div class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-lg space-y-4">
+        <form action="{{ route('disposal.index') }}" method="GET" id="disposalFilterForm" class="flex flex-col lg:flex-row items-center gap-3 flex-wrap">
             <!-- Search input -->
-            <div class="relative flex-1 w-full">
+            <div class="relative flex-1 min-w-[240px] w-full">
                 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
                 <input type="text" name="search" value="{{ $search }}" placeholder="Search No. Polisi, Model, SO, Customer..." class="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all">
             </div>
 
+            <!-- Posisi Tanggal (Cutoff Date) -->
+            <div class="w-full sm:w-auto flex items-center gap-1.5">
+                <div class="relative cursor-pointer" onclick="try { document.getElementById('as_of_date_input').showPicker(); } catch(e) {}">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <input type="date" name="as_of_date" id="as_of_date_input" value="{{ $asOfDateInput }}" onclick="try { this.showPicker(); } catch(e) {}" title="Posisi Per Tanggal (Default: Hari Ini)" class="pl-9 pr-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border cursor-pointer {{ $isCustomAsOf ? 'border-amber-500 ring-2 ring-amber-500/20 font-bold text-amber-600 dark:text-amber-400' : 'border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white font-semibold' }} text-xs focus:border-indigo-500 focus:outline-none transition-all [&::-webkit-calendar-picker-indicator]:cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Filter Tahun Unit -->
+            <div class="w-full sm:w-36">
+                <select name="vehicle_year" onchange="this.form.submit()" class="w-full px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border {{ $yearFilter !== 'all' && !empty($yearFilter) ? 'border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white font-semibold' }} text-xs focus:border-indigo-500 focus:outline-none transition-all">
+                    <option value="all" {{ $yearFilter === 'all' || empty($yearFilter) ? 'selected' : '' }}>Tahun: Semua</option>
+                    @foreach($yearBreakdown as $yb)
+                    <option value="{{ $yb->year }}" {{ $yearFilter == (string)$yb->year ? 'selected' : '' }}>Tahun {{ $yb->year }}</option>
+                    @endforeach
+                </select>
+            </div>
+
             <!-- Sent As Filter Dropdown -->
-            <div class="w-full lg:w-52">
+            <div class="w-full sm:w-44">
                 <select name="sent_as" onchange="this.form.submit()" class="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:outline-none transition-all">
-                    <option value="all" {{ $sentAsFilter === 'all' ? 'selected' : '' }}>Sent As (1st SO): All</option>
+                    <option value="all" {{ $sentAsFilter === 'all' ? 'selected' : '' }}>Sent As: All</option>
                     <option value="ORIGINAL" {{ $sentAsFilter === 'ORIGINAL' ? 'selected' : '' }}>Sent As: ORIGINAL</option>
                     <option value="RBO" {{ $sentAsFilter === 'RBO' ? 'selected' : '' }}>Sent As: RBO</option>
                 </select>
             </div>
 
             <!-- Status Filter Dropdown -->
-            <div class="w-full lg:w-52">
+            <div class="w-full sm:w-48">
                 <select name="status" onchange="this.form.submit()" class="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:outline-none transition-all">
                     <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>Status: All Status</option>
                     <option value="due" {{ $statusFilter === 'due' ? 'selected' : '' }}>Status: Due (≥ 5 Thn)</option>
@@ -202,25 +226,25 @@
 
             <!-- Branch filter for nationwide -->
             @if(auth()->user()->isNationwide())
-            <div class="w-full lg:w-44">
+            <div class="w-full sm:w-36">
                 <select name="branch" onchange="this.form.submit()" class="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:outline-none transition-all">
-                    <option value="ALL" {{ ($branchFilter === 'ALL' || empty($branchFilter)) ? 'selected' : '' }}>Branch: Nationwide</option>
-                    <option value="JKT" {{ $branchFilter === 'JKT' ? 'selected' : '' }}>Branch: Jakarta</option>
-                    <option value="SUB" {{ $branchFilter === 'SUB' ? 'selected' : '' }}>Branch: Surabaya</option>
-                    <option value="SMG" {{ $branchFilter === 'SMG' ? 'selected' : '' }}>Branch: Semarang</option>
-                    <option value="DPS" {{ $branchFilter === 'DPS' ? 'selected' : '' }}>Branch: Denpasar</option>
-                    <option value="BPN" {{ $branchFilter === 'BPN' ? 'selected' : '' }}>Branch: Balikpapan</option>
-                    <option value="BDG" {{ $branchFilter === 'BDG' ? 'selected' : '' }}>Branch: Bandung</option>
-                    <option value="MDN" {{ $branchFilter === 'MDN' ? 'selected' : '' }}>Branch: Medan</option>
-                    <option value="MKS" {{ $branchFilter === 'MKS' ? 'selected' : '' }}>Branch: Makassar</option>
-                    <option value="BTM" {{ $branchFilter === 'BTM' ? 'selected' : '' }}>Branch: Batam</option>
-                    <option value="MNI" {{ $branchFilter === 'MNI' ? 'selected' : '' }}>Branch: Manado</option>
+                    <option value="ALL" {{ ($branchFilter === 'ALL' || empty($branchFilter)) ? 'selected' : '' }}>Branch: All</option>
+                    <option value="JKT" {{ $branchFilter === 'JKT' ? 'selected' : '' }}>Jakarta</option>
+                    <option value="SUB" {{ $branchFilter === 'SUB' ? 'selected' : '' }}>Surabaya</option>
+                    <option value="SMG" {{ $branchFilter === 'SMG' ? 'selected' : '' }}>Semarang</option>
+                    <option value="DPS" {{ $branchFilter === 'DPS' ? 'selected' : '' }}>Denpasar</option>
+                    <option value="BPN" {{ $branchFilter === 'BPN' ? 'selected' : '' }}>Balikpapan</option>
+                    <option value="BDG" {{ $branchFilter === 'BDG' ? 'selected' : '' }}>Bandung</option>
+                    <option value="MDN" {{ $branchFilter === 'MDN' ? 'selected' : '' }}>Medan</option>
+                    <option value="MKS" {{ $branchFilter === 'MKS' ? 'selected' : '' }}>Makassar</option>
+                    <option value="BTM" {{ $branchFilter === 'BTM' ? 'selected' : '' }}>Batam</option>
+                    <option value="MNI" {{ $branchFilter === 'MNI' ? 'selected' : '' }}>Manado</option>
                 </select>
             </div>
             @endif
 
-            <div class="flex items-center gap-2 w-full lg:w-auto">
-                <button type="submit" class="px-5 py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-700 hover:bg-black text-white text-xs font-bold transition-all">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button type="submit" class="px-5 py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-700 hover:bg-black text-white text-xs font-bold transition-all shadow">
                     Filter
                 </button>
                 <a href="{{ route('disposal.index') }}" class="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold transition-all">
@@ -228,7 +252,92 @@
                 </a>
             </div>
         </form>
+
+        <!-- Quick Presets Row for As-Of Cutoff Date -->
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Preset Posisi:
+            </span>
+
+            <!-- Hari Ini (Default) -->
+            <button type="button" @click="setAsOfDate('')" class="px-3 py-1 rounded-xl text-xs font-bold transition-all {{ !$isCustomAsOf ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
+                Hari Ini
+            </button>
+
+            <!-- 31 Des 2026 -->
+            <button type="button" @click="setAsOfDate('2026-12-31')" class="px-3 py-1 rounded-xl text-xs font-bold transition-all {{ $asOfDateInput === '2026-12-31' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
+                31 Des 2026
+            </button>
+
+            <!-- 31 Des 2027 -->
+            <button type="button" @click="setAsOfDate('2027-12-31')" class="px-3 py-1 rounded-xl text-xs font-bold transition-all {{ $asOfDateInput === '2027-12-31' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
+                31 Des 2027
+            </button>
+
+            <!-- 31 Des 2028 -->
+            <button type="button" @click="setAsOfDate('2028-12-31')" class="px-3 py-1 rounded-xl text-xs font-bold transition-all {{ $asOfDateInput === '2028-12-31' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
+                31 Des 2028
+            </button>
+
+            <!-- 31 Des 2029 -->
+            <button type="button" @click="setAsOfDate('2029-12-31')" class="px-3 py-1 rounded-xl text-xs font-bold transition-all {{ $asOfDateInput === '2029-12-31' ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
+                31 Des 2029
+            </button>
+
+            @if($isCustomAsOf)
+            <span class="ml-auto text-[11px] font-semibold text-amber-500 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Mode Proyeksi: s.d. {{ $asOfDate->format('d M Y') }}
+            </span>
+            @endif
+        </div>
     </div>
+
+    <!-- Year Breakdown Summary Box (Tahun Berapa Aja & Berapa Unit) -->
+    @if($yearBreakdown->isNotEmpty())
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl text-white">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-indigo-500/20">
+            <div class="flex items-center gap-3">
+                <span class="p-2 rounded-2xl bg-indigo-500/20 text-indigo-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                </span>
+                <div>
+                    <h3 class="text-sm font-black tracking-tight text-white flex items-center gap-2">
+                        Distribusi Tahun Unit Jatuh Tempo Disposal
+                        <span class="text-xs font-bold text-amber-300">
+                            ({{ $isCustomAsOf ? 'Posisi s.d. ' . $asOfDate->format('d M Y') : 'Posisi s.d. Hari Ini' }})
+                        </span>
+                    </h3>
+                    <p class="text-[11px] text-slate-300 mt-0.5">Rincian tahun pembuatan dari armada yang masa pakainya telah mencapai ≥ 5 tahun</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-300 font-semibold">Total Jatuh Tempo:</span>
+                <span class="px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                    {{ number_format($kpis['due']) }} Unit
+                </span>
+            </div>
+        </div>
+
+        <!-- Year Badges Breakdown -->
+        <div class="mt-3.5 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-bold text-slate-400 mr-1">Filter Tahun (Jatuh Tempo):</span>
+            <a href="{{ route('disposal.index', array_merge(request()->except(['vehicle_year', 'status', 'page']), ['status' => 'due', 'vehicle_year' => 'all'])) }}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all {{ ($statusFilter === 'due' && ($yearFilter === 'all' || empty($yearFilter))) ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400/30' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60' }}">
+                Semua Tahun
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black {{ ($statusFilter === 'due' && ($yearFilter === 'all' || empty($yearFilter))) ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300' }}">{{ $yearBreakdown->sum('count') }}</span>
+            </a>
+            @foreach($yearBreakdown as $yb)
+            <a href="{{ route('disposal.index', array_merge(request()->except(['vehicle_year', 'status', 'page']), ['status' => 'due', 'vehicle_year' => $yb->year])) }}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all {{ ($statusFilter === 'due' && $yearFilter == (string)$yb->year) ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 ring-2 ring-amber-400/30' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60' }}">
+                <span>Tahun {{ $yb->year }}</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black {{ ($statusFilter === 'due' && $yearFilter == (string)$yb->year) ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' }}">{{ number_format($yb->count) }} unit</span>
+            </a>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     <!-- Data Table -->
     <div class="bg-white dark:bg-[#0d1322] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden">
@@ -237,6 +346,7 @@
                 <thead class="bg-slate-50 dark:bg-[#050913] border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-extrabold text-[11px]">
                     <tr>
                         <th class="py-4 px-5 whitespace-nowrap">No. Polisi / Unit</th>
+                        <th class="py-4 px-3 text-center whitespace-nowrap">Tahun</th>
                         <th class="py-4 px-4 whitespace-nowrap">First Rental SO</th>
                         <th class="py-4 px-4 text-center whitespace-nowrap" title="Vehicle role upon initial dispatch (ORIGINAL vs RBO)">Sent As</th>
                         <th class="py-4 px-4 whitespace-nowrap">First Start Sewa</th>
@@ -250,7 +360,8 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
                     @forelse($items as $item)
                     @php
-                        $status = $item->disposal_status;
+                        $status = $item->getDisposalStatusAt($asOfDate);
+                        $serviceAge = $item->getServiceAgeStringAt($asOfDate);
                         $sentBadge = $item->first_sent_as_badge;
                     @endphp
                     <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
@@ -260,6 +371,17 @@
                             <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">{{ $item->product }}</div>
                             @if($item->warehouse)
                             <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">{{ $item->warehouse }}</span>
+                            @endif
+                        </td>
+
+                        <!-- Tahun Unit -->
+                        <td class="py-4 px-3 text-center whitespace-nowrap">
+                            @if($item->year)
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-black bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+                                {{ $item->year }}
+                            </span>
+                            @else
+                            <span class="text-slate-400 text-xs">-</span>
                             @endif
                         </td>
 
@@ -320,7 +442,7 @@
 
                         <!-- Service Age -->
                         <td class="py-4 px-4 text-center whitespace-nowrap">
-                            <span class="font-bold text-slate-900 dark:text-white">{{ $item->service_age_string }}</span>
+                            <span class="font-bold text-slate-900 dark:text-white">{{ $serviceAge }}</span>
                         </td>
 
                         <!-- Status Badge -->
@@ -366,7 +488,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="9" class="py-12 text-center text-slate-400">
+                        <td colspan="10" class="py-12 text-center text-slate-400">
                             <svg class="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             <p class="font-semibold text-sm">No vehicles found matching the specified filters.</p>
                             <a href="{{ route('disposal.index') }}" class="text-xs text-indigo-500 hover:underline mt-2 inline-block font-semibold">Clear filters</a>
@@ -540,6 +662,25 @@ function disposalApp() {
             if (!this.totalInitial || this.totalInitial === 0) return 100;
             const pct = Math.min(100, Math.round((this.stats.processed / this.totalInitial) * 100));
             return isNaN(pct) ? 0 : pct;
+        },
+        setAsOfDate(val) {
+            const input = document.getElementById('as_of_date_input');
+            if (input) {
+                input.value = val;
+                const statusSelect = document.querySelector('select[name="status"]');
+                if (statusSelect) {
+                    if (val !== '') {
+                        statusSelect.value = 'due';
+                    } else {
+                        statusSelect.value = 'all';
+                    }
+                }
+                const yearSelect = document.querySelector('select[name="vehicle_year"]');
+                if (yearSelect && val === '') {
+                    yearSelect.value = 'all';
+                }
+                document.getElementById('disposalFilterForm').submit();
+            }
         },
         openSyncModal() {
             this.showSyncModal = true;
