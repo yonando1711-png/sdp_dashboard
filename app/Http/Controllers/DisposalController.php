@@ -33,6 +33,21 @@ class DisposalController extends Controller
         $statusFilter = trim((string) $request->input('status', 'all'));
         $sentAsFilter = trim((string) $request->input('sent_as', 'all'));
         $branchFilter = trim((string) $request->input('branch', ''));
+        $asOfDateInput = trim((string) $request->input('as_of_date', ''));
+        $yearFilter = trim((string) $request->input('vehicle_year', 'all'));
+
+        // Target / As-Of cutoff date (defaults to current time if unspecified)
+        $isCustomAsOf = false;
+        if ($asOfDateInput !== '') {
+            try {
+                $asOfDate = Carbon::parse($asOfDateInput)->endOfDay();
+                $isCustomAsOf = true;
+            } catch (\Exception $e) {
+                $asOfDate = now();
+            }
+        } else {
+            $asOfDate = now();
+        }
 
         $query = Item::forUserBranch();
 
@@ -62,9 +77,14 @@ class DisposalController extends Controller
             $query->where('first_sent_as', $sentAsFilter);
         }
 
-        // Common condition definitions
-        $fiveYearsAgo = now()->subYears(5)->toDateString();
-        $fourAndHalfYearsAgo = now()->subMonths(54)->toDateString(); // 4.5 years = 54 months
+        // Vehicle Year Filter
+        if ($yearFilter !== '' && $yearFilter !== 'all') {
+            $query->where('year', $yearFilter);
+        }
+
+        // Common condition definitions relative to $asOfDate
+        $fiveYearsAgo = $asOfDate->copy()->subYears(5)->toDateString();
+        $fourAndHalfYearsAgo = $asOfDate->copy()->subMonths(54)->toDateString(); // 4.5 years = 54 months
 
         $isDisposed = function ($q) {
             $q->where('is_sold', true)
@@ -95,6 +115,19 @@ class DisposalController extends Controller
             'never_rented' => (clone $kpiBase)->where($notDisposed)->whereNull('first_start_sewa_date')->count(),
         ];
 
+        // Vehicle Year Breakdown for Due Units as of selected date
+        $yearBreakdown = (clone $kpiBase)
+            ->where($notDisposed)
+            ->whereNotNull('first_start_sewa_date')
+            ->where('first_start_sewa_date', '<=', $fiveYearsAgo)
+            ->whereNotNull('year')
+            ->where('year', '!=', '')
+            ->where('year', '!=', '0')
+            ->select('year', \Illuminate\Support\Facades\DB::raw('count(*) as count'))
+            ->groupBy('year')
+            ->orderBy('year', 'desc')
+            ->get();
+
         // Apply Status Filter
         if ($statusFilter === 'due') {
             $query->where($notDisposed)->whereNotNull('first_start_sewa_date')->where('first_start_sewa_date', '<=', $fiveYearsAgo);
@@ -124,6 +157,11 @@ class DisposalController extends Controller
             'authenticated' => true,
             'items' => $items,
             'kpis' => $kpis,
+            'yearBreakdown' => $yearBreakdown,
+            'asOfDate' => $asOfDate,
+            'asOfDateInput' => $asOfDateInput,
+            'isCustomAsOf' => $isCustomAsOf,
+            'yearFilter' => $yearFilter,
             'pendingSyncCount' => $pendingSyncCount,
             'search' => $search,
             'statusFilter' => $statusFilter,
@@ -180,6 +218,19 @@ class DisposalController extends Controller
         $statusFilter = trim((string) $request->input('status', 'all'));
         $sentAsFilter = trim((string) $request->input('sent_as', 'all'));
         $branchFilter = trim((string) $request->input('branch', ''));
+        $asOfDateInput = trim((string) $request->input('as_of_date', ''));
+        $yearFilter = trim((string) $request->input('vehicle_year', 'all'));
+
+        // Target / As-Of cutoff date
+        if ($asOfDateInput !== '') {
+            try {
+                $asOfDate = Carbon::parse($asOfDateInput)->endOfDay();
+            } catch (\Exception $e) {
+                $asOfDate = now();
+            }
+        } else {
+            $asOfDate = now();
+        }
 
         $query = Item::forUserBranch();
 
@@ -206,8 +257,12 @@ class DisposalController extends Controller
             $query->where('first_sent_as', $sentAsFilter);
         }
 
-        $fiveYearsAgo = now()->subYears(5)->toDateString();
-        $fourAndHalfYearsAgo = now()->subMonths(54)->toDateString();
+        if ($yearFilter !== '' && $yearFilter !== 'all') {
+            $query->where('year', $yearFilter);
+        }
+
+        $fiveYearsAgo = $asOfDate->copy()->subYears(5)->toDateString();
+        $fourAndHalfYearsAgo = $asOfDate->copy()->subMonths(54)->toDateString();
 
         $isDisposed = function ($q) {
             $q->where('is_sold', true)
@@ -244,8 +299,8 @@ class DisposalController extends Controller
             ->orderBy('lot_number', 'asc')
             ->get();
 
-        $filename = 'Disposal_Fleet_Lifecycle_' . date('Ymd_His') . '.xlsx';
-        return Excel::download(new DisposalExport($items), $filename);
+        $filename = 'Disposal_Fleet_Lifecycle_' . ($asOfDateInput ? str_replace('-', '', $asOfDateInput) . '_' : '') . date('Ymd_His') . '.xlsx';
+        return Excel::download(new DisposalExport($items, $asOfDate), $filename);
     }
 
     /**
