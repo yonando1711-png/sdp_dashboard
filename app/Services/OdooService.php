@@ -2345,6 +2345,7 @@ class OdooService
                 'engine_number',
                 'product_id',
                 'vehicle_year',
+                'color_id',
                 'location_id',
                 'x_studio_partnercust',
                 'is_vendor_rent',
@@ -2422,6 +2423,7 @@ class OdooService
                     ? $bbnMap['by_id'][$bbnId]
                     : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
+                $color = is_array($row['color_id']) ? ($row['color_id'][1] ?? null) : (is_string($row['color_id']) ? $row['color_id'] : null);
 
                 $records[] = [
                     'odoo_lot_id'        => $odooLotId,
@@ -2431,6 +2433,7 @@ class OdooService
                     'product'            => $product,
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : date('Y'),
+                    'color'              => $color,
                     'location'           => $location,
                     'bbn'                => $bbnCode,
                     'bbn_alamat'         => $bbnAlamat,
@@ -2471,6 +2474,7 @@ class OdooService
                 'engine_number',
                 'product_id',
                 'vehicle_year',
+                'color_id',
                 'location_id',
                 'x_studio_partnercust',
                 'is_vendor_rent',
@@ -2524,6 +2528,7 @@ class OdooService
                     ? $bbnMap['by_id'][$bbnId]
                     : (($bbnCode && isset($bbnMap['by_code'][$bbnCode])) ? $bbnMap['by_code'][$bbnCode] : null);
                 $vehicleCategory = $productId ? ($categoryMap[$productId] ?? null) : null;
+                $color = is_array($row['color_id']) ? ($row['color_id'][1] ?? null) : (is_string($row['color_id']) ? $row['color_id'] : null);
 
                 $data[$odooId] = [
                     'odoo_lot_id'        => $odooId,
@@ -2533,6 +2538,7 @@ class OdooService
                     'product'            => $product,
                     'vehicle_category'   => $vehicleCategory,
                     'year'               => !empty($row['vehicle_year']) ? (string) $row['vehicle_year'] : null,
+                    'color'              => $color,
                     'location'           => $location,
                     'bbn'                => $bbnCode,
                     'bbn_alamat'         => $bbnAlamat,
@@ -4186,7 +4192,7 @@ class OdooService
         while (true) {
             $batch = $this->execute('rental.period.invoice', 'search_read', [$periodDomain], [
                 'fields' => [
-                    'id', 'rental_order_id', 'invoice_id', 'invoice_date',
+                    'id', 'rental_order_id', 'rental_order_line_id', 'invoice_id', 'invoice_date',
                     'start_rental_period_date', 'end_rental_period_date',
                     'price_unit', 'rental_qty', 'rental_uom',
                     'lot_id', 'product_id', 'area_id', 'write_date'
@@ -4202,6 +4208,9 @@ class OdooService
                 $rawPeriods[] = $p;
                 if (!empty($p['rental_order_id'][0])) {
                     $soIdsMap[$p['rental_order_id'][0]] = true;
+                }
+                if (!empty($p['rental_order_line_id'][0])) {
+                    $solIdsMap[$p['rental_order_line_id'][0]] = true;
                 }
                 if (!empty($p['invoice_id'][0])) {
                     $invoiceIdsMap[$p['invoice_id'][0]] = true;
@@ -4228,15 +4237,23 @@ class OdooService
 
         $orders = [];
         $partnerIdsMap = [];
+        $contractIdsMap = [];
         $soChunks = array_chunk(array_keys($soIdsMap), 200);
         foreach ($soChunks as $sChunk) {
             $res = $this->execute('sale.order', 'search_read', [
                 [['id', 'in', $sChunk]]
             ], [
-                'fields' => ['id', 'name', 'partner_id', 'client_order_ref', 'rental_contract_id', 'actual_start_rental', 'actual_end_rental', 'rental_status', 'invoice_ids']
+                'fields' => [
+                    'id', 'name', 'partner_id', 'client_order_ref', 'rental_contract_id',
+                    'actual_start_rental', 'actual_end_rental', 'rental_status', 'invoice_ids',
+                    'sale_invoice_period_id', 'order_line'
+                ]
             ]);
             foreach ($res as $o) {
                 $orders[$o['id']] = $o;
+                if (!empty($o['rental_contract_id'][0])) {
+                    $contractIdsMap[$o['rental_contract_id'][0]] = true;
+                }
                 if (!empty($o['partner_id'][0])) {
                     $partnerIdsMap[$o['partner_id'][0]] = true;
                 }
@@ -4245,13 +4262,18 @@ class OdooService
                         $invoiceIdsMap[$invId] = true;
                     }
                 }
+                if (!empty($o['order_line'])) {
+                    foreach ($o['order_line'] as $lineId) {
+                        $solIdsMap[$lineId] = true;
+                    }
+                }
             }
         }
 
         // 3. Fetch linked res.partner in 200-item chunks
         $partnerCount = count($partnerIdsMap);
         if ($onProgress) {
-            $onProgress('partners', 65, 0, $partnerCount, "Resolving customer information for {$partnerCount} partners...");
+            $onProgress('partners', 60, 0, $partnerCount, "Resolving customer information for {$partnerCount} partners...");
         }
 
         $partners = [];
@@ -4260,7 +4282,7 @@ class OdooService
             $res = $this->execute('res.partner', 'search_read', [
                 [['id', 'in', $pChunk]]
             ], [
-                'fields' => ['id', 'name', 'ref', 'vat']
+                'fields' => ['id', 'name', 'ref', 'vat', 'hrc_forminv_invoice_pic']
             ]);
             foreach ($res as $p) {
                 $partners[$p['id']] = $p;
@@ -4270,7 +4292,7 @@ class OdooService
         // 4. Fetch linked stock.lot (Nopol & Chassis Number) in 200-item chunks
         $lotCount = count($lotIdsMap);
         if ($onProgress) {
-            $onProgress('lots', 75, 0, $lotCount, "Resolving vehicle chassis & specifications for {$lotCount} units...");
+            $onProgress('lots', 70, 0, $lotCount, "Resolving vehicle chassis & specifications for {$lotCount} units...");
         }
 
         $lots = [];
@@ -4289,7 +4311,7 @@ class OdooService
         // 5. Fetch linked account.move (Invoices) in 200-item chunks
         $invCount = count($invoiceIdsMap);
         if ($onProgress) {
-            $onProgress('invoices', 85, 0, $invCount, "Resolving {$invCount} invoice records from accounting journal...");
+            $onProgress('invoices', 80, 0, $invCount, "Resolving {$invCount} invoice records from accounting journal...");
         }
 
         $invoices = [];
@@ -4298,11 +4320,46 @@ class OdooService
             $res = $this->execute('account.move', 'search_read', [
                 [['id', 'in', $iChunk]]
             ], [
-                'fields' => ['id', 'name', 'state', 'payment_state', 'move_type', 'invoice_date', 'create_date']
+                'fields' => [
+                    'id', 'name', 'state', 'payment_state', 'move_type', 'invoice_date',
+                    'create_date', 'amount_total', 'amount_untaxed', 'hrc_forminv_invoice_pic'
+                ]
             ]);
             foreach ($res as $inv) {
                 $invoices[$inv['id']] = $inv;
             }
+        }
+
+        // 6. Fetch linked rental.contract in 200-item chunks
+        $contracts = [];
+        $contractChunks = array_chunk(array_keys($contractIdsMap), 200);
+        foreach ($contractChunks as $cChunk) {
+            try {
+                $res = $this->execute('rental.contract', 'search_read', [
+                    [['id', 'in', $cChunk]]
+                ], [
+                    'fields' => ['id', 'name', 'reference']
+                ]);
+                foreach ($res as $c) {
+                    $contracts[$c['id']] = $c;
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // 7. Fetch linked sale.order.line in 200-item chunks
+        $orderLines = [];
+        $solChunks = array_chunk(array_keys($solIdsMap ?? []), 200);
+        foreach ($solChunks as $solChunk) {
+            try {
+                $res = $this->execute('sale.order.line', 'search_read', [
+                    [['id', 'in', $solChunk]]
+                ], [
+                    'fields' => ['id', 'order_id', 'product_id', 'duration_price', 'price_unit', 'tax_id']
+                ]);
+                foreach ($res as $l) {
+                    $orderLines[$l['id']] = $l;
+                }
+            } catch (\Throwable $e) {}
         }
 
         if ($onProgress) {
@@ -4318,6 +4375,8 @@ class OdooService
             'partners' => $partners,
             'lots' => $lots,
             'invoices' => $invoices,
+            'contracts' => $contracts,
+            'order_lines' => $orderLines,
             'sync_message' => "Sync complete: " . count($rawPeriods) . " billing periods and " . count($orders) . " contracts cached for fiscal year {$year}.",
             'cached_at' => now()->toDateTimeString(),
         ];
@@ -4349,6 +4408,59 @@ class OdooService
         $partners = $masterData['partners'] ?? [];
         $lots = $masterData['lots'] ?? [];
         $invoices = $masterData['invoices'] ?? [];
+        $contracts = $masterData['contracts'] ?? [];
+        $orderLines = $masterData['order_lines'] ?? [];
+
+        // On-the-fly resolution for contracts, order_lines, or partner PIC if not yet in cache
+        $missingContractIds = [];
+        $missingSolIds = [];
+        $missingPartnerIds = [];
+
+        foreach ($periods as $p) {
+            $soId = $p['rental_order_id'][0] ?? null;
+            $so = $soId ? ($orders[$soId] ?? []) : [];
+            if (!empty($so['rental_contract_id'][0]) && !isset($contracts[$so['rental_contract_id'][0]])) {
+                $missingContractIds[$so['rental_contract_id'][0]] = true;
+            }
+            if (!empty($p['rental_order_line_id'][0]) && !isset($orderLines[$p['rental_order_line_id'][0]])) {
+                $missingSolIds[$p['rental_order_line_id'][0]] = true;
+            } elseif (!empty($so['order_line'][0]) && !isset($orderLines[$so['order_line'][0]])) {
+                $missingSolIds[$so['order_line'][0]] = true;
+            }
+            $partnerId = $so['partner_id'][0] ?? null;
+            if ($partnerId && !isset($partners[$partnerId]['hrc_forminv_invoice_pic'])) {
+                $missingPartnerIds[$partnerId] = true;
+            }
+        }
+
+        if (!empty($missingContractIds)) {
+            foreach (array_chunk(array_keys($missingContractIds), 200) as $cChunk) {
+                try {
+                    $res = $this->execute('rental.contract', 'search_read', [[['id', 'in', $cChunk]]], ['fields' => ['id', 'name', 'reference']]);
+                    foreach ($res as $c) { $contracts[$c['id']] = $c; }
+                } catch (\Throwable $e) {}
+            }
+        }
+        if (!empty($missingSolIds)) {
+            foreach (array_chunk(array_keys($missingSolIds), 200) as $sChunk) {
+                try {
+                    $res = $this->execute('sale.order.line', 'search_read', [[['id', 'in', $sChunk]]], ['fields' => ['id', 'order_id', 'product_id', 'duration_price', 'price_unit', 'tax_id']]);
+                    foreach ($res as $l) { $orderLines[$l['id']] = $l; }
+                } catch (\Throwable $e) {}
+            }
+        }
+        if (!empty($missingPartnerIds)) {
+            foreach (array_chunk(array_keys($missingPartnerIds), 200) as $pChunk) {
+                try {
+                    $res = $this->execute('res.partner', 'search_read', [[['id', 'in', $pChunk]]], ['fields' => ['id', 'hrc_forminv_invoice_pic']]);
+                    foreach ($res as $p) {
+                        if (isset($partners[$p['id']])) {
+                            $partners[$p['id']]['hrc_forminv_invoice_pic'] = $p['hrc_forminv_invoice_pic'];
+                        }
+                    }
+                } catch (\Throwable $e) {}
+            }
+        }
 
         // Build month keys in range (e.g. ['2026-01', '2026-02', ...])
         $startDt = \Carbon\Carbon::parse($startMonth . '-01')->startOfMonth();
@@ -4418,6 +4530,34 @@ class OdooService
             $rentalStatus = $so['rental_status'] ?? 'pickedup';
             $areaName = $p['area_id'][1] ?? '';
 
+            // Resolve Contract Ref
+            $contractId = $so['rental_contract_id'][0] ?? null;
+            $contract = $contractId ? ($contracts[$contractId] ?? []) : [];
+            $contractNumber = !empty($contract['reference']) ? $contract['reference'] : (!empty($contract['name']) ? $contract['name'] : '-');
+
+            // Resolve Actual Rental Dates (in Asia/Jakarta timezone)
+            $actualStartRaw = $so['actual_start_rental'] ?? '';
+            $actualEndRaw = $so['actual_end_rental'] ?? '';
+            $actualStartFormatted = !empty($actualStartRaw)
+                ? \Carbon\Carbon::parse($actualStartRaw, 'UTC')->setTimezone('Asia/Jakarta')->format('d/m/Y')
+                : (!empty($startRentalPeriod) ? \Carbon\Carbon::parse($startRentalPeriod)->format('d/m/Y') : '-');
+            $actualEndFormatted = !empty($actualEndRaw)
+                ? \Carbon\Carbon::parse($actualEndRaw, 'UTC')->setTimezone('Asia/Jakarta')->format('d/m/Y')
+                : (!empty($p['end_rental_period_date']) ? \Carbon\Carbon::parse($p['end_rental_period_date'])->format('d/m/Y') : '-');
+
+            // Resolve Invoice Period & Invoice PIC
+            $invoicePeriod = $so['sale_invoice_period_id'][1] ?? 'Monthly';
+            $picName = $partner['hrc_forminv_invoice_pic'][1] ?? '-';
+
+            // Resolve Order Line & Duration Price
+            $solId = $p['rental_order_line_id'][0] ?? ($so['order_line'][0] ?? null);
+            $sol = $solId ? ($orderLines[$solId] ?? []) : [];
+            $durationPrice = (float)($sol['duration_price'] ?? $priceUnit);
+            $durationQty = (float)($p['rental_qty'] ?? 1.0);
+            if ($durationQty <= 0) {
+                $durationQty = 1.0;
+            }
+
             // 3. Evaluate Status as of Cutoff Date (The Point-in-Time Matrix)
             $invId = $p['invoice_id'][0] ?? null;
             $inv = $invId ? ($invoices[$invId] ?? null) : null;
@@ -4425,6 +4565,14 @@ class OdooService
             $invState = $inv['state'] ?? '';
             $payState = $inv['payment_state'] ?? '';
             $invNumber = $inv['name'] ?? '';
+
+            if (!empty($inv['hrc_forminv_invoice_pic'][1])) {
+                $picName = $inv['hrc_forminv_invoice_pic'][1];
+            }
+
+            // Total Gross (Inc. PPN 11%)
+            $invTotal = !empty($inv['amount_total']) ? (float)$inv['amount_total'] : null;
+            $totalGross = $invTotal ?? round($priceUnit * 1.11);
 
             $status = '';
             $statusLabel = '';
@@ -4487,59 +4635,71 @@ class OdooService
 
             // Search Filter Check
             if (!empty($searchLower)) {
-                $searchable = strtolower("{$customerCode} {$customerName} {$soNumber} {$poNumber} {$nopol} {$chassis} {$vehicleModel}");
+                $searchable = strtolower("{$customerCode} {$customerName} {$soNumber} {$poNumber} {$contractNumber} {$nopol} {$chassis} {$vehicleModel} {$picName}");
                 if (!str_contains($searchable, $searchLower)) {
                     continue;
                 }
             }
 
-            // Accumulate KPIs
-            $kpi['total_unbilled_value'] += $priceUnit;
+            // Accumulate KPIs (Gross Inc. PPN)
+            $kpi['total_unbilled_value'] += $totalGross;
             $distinctNopols[$nopol] = true;
 
             if ($status === 'draft') {
                 $kpi['draft_units']++;
-                $kpi['draft_value'] += $priceUnit;
+                $kpi['draft_value'] += $totalGross;
             } elseif ($status === 'post_cutoff') {
                 $kpi['post_cutoff_units']++;
-                $kpi['post_cutoff_value'] += $priceUnit;
+                $kpi['post_cutoff_value'] += $totalGross;
             } elseif ($status === 'reversed') {
                 $kpi['reversed_units']++;
-                $kpi['reversed_value'] += $priceUnit;
+                $kpi['reversed_value'] += $totalGross;
             } else {
                 $kpi['uninvoiced_units']++;
-                $kpi['uninvoiced_value'] += $priceUnit;
+                $kpi['uninvoiced_value'] += $totalGross;
             }
 
             if (in_array(strtolower($rentalStatus), ['returned', 'return'])) {
                 $kpi['returned_unbilled_units']++;
-                $kpi['returned_unbilled_value'] += $priceUnit;
+                $kpi['returned_unbilled_value'] += $totalGross;
             }
 
-            // Format 17-column flat row
+            // Format 22-column flat row
             $itemRow = [
                 'no' => $itemIndex++,
                 'kode_cust' => $customerCode,
                 'nama_customer' => $customerName,
                 'nomor_so' => $soNumber,
                 'nomor_po' => $poNumber,
+                'nomor_kontrak' => $contractNumber,
                 'nopol' => $nopol,
                 'chassis' => $chassis,
                 'model' => $vehicleModel,
                 'tahun' => $vehicleYear,
-                'start_period' => $startRentalPeriod,
-                'start_period_formatted' => \Carbon\Carbon::parse($startRentalPeriod)->format('d/m/Y'),
-                'end_period' => $p['end_rental_period_date'] ?? '',
-                'end_period_formatted' => !empty($p['end_rental_period_date']) ? \Carbon\Carbon::parse($p['end_rental_period_date'])->format('d/m/Y') : '',
+                'actual_start' => $actualStartFormatted,
+                'actual_end' => $actualEndFormatted,
                 'status' => $status,
                 'status_label' => $statusLabel,
                 'status_badge_class' => $statusBadgeClass,
                 'invoice_number' => $invNumber ?: '-',
                 'invoice_date' => $invDate ? \Carbon\Carbon::parse($invDate)->format('d/m/Y') : '-',
-                'price_unit' => $priceUnit,
-                'price_unit_formatted' => 'Rp ' . number_format($priceUnit, 0, ',', '.'),
+                'total' => $totalGross,
+                'total_formatted' => 'Rp ' . number_format($totalGross, 0, ',', '.'),
+                'duration' => $durationQty,
+                'duration_price' => $durationPrice,
+                'duration_price_formatted' => 'Rp ' . number_format($durationPrice, 0, ',', '.'),
+                'invoice_period' => $invoicePeriod,
                 'rental_status' => in_array(strtolower($rentalStatus), ['returned', 'return']) ? 'Returned' : 'Active on Rent',
                 'area_pemakaian' => $areaName ?: '-',
+                'invoice_pic' => $picName,
+
+                // Legacy keys preserved for backward compatibility
+                'price_unit' => $totalGross,
+                'price_unit_formatted' => 'Rp ' . number_format($totalGross, 0, ',', '.'),
+                'start_period' => $startRentalPeriod,
+                'start_period_formatted' => $actualStartFormatted,
+                'end_period' => $p['end_rental_period_date'] ?? '',
+                'end_period_formatted' => $actualEndFormatted,
             ];
             $items[] = $itemRow;
 
@@ -4558,8 +4718,8 @@ class OdooService
             }
 
             $pivotCustomers[$custKey]['months'][$pMonth]['qty']++;
-            $pivotCustomers[$custKey]['months'][$pMonth]['value'] += $priceUnit;
-            $pivotCustomers[$custKey]['total_value'] += $priceUnit;
+            $pivotCustomers[$custKey]['months'][$pMonth]['value'] += $totalGross;
+            $pivotCustomers[$custKey]['total_value'] += $totalGross;
 
             // Vehicle sub-row
             if (!isset($pivotCustomers[$custKey]['vehicles'][$nopol])) {
@@ -4574,10 +4734,10 @@ class OdooService
             }
 
             $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['qty']++;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['value'] += $priceUnit;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['value'] += $totalGross;
             $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status'] = $status;
             $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status_label'] = $statusLabel;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['total_value'] += $priceUnit;
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['total_value'] += $totalGross;
         }
 
         // Finalize pivot counts & sort

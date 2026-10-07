@@ -55,15 +55,198 @@
                 <span>Sync from Odoo</span>
             </button>
 
-            <!-- Export to CSV Button -->
             @if($isYearCached && $reportData && !empty($reportData['items']))
-                <a href="{{ route('accounting.uninvoiced.export', request()->all()) }}"
-                   class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all whitespace-nowrap">
-                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span>Export CSV (17 Cols)</span>
-                </a>
+                @php
+                    $exportParams = array_merge([
+                        'year' => $year,
+                        'start_month' => $startMonth,
+                        'end_month' => $endMonth,
+                        'cutoff_date' => $cutoffDate,
+                        'search' => $search,
+                        'status' => $status,
+                    ], request()->all());
+                @endphp
+                <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block mx-0.5"></div>
+
+                <!-- Export to Excel Dropdown -->
+                <div class="relative" x-data="{ openExport: false }" @click.outside="openExport = false">
+                    <button type="button" 
+                            @click="openExport = !openExport"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all whitespace-nowrap cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <span>Export Excel</span>
+                        <svg class="w-3 h-3 text-emerald-100 transition-transform duration-200" :class="{ 'rotate-180': openExport }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Excel Dropdown Menu -->
+                    <div x-show="openExport"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 scale-95 translate-y-1"
+                         x-cloak
+                         style="display: none;"
+                         class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                        
+                        <div class="px-3 py-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Choose Excel Export Format
+                        </div>
+
+                        <div class="py-1 space-y-1">
+                            <!-- Multi-Tab (Recommended) -->
+                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'multitab'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Multi-Tab Excel (2 Sheets)</span>
+                                        <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300 text-[9px] font-bold rounded">Recommended</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        <strong>Sheet 1:</strong> Customer Summary (Pivot)<br>
+                                        <strong>Sheet 2:</strong> Detailed Line-Item Audit (22 Cols)
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Detailed Audit (22 Cols) -->
+                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'detailed'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
+                                <div class="mt-0.5 p-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg group-hover:bg-slate-200 dark:group-hover:bg-slate-600 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white">Detailed Line-Item Audit (.xlsx)</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Single sheet containing all 22 audit columns with formatted Rupiah currency and auto-filter.
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Customer Summary (Pivot) -->
+                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'pivot'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-400">Customer Summary Pivot (.xlsx)</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Grouped by Customer with monthly unbilled values and unit counts.
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Raw CSV -->
+                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'csv'])) }}"
+                               @click="openExport = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-lg group-hover:bg-amber-200 dark:group-hover:bg-amber-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-400">CSV Export (.csv)</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Standard comma-separated file for fast processing.
+                                    </p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export to PDF Dropdown -->
+                <div class="relative" x-data="{ openPdf: false }" @click.outside="openPdf = false">
+                    <button type="button" 
+                            @click="openPdf = !openPdf"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all whitespace-nowrap cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Export PDF</span>
+                        <svg class="w-3 h-3 text-rose-100 transition-transform duration-200" :class="{ 'rotate-180': openPdf }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- PDF Dropdown Menu -->
+                    <div x-show="openPdf"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave-end="opacity-0 scale-95 translate-y-1"
+                         x-cloak
+                         style="display: none;"
+                         class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 divide-y divide-slate-100 dark:divide-slate-700/60">
+                        
+                        <div class="px-3 py-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Choose PDF Export Format
+                        </div>
+
+                        <div class="py-1 space-y-1">
+                            <!-- Detailed Audit PDF -->
+                            <a href="{{ route('accounting.uninvoiced.export-pdf', array_merge($exportParams, ['type' => 'detailed'])) }}"
+                               @click="openPdf = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors">
+                                <div class="mt-0.5 p-2 bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 rounded-lg group-hover:bg-rose-200 dark:group-hover:bg-rose-800 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-rose-700 dark:group-hover:text-rose-400">Detailed Line-Item Audit (PDF)</span>
+                                        <span class="px-1.5 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-900/80 dark:text-rose-300 text-[9px] font-bold rounded">Landscape A3</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Full operational audit table with color-coded status badges, PO numbers, and invoice numbers.
+                                    </p>
+                                </div>
+                            </a>
+
+                            <!-- Customer Summary PDF -->
+                            <a href="{{ route('accounting.uninvoiced.export-pdf', array_merge($exportParams, ['type' => 'summary'])) }}"
+                               @click="openPdf = false"
+                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
+                                <div class="mt-0.5 p-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg group-hover:bg-slate-200 dark:group-hover:bg-slate-600 transition-colors shrink-0">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white">Customer Summary Pivot (PDF)</span>
+                                        <span class="px-1.5 py-0.5 bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-300 text-[9px] font-bold rounded">Landscape A4</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                        Executive presentation format showing monthly unbilled values and unit counts per customer.
+                                    </p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
             @endif
         </div>
     </div>
@@ -308,7 +491,7 @@
                             :class="activeTab === 'detailed' ? 'bg-indigo-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700 font-semibold'"
                             class="px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
-                        <span>Detailed Audit Table (17 Columns)</span>
+                        <span>Detailed Audit Table (22 Columns)</span>
                         <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $activeTab === 'detailed' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
                             {{ count($reportData['items']) }}
                         </span>
@@ -332,28 +515,33 @@
                 </div>
             </div>
 
-            <!-- TAB 1: DETAILED LINE-ITEM AUDIT TABLE (17 COLUMNS) -->
+            <!-- TAB 1: DETAILED LINE-ITEM AUDIT TABLE (22 COLUMNS) -->
             <div x-show="activeTab === 'detailed'" class="overflow-x-auto max-h-[72vh] relative">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead class="sticky top-0 z-20 bg-slate-900 text-white text-[11px] uppercase tracking-wider font-bold">
                         <tr class="divide-x divide-slate-700/80">
                             <th class="py-2.5 px-2 text-center w-12 bg-slate-900">No.</th>
                             <th class="py-2.5 px-2.5 min-w-[80px] bg-slate-900">Kode Cust</th>
-                            <th class="py-2.5 px-3 min-w-[200px] bg-slate-900 sticky left-0 z-30 shadow-sm">Nama Customer</th>
+                            <th class="py-2.5 px-3 min-w-[190px] bg-slate-900 sticky left-0 z-30 shadow-sm">Nama Customer</th>
                             <th class="py-2.5 px-2.5 min-w-[110px] bg-slate-800">Nomor SO</th>
-                            <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">Nomor PO / Kontrak</th>
+                            <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">Nomor PO</th>
+                            <th class="py-2.5 px-2.5 min-w-[130px] bg-slate-800">Nomor Kontrak</th>
                             <th class="py-2.5 px-2.5 min-w-[95px] bg-slate-800">Nopol</th>
-                            <th class="py-2.5 px-2.5 min-w-[150px] bg-slate-800">No. Rangka (Chassis)</th>
-                            <th class="py-2.5 px-3 min-w-[180px] bg-slate-800">Model Kendaraan</th>
-                            <th class="py-2.5 px-2 text-center min-w-[65px] bg-slate-800">Tahun</th>
-                            <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Start Period</th>
-                            <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">End Period</th>
+                            <th class="py-2.5 px-2.5 min-w-[140px] bg-slate-800">No. Rangka (Chassis)</th>
+                            <th class="py-2.5 px-3 min-w-[160px] bg-slate-800">Model Kendaraan</th>
+                            <th class="py-2.5 px-2 text-center min-w-[65px] bg-slate-800">Tahun Mobil</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Actual Start</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Actual End</th>
                             <th class="py-2.5 px-3 min-w-[160px] bg-slate-900">Status per Cutoff</th>
-                            <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">No. Invoice Odoo</th>
-                            <th class="py-2.5 px-2.5 text-center min-w-[100px] bg-slate-800">Tgl Invoice</th>
-                            <th class="py-2.5 px-3 text-right min-w-[120px] bg-slate-900">Nilai Sewa (IDR)</th>
+                            <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">Nomor Invoice Odoo</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[100px] bg-slate-800">Tanggal Invoice Odoo</th>
+                            <th class="py-2.5 px-3 text-right min-w-[120px] bg-slate-900">Total</th>
+                            <th class="py-2.5 px-2 text-center min-w-[70px] bg-slate-800">Duration</th>
+                            <th class="py-2.5 px-3 text-right min-w-[120px] bg-slate-800">Duration Price</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[100px] bg-slate-800">Invoice Period</th>
                             <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Rental Status</th>
-                            <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">Area Pemakaian</th>
+                            <th class="py-2.5 px-2.5 min-w-[110px] bg-slate-800">Area Pemakaian</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[100px] bg-slate-800">Invoice PIC</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 text-slate-700 dark:text-slate-200">
@@ -361,17 +549,18 @@
                             <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
                                 <td class="py-2 px-2 text-center text-slate-400 font-mono text-[11px]">{{ $item['no'] }}</td>
                                 <td class="py-2 px-2.5 font-mono text-indigo-600 dark:text-indigo-400 font-semibold">{{ $item['kode_cust'] ?: '-' }}</td>
-                                <td class="py-2 px-3 font-bold text-slate-800 dark:text-slate-100 sticky left-0 z-10 bg-white dark:bg-slate-800 shadow-sm truncate max-w-[220px]" title="{{ $item['nama_customer'] }}">
+                                <td class="py-2 px-3 font-bold text-slate-800 dark:text-slate-100 sticky left-0 z-10 bg-white dark:bg-slate-800 shadow-sm truncate max-w-[200px]" title="{{ $item['nama_customer'] }}">
                                     {{ $item['nama_customer'] }}
                                 </td>
                                 <td class="py-2 px-2.5 font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">{{ $item['nomor_so'] }}</td>
-                                <td class="py-2 px-2.5 text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-[130px]" title="{{ $item['nomor_po'] }}">{{ $item['nomor_po'] ?: '-' }}</td>
+                                <td class="py-2 px-2.5 text-slate-500 dark:text-slate-400 text-[11px] truncate max-w-[120px]" title="{{ $item['nomor_po'] }}">{{ $item['nomor_po'] ?: '-' }}</td>
+                                <td class="py-2 px-2.5 text-slate-600 dark:text-slate-300 text-[11px] truncate max-w-[130px]" title="{{ $item['nomor_kontrak'] }}">{{ $item['nomor_kontrak'] ?: '-' }}</td>
                                 <td class="py-2 px-2.5 font-mono font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">{{ $item['nopol'] }}</td>
-                                <td class="py-2 px-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[150px]" title="{{ $item['chassis'] }}">{{ $item['chassis'] ?: '-' }}</td>
-                                <td class="py-2 px-3 text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[180px]" title="{{ $item['model'] }}">{{ $item['model'] }}</td>
+                                <td class="py-2 px-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[140px]" title="{{ $item['chassis'] }}">{{ $item['chassis'] ?: '-' }}</td>
+                                <td class="py-2 px-3 text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[160px]" title="{{ $item['model'] }}">{{ $item['model'] }}</td>
                                 <td class="py-2 px-2 text-center text-slate-400 font-mono text-[11px]">{{ $item['tahun'] ?: '-' }}</td>
-                                <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['start_period_formatted'] }}</td>
-                                <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['end_period_formatted'] ?: '-' }}</td>
+                                <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['actual_start'] ?? $item['start_period_formatted'] }}</td>
+                                <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['actual_end'] ?? $item['end_period_formatted'] ?: '-' }}</td>
                                 <td class="py-2 px-3">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border {{ $item['status_badge_class'] }}">
                                         {{ $item['status_label'] }}
@@ -380,18 +569,26 @@
                                 <td class="py-2 px-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['invoice_number'] }}</td>
                                 <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-500 dark:text-slate-400">{{ $item['invoice_date'] }}</td>
                                 <td class="py-2 px-3 text-right font-mono font-bold text-slate-800 dark:text-slate-100">
-                                    {{ $item['price_unit_formatted'] }}
+                                    {{ $item['total_formatted'] ?? $item['price_unit_formatted'] }}
                                 </td>
+                                <td class="py-2 px-2 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                                    {{ number_format((float)($item['duration'] ?? 1.0), 2) }}
+                                </td>
+                                <td class="py-2 px-3 text-right font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                                    {{ $item['duration_price_formatted'] ?? ('Rp ' . number_format($item['duration_price'] ?? 0, 0, ',', '.')) }}
+                                </td>
+                                <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['invoice_period'] ?: '-' }}</td>
                                 <td class="py-2 px-2.5 text-center">
                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $item['rental_status'] === 'Returned' ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' }}">
                                         {{ $item['rental_status'] }}
                                     </span>
                                 </td>
-                                <td class="py-2 px-2.5 text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[120px]">{{ $item['area_pemakaian'] }}</td>
+                                <td class="py-2 px-2.5 text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[110px]">{{ $item['area_pemakaian'] }}</td>
+                                <td class="py-2 px-2.5 text-center text-[11px] font-medium text-slate-600 dark:text-slate-300">{{ $item['invoice_pic'] ?: '-' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="17" class="py-12 text-center text-slate-400">
+                                <td colspan="22" class="py-12 text-center text-slate-400">
                                     <svg class="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                     <p class="font-bold text-sm text-slate-700 dark:text-slate-200">No Uninvoiced Records Found</p>
                                     <p class="text-xs text-slate-400 mt-0.5">All rental periods starting on or before {{ $reportData['cutoff_date_formatted'] }} have valid posted invoices!</p>

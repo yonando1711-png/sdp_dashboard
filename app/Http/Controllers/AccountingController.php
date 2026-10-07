@@ -7,6 +7,9 @@ use App\Services\OdooService;
 use App\Exports\SummaryRentedVehicleExport;
 use App\Exports\SummaryRentedVehicleHierarchicalExport;
 use App\Exports\SummaryRentedVehicleMultiTabExport;
+use App\Exports\UninvoicedAccountingMultiTabExport;
+use App\Exports\UninvoicedAccountingDetailedExport;
+use App\Exports\UninvoicedAccountingCustomerExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 
@@ -569,12 +572,12 @@ class AccountingController extends Controller
     }
 
     /**
-     * Export Uninvoiced Accounting Report to CSV matching the exact 17 columns
+     * Export Uninvoiced Accounting Report to Excel (.xlsx) or CSV
      */
     public function exportUninvoiced(Request $request)
     {
         if (!auth()->user()->canViewUninvoicedAccounting()) {
-            abort(403, 'Access Denied.');
+            abort(403, 'Access Denied: You do not have permission to export this report.');
         }
 
         $year = (int)$request->input('year', now()->year);
@@ -582,8 +585,12 @@ class AccountingController extends Controller
         $endMonth = $request->input('end_month', $year == now()->year ? now()->format('Y-m') : "{$year}-12");
         $defaultCutoff = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth()->format('Y-m-d');
         $cutoffDate = $request->input('cutoff_date', $defaultCutoff);
+        if (empty($cutoffDate)) {
+            $cutoffDate = $defaultCutoff;
+        }
         $search = trim((string)$request->input('search', ''));
         $status = $request->input('status', 'all');
+        $format = $request->input('format', 'multitab');
 
         $masterCacheKey = "uninvoiced_accounting_master_{$year}";
         $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);
@@ -601,65 +608,194 @@ class AccountingController extends Controller
             $status
         );
 
-        $fileName = sprintf(
-            'Uninvoiced_Accounting_Cutoff_%s_%s_to_%s.csv',
-            str_replace('-', '', $cutoffDate),
-            str_replace('-', '', $startMonth),
-            str_replace('-', '', $endMonth)
+        $cutoffClean = str_replace('-', '', $cutoffDate);
+        $startClean = str_replace('-', '', $startMonth);
+        $endClean = str_replace('-', '', $endMonth);
+
+        // 1. Detailed Audit Excel (17 Columns, 1 Sheet)
+        if ($format === 'detailed') {
+            $fileName = sprintf('Uninvoiced_Accounting_Detailed_%s_%s_to_%s.xlsx', $cutoffClean, $startClean, $endClean);
+            return Excel::download(
+                new UninvoicedAccountingDetailedExport($reportData, $cutoffDate, $startMonth, $endMonth, $status),
+                $fileName
+            );
+        }
+
+        // 2. Customer Summary Excel (Pivot, 1 Sheet)
+        if ($format === 'pivot') {
+            $fileName = sprintf('Uninvoiced_Accounting_Customer_Summary_%s_%s_to_%s.xlsx', $cutoffClean, $startClean, $endClean);
+            return Excel::download(
+                new UninvoicedAccountingCustomerExport($reportData, $cutoffDate, $startMonth, $endMonth),
+                $fileName
+            );
+        }
+
+        // 3. Raw Streamed CSV Export (22 Columns)
+        if ($format === 'csv') {
+            $fileName = sprintf('Uninvoiced_Accounting_%s_%s_to_%s.csv', $cutoffClean, $startClean, $endClean);
+            $columns = [
+                'No.',
+                'Kode Cust',
+                'Nama Customer',
+                'Nomor SO',
+                'Nomor PO',
+                'Nomor Kontrak',
+                'Nopol',
+                'No. Rangka (Chassis)',
+                'Model Kendaraan',
+                'Tahun Mobil',
+                'Actual Start',
+                'Actual End',
+                'Status per Cutoff',
+                'Nomor Invoice Odoo',
+                'Tanggal Invoice Odoo',
+                'Total',
+                'Duration',
+                'Duration Price',
+                'Invoice Period',
+                'Rental Status',
+                'Area Pemakaian',
+                'Invoice PIC',
+            ];
+
+            return response()->streamDownload(function () use ($columns, $reportData) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM
+                fputcsv($handle, $columns);
+
+                foreach ($reportData['items'] as $item) {
+                    fputcsv($handle, [
+                        $item['no'] ?? '',
+                        $item['kode_cust'] ?? '',
+                        $item['nama_customer'] ?? '',
+                        $item['nomor_so'] ?? '',
+                        $item['nomor_po'] ?? '',
+                        $item['nomor_kontrak'] ?? '',
+                        $item['nopol'] ?? '',
+                        $item['chassis'] ?? '',
+                        $item['model'] ?? '',
+                        $item['tahun'] ?? '',
+                        $item['actual_start'] ?? $item['start_period_formatted'] ?? '',
+                        $item['actual_end'] ?? $item['end_period_formatted'] ?? '',
+                        $item['status_label'] ?? '',
+                        $item['invoice_number'] ?? '-',
+                        $item['invoice_date'] ?? '-',
+                        $item['total'] ?? $item['price_unit'] ?? 0,
+                        $item['duration'] ?? 1.0,
+                        $item['duration_price'] ?? 0,
+                        $item['invoice_period'] ?? '',
+                        $item['rental_status'] ?? '',
+                        $item['area_pemakaian'] ?? '-',
+                        $item['invoice_pic'] ?? '-',
+                    ]);
+                }
+
+                fclose($handle);
+            }, $fileName, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+            ]);
+        }
+
+        // 4. Default: Multi-Tab Excel (.xlsx - 2 Sheets: Customer Summary + Detailed Audit)
+        $fileName = sprintf('Uninvoiced_Accounting_MultiTab_%s_%s_to_%s.xlsx', $cutoffClean, $startClean, $endClean);
+        return Excel::download(
+            new UninvoicedAccountingMultiTabExport($reportData, $cutoffDate, $startMonth, $endMonth, $status),
+            $fileName
+        );
+    }
+
+    /**
+     * Export Uninvoiced Accounting Report to PDF (.pdf)
+     */
+    public function exportUninvoicedPdf(Request $request)
+    {
+        if (!auth()->user()->canViewUninvoicedAccounting()) {
+            abort(403, 'Access Denied: You do not have permission to export this report.');
+        }
+
+        set_time_limit(300);
+        ini_set('memory_limit', '1024M');
+
+        $year = (int)$request->input('year', now()->year);
+        $startMonth = $request->input('start_month', "{$year}-01");
+        $endMonth = $request->input('end_month', $year == now()->year ? now()->format('Y-m') : "{$year}-12");
+        $defaultCutoff = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth()->format('Y-m-d');
+        $cutoffDate = $request->input('cutoff_date', $defaultCutoff);
+        if (empty($cutoffDate)) {
+            $cutoffDate = $defaultCutoff;
+        }
+        $search = trim((string)$request->input('search', ''));
+        $status = $request->input('status', 'all');
+        $type = $request->input('type', 'detailed'); // 'summary' or 'detailed'
+
+        $masterCacheKey = "uninvoiced_accounting_master_{$year}";
+        $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);
+
+        if (empty($masterData)) {
+            $masterData = $this->odooService->fetchUninvoicedAccountingMaster($year);
+        }
+
+        $reportData = $this->odooService->compileUninvoicedReport(
+            $masterData,
+            $cutoffDate,
+            $startMonth,
+            $endMonth,
+            $search,
+            $status
         );
 
-        $columns = [
-            'No.',
-            'Kode Cust',
-            'Nama Customer',
-            'Nomor SO',
-            'Nomor PO / Kontrak',
-            'Nopol',
-            'No. Rangka (Chassis)',
-            'Model Kendaraan',
-            'Tahun Mobil',
-            'Start Period',
-            'End Period',
-            'Status per Cutoff',
-            'Nomor Invoice Odoo',
-            'Tanggal Invoice Odoo',
-            'Nilai Sewa (IDR)',
-            'Rental Status',
-            'Area Pemakaian'
-        ];
+        // Guard against memory limits if too many rows in detailed PDF
+        if ($type === 'detailed' && count($reportData['items'] ?? []) > 600) {
+            return redirect()->route('accounting.uninvoiced', array_merge($request->all(), ['year' => $year]))
+                ->with('error', 'Laporan Detailed Audit PDF berisi ' . number_format(count($reportData['items'])) . ' baris kendaraan, melebihi batas memori PDF browser. Silakan gunakan opsi "Export Excel" untuk mengekspor seluruh ' . number_format(count($reportData['items'])) . ' kendaraan secara instan, atau gunakan filter Search / Status untuk mempersempit data PDF.');
+        }
 
-        return response()->streamDownload(function () use ($columns, $reportData) {
-            $handle = fopen('php://output', 'w');
-            // Add UTF-8 BOM for Excel compatibility
-            fputs($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $columns);
+        $options = new \Dompdf\Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+        $options->set('isPhpEnabled', true);
 
-            foreach ($reportData['items'] as $item) {
-                fputcsv($handle, [
-                    $item['no'],
-                    $item['kode_cust'],
-                    $item['nama_customer'],
-                    $item['nomor_so'],
-                    $item['nomor_po'],
-                    $item['nopol'],
-                    $item['chassis'],
-                    $item['model'],
-                    $item['tahun'],
-                    $item['start_period_formatted'],
-                    $item['end_period_formatted'],
-                    $item['status_label'],
-                    $item['invoice_number'],
-                    $item['invoice_date'],
-                    $item['price_unit'],
-                    $item['rental_status'],
-                    $item['area_pemakaian'],
-                ]);
-            }
+        $dompdf = new \Dompdf\Dompdf($options);
 
-            fclose($handle);
-        }, $fileName, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
-        ]);
+        $html = view('exports.uninvoiced_accounting_pdf', [
+            'type' => $type,
+            'items' => $reportData['items'] ?? [],
+            'pivotCustomers' => $reportData['pivot_customers'] ?? [],
+            'monthKeys' => $reportData['month_keys'] ?? [],
+            'monthLabels' => $reportData['month_labels'] ?? [],
+            'monthTotals' => $reportData['month_totals'] ?? [],
+            'totals' => $reportData['month_totals'] ?? [],
+            'kpis' => $reportData['kpis'] ?? [],
+            'kpi' => $reportData['kpis'] ?? [],
+            'cutoffDate' => $cutoffDate,
+            'startMonth' => $startMonth,
+            'endMonth' => $endMonth,
+            'search' => $search,
+            'statusFilter' => $status,
+        ])->render();
+
+        $dompdf->loadHtml($html);
+        $paperSize = ($type === 'detailed' || count($reportData['month_keys'] ?? []) > 6) ? 'A3' : 'A4';
+        $dompdf->setPaper($paperSize, 'landscape');
+        $dompdf->render();
+
+        $cutoffClean = str_replace('-', '', $cutoffDate);
+        $startClean = str_replace('-', '', $startMonth);
+        $endClean = str_replace('-', '', $endMonth);
+
+        $fileName = sprintf(
+            'Uninvoiced_Accounting_%s_%s_%s_to_%s.pdf',
+            ucfirst($type),
+            $cutoffClean,
+            $startClean,
+            $endClean
+        );
+
+        return response()->streamDownload(
+            fn () => print($dompdf->output()),
+            $fileName,
+            ['Content-Type' => 'application/pdf']
+        );
     }
 }

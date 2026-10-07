@@ -124,6 +124,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/accounting/uninvoiced/sync', [AccountingController::class, 'triggerUninvoicedSync'])->name('accounting.uninvoiced.sync');
             Route::get('/accounting/uninvoiced/sync-progress', [AccountingController::class, 'getUninvoicedSyncProgress'])->name('accounting.uninvoiced.sync-progress');
             Route::get('/accounting/uninvoiced/export', [AccountingController::class, 'exportUninvoiced'])->name('accounting.uninvoiced.export');
+            Route::get('/accounting/uninvoiced/export-pdf', [AccountingController::class, 'exportUninvoicedPdf'])->name('accounting.uninvoiced.export-pdf');
         });
     });
 
