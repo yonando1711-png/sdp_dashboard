@@ -40,7 +40,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
         $col = $cell->getColumn();
         $row = $cell->getRow();
 
-        if ($row >= $this->firstDataRow && in_array($col, ['B', 'D', 'E', 'F', 'G', 'H', 'N'])) {
+        if ($row >= $this->firstDataRow && in_array($col, ['B', 'D', 'E', 'F', 'G', 'H', 'S', 'U'])) {
             $cell->setValueExplicit((string)$value, DataType::TYPE_STRING);
             return true;
         }
@@ -77,7 +77,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
         $this->rows[] = ["As-of Cutoff Date: {$cutoffFmt} | Period Range: {$fromFmt} to {$toFmt} | Status Filter: {$statusText}"];
         $this->rows[] = ['']; // Blank separator (Row 4)
 
-        // Header Row (22 Columns matching Odoo & specification)
+        // Header Row (25 Columns matching Odoo & legacy FlexCel specification)
         $this->rows[] = [
             'No.',
             'Kode Cust',
@@ -89,14 +89,17 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
             'No. Rangka (Chassis)',
             'Model Kendaraan',
             'Tahun Mobil',
-            'Actual Start ',
+            'Actual Start',
             'Actual End',
+            'Uninvoiced Start (ddtstr)',
+            'Uninvoiced End (ddtend)',
+            'Duration (nlen)',
+            'Hg Sewa Inc PPN',
+            'Total Accrued',
             'Status per Cutoff',
             'Nomor Invoice Odoo',
             'Tanggal Invoice Odoo',
-            'Total',
-            'Duration',
-            'Duration Price',
+            'Invoice Realisasi',
             'Invoice Period',
             'Rental Status',
             'Area Pemakaian',
@@ -106,15 +109,15 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
         // Data Rows
         $items = $this->reportData['items'] ?? [];
         $totalGrossSum = 0;
-        $totalDurationPriceSum = 0;
+        $totalHgSwSum = 0;
 
         foreach ($items as $item) {
             $totalGross = (float) ($item['total'] ?? $item['price_unit'] ?? 0);
             $durationQty = (float) ($item['duration'] ?? 1.0);
-            $durationPrice = (float) ($item['duration_price'] ?? 0);
+            $hgSw = (float) ($item['hg_sw'] ?? round(($item['duration_price'] ?? 0) * 1.11));
 
             $totalGrossSum += $totalGross;
-            $totalDurationPriceSum += $durationPrice;
+            $totalHgSwSum += $hgSw;
 
             $this->rows[] = [
                 $item['no'] ?? '',
@@ -129,12 +132,15 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
                 $item['tahun'] ?? '',
                 $item['actual_start'] ?? $item['start_period_formatted'] ?? '',
                 $item['actual_end'] ?? $item['end_period_formatted'] ?? '',
+                $item['ddtstr_formatted'] ?? $item['ddtstr'] ?? '',
+                $item['ddtend_formatted'] ?? $item['ddtend'] ?? '',
+                $durationQty,
+                $hgSw,
+                $totalGross,
                 $item['status_label'] ?? '',
                 $item['invoice_number'] ?? '-',
                 $item['invoice_date'] ?? '-',
-                $totalGross,
-                $durationQty,
-                $durationPrice,
+                $item['realization_str'] ?? '-',
                 $item['invoice_period'] ?? '',
                 $item['rental_status'] ?? '',
                 $item['area_pemakaian'] ?? '-',
@@ -142,7 +148,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
             ];
         }
 
-        // Summary Total Row (22 Columns)
+        // Summary Total Row (25 Columns)
         $this->rows[] = [
             'Grand Total', // A
             '',            // B
@@ -158,14 +164,17 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
             '',            // L
             '',            // M
             '',            // N
-            '',            // O
-            $totalGrossSum, // P: Total Gross
-            '',            // Q: Duration
-            $totalDurationPriceSum, // R: Duration Price
-            '',            // S
-            '',            // T
-            '',            // U
-            ''             // V
+            '',            // O: Duration (nlen)
+            $totalHgSwSum, // P: Hg Sewa Inc PPN sum
+            $totalGrossSum,// Q: Total Accrued sum
+            '',            // R: Status
+            '',            // S: Nomor Invoice
+            '',            // T: Tanggal Invoice
+            '',            // U: Invoice Realisasi
+            '',            // V: Invoice Period
+            '',            // W: Rental Status
+            '',            // X: Area Pemakaian
+            ''             // Y: Invoice PIC
         ];
 
         $this->totalRow = count($this->rows);
@@ -181,7 +190,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $lastColLetter = 'V'; // 22 columns: A to V
+                $lastColLetter = 'Y'; // 25 columns: A to Y
 
                 // Merge title block across A-G so Column A (No.) stays small and neat
                 $sheet->mergeCells("A1:G1");
@@ -201,6 +210,12 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 ]);
 
+                // Highlight headers for Uninvoiced Period columns (M & N) with a distinct indigo accent
+                $sheet->getStyle("M{$this->headerRow}:N{$this->headerRow}")->applyFromArray([
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '312E81']],
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FDE047'], 'size' => 10],
+                ]);
+
                 // Auto-filter
                 if ($this->totalRow > $this->firstDataRow) {
                     $sheet->setAutoFilter("A{$this->headerRow}:{$lastColLetter}" . ($this->totalRow - 1));
@@ -212,36 +227,36 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
 
                 // Center columns:
                 // A: No., B: Kode Cust, D: Nomor SO, E: Nomor PO, F: Nomor Kontrak, G: Nopol,
-                // J: Tahun Mobil, K: Actual Start, L: Actual End, M: Status per Cutoff,
-                // N: Nomor Invoice Odoo, O: Tanggal Invoice Odoo, Q: Duration, S: Invoice Period,
-                // T: Rental Status, V: Invoice PIC
-                $centerCols = ['A', 'B', 'D', 'E', 'F', 'G', 'J', 'K', 'L', 'M', 'N', 'O', 'Q', 'S', 'T', 'V'];
+                // J: Tahun Mobil, K: Actual Start, L: Actual End, M: Uninvoiced Start, N: Uninvoiced End,
+                // O: Duration, R: Status per Cutoff, S: Nomor Invoice Odoo, T: Tanggal Invoice Odoo,
+                // V: Invoice Period, W: Rental Status, Y: Invoice PIC
+                $centerCols = ['A', 'B', 'D', 'E', 'F', 'G', 'J', 'K', 'L', 'M', 'N', 'O', 'R', 'S', 'T', 'V', 'W', 'Y'];
                 foreach ($centerCols as $cCol) {
                     $sheet->getStyle("{$cCol}{$firstRow}:{$cCol}{$lastRow}")
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 }
 
                 // Explicit text format for identification columns (guarantees Excel never converts PO/SO/Chassis to scientific notation)
-                $textCols = ['B', 'D', 'E', 'F', 'G', 'H', 'N'];
+                $textCols = ['B', 'D', 'E', 'F', 'G', 'H', 'S', 'U'];
                 foreach ($textCols as $tCol) {
                     $sheet->getStyle("{$tCol}{$firstRow}:{$tCol}{$lastRow}")
                         ->getNumberFormat()->setFormatCode('@');
                 }
 
-                // Currency format for Column P (Total) and Column R (Duration Price)
-                $sheet->getStyle("P{$firstRow}:P{$lastRow}")
-                    ->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle("P{$firstRow}:P{$lastRow}")
-                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
-                $sheet->getStyle("R{$firstRow}:R{$lastRow}")
-                    ->getNumberFormat()->setFormatCode('#,##0');
-                $sheet->getStyle("R{$firstRow}:R{$lastRow}")
-                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
-                // Decimal format for Column Q (Duration)
-                $sheet->getStyle("Q{$firstRow}:Q{$lastRow}")
+                // Decimal format for Column O (Duration / nlen)
+                $sheet->getStyle("O{$firstRow}:O{$lastRow}")
                     ->getNumberFormat()->setFormatCode('0.00');
+
+                // Currency format for Column P (Hg Sewa Inc PPN) and Column Q (Total Accrued)
+                $sheet->getStyle("P{$firstRow}:P{$lastRow}")
+                    ->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("P{$firstRow}:P{$lastRow}")
+                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                $sheet->getStyle("Q{$firstRow}:Q{$lastRow}")
+                    ->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("Q{$firstRow}:Q{$lastRow}")
+                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 // Grid borders
                 $dataRange = "A{$this->headerRow}:{$lastColLetter}{$lastRow}";

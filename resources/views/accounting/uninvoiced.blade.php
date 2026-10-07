@@ -491,7 +491,7 @@
                             :class="activeTab === 'detailed' ? 'bg-indigo-600 text-white shadow-xs font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700 font-semibold'"
                             class="px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
-                        <span>Detailed Audit Table (22 Columns)</span>
+                        <span>Detailed Audit Table</span>
                         <span class="px-1.5 py-0.5 rounded-full text-[10px] {{ $activeTab === 'detailed' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' }}">
                             {{ count($reportData['items']) }}
                         </span>
@@ -515,7 +515,7 @@
                 </div>
             </div>
 
-            <!-- TAB 1: DETAILED LINE-ITEM AUDIT TABLE (22 COLUMNS) -->
+            <!-- TAB 1: DETAILED LINE-ITEM AUDIT TABLE -->
             <div x-show="activeTab === 'detailed'" class="overflow-x-auto max-h-[72vh] relative">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead class="sticky top-0 z-20 bg-slate-900 text-white text-[11px] uppercase tracking-wider font-bold">
@@ -532,6 +532,8 @@
                             <th class="py-2.5 px-2 text-center min-w-[65px] bg-slate-800">Tahun Mobil</th>
                             <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Actual Start</th>
                             <th class="py-2.5 px-2.5 text-center min-w-[95px] bg-slate-800">Actual End</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[110px] bg-indigo-950 text-amber-300 font-bold border-x border-indigo-800">Uninvoiced Start</th>
+                            <th class="py-2.5 px-2.5 text-center min-w-[110px] bg-indigo-950 text-amber-300 font-bold border-r border-indigo-800">Uninvoiced End</th>
                             <th class="py-2.5 px-3 min-w-[160px] bg-slate-900">Status per Cutoff</th>
                             <th class="py-2.5 px-2.5 min-w-[120px] bg-slate-800">Nomor Invoice Odoo</th>
                             <th class="py-2.5 px-2.5 text-center min-w-[100px] bg-slate-800">Tanggal Invoice Odoo</th>
@@ -561,6 +563,8 @@
                                 <td class="py-2 px-2 text-center text-slate-400 font-mono text-[11px]">{{ $item['tahun'] ?: '-' }}</td>
                                 <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['actual_start'] ?? $item['start_period_formatted'] }}</td>
                                 <td class="py-2 px-2.5 text-center font-mono text-[11px] text-slate-600 dark:text-slate-300">{{ $item['actual_end'] ?? $item['end_period_formatted'] ?: '-' }}</td>
+                                <td class="py-2 px-2.5 text-center font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20 whitespace-nowrap">{{ $item['ddtstr_formatted'] }}</td>
+                                <td class="py-2 px-2.5 text-center font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20 whitespace-nowrap">{{ $item['ddtend_formatted'] }}</td>
                                 <td class="py-2 px-3">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border {{ $item['status_badge_class'] }}">
                                         {{ $item['status_label'] }}
@@ -588,7 +592,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="22" class="py-12 text-center text-slate-400">
+                                <td colspan="24" class="py-12 text-center text-slate-400">
                                     <svg class="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                     <p class="font-bold text-sm text-slate-700 dark:text-slate-200">No Uninvoiced Records Found</p>
                                     <p class="text-xs text-slate-400 mt-0.5">All rental periods starting on or before {{ $reportData['cutoff_date_formatted'] }} have valid posted invoices!</p>
