@@ -32,6 +32,11 @@ pph23_analysis.md
 sdp_dashboard_*.md
 *_analysis.md
 *_audit.md
+*_plan.md
+*_steps.md
+uninvoiced_*.md
+UNINVOICED_*.md
+*.py
 
 # Local debug/scratch scripts
 /scratch/
