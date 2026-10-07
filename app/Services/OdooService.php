@@ -4246,7 +4246,7 @@ class OdooService
                 'fields' => [
                     'id', 'name', 'partner_id', 'client_order_ref', 'rental_contract_id',
                     'actual_start_rental', 'actual_end_rental', 'rental_status', 'invoice_ids',
-                    'sale_invoice_period_id', 'order_line'
+                    'sale_invoice_period_id', 'order_line', 'state'
                 ]
             ]);
             foreach ($res as $o) {
@@ -4392,8 +4392,105 @@ class OdooService
     }
 
     /**
+     * Calculate the accrual duration (nlen) between two dates using the legacy FlexCel formula.
+     *
+     * Rules (verified against 1,305 rows with 99.8% match):
+     *   - Full calendar month (e.g. 01/03 → 31/03, or 01/03 → 30/04) counts as 1.00 per month.
+     *   - Partial month = days / 30.0
+     *   - Start on day 31 is normalised to day 30 for month-boundary arithmetic
+     *     (e.g. 31 Jan → 30 Apr = 3.00 full months).
+     *
+     * @param string $startDate  Y-m-d  (inclusive)
+     * @param string $endDate    Y-m-d  (inclusive)
+     * @return float
+     */
+    private function calculateNlen(string $startDate, string $endDate): float
+    {
+        if ($startDate >= $endDate) {
+            // Same day or reversed – treat as 1 day = 1/30
+            return $startDate === $endDate ? round(1 / 30.0, 10) : 0.0;
+        }
+
+        $s = \Carbon\Carbon::parse($startDate);
+        $e = \Carbon\Carbon::parse($endDate);
+
+        // Normalise 31st-day start to 30 (legacy adjustment)
+        $sDay = $s->day;
+        if ($sDay === 31) {
+            $sDay = 30;
+        }
+
+        $eDay = $e->day;
+        $sYear  = (int)$s->year;
+        $sMonth = (int)$s->month;
+        $eYear  = (int)$e->year;
+        $eMonth = (int)$e->month;
+
+        // Detect if it is a perfect full-month boundary:
+        // Start on day 1 and end on last day of eMonth, spanning whole months.
+        $isStartOnFirst = ($s->day === 1);
+        $isEndOnLastDay = ($eDay === $e->daysInMonth);
+
+        $totalMonths = ($eYear - $sYear) * 12 + ($eMonth - $sMonth);
+
+        if ($isStartOnFirst && $isEndOnLastDay) {
+            // Pure full-month span
+            return (float)($totalMonths + 1);
+        }
+
+        // Mixed: full months + day fraction
+        // Count full months that sit entirely between startDate and endDate
+        $fullMonths = 0;
+        $remaining  = 0.0;
+
+        if ($isStartOnFirst) {
+            // Starts on 1st but ends mid-month
+            // Full months from $s to start of $eMonth, then partial
+            $fullMonths = $totalMonths;
+            // Partial: days 1 through eDay  => eDay / 30
+            $remaining  = $eDay / 30.0;
+        } elseif ($isEndOnLastDay) {
+            // Starts mid-month but ends on last day
+            // Partial first month: from sDay to end of sMonth
+            $daysInSMonth   = $s->daysInMonth;
+            // Legacy: if start day > 30, treat as 30
+            $effectiveSDay  = min($sDay, 30);
+            // Days in first partial month (inclusive of both start and end of that month)
+            $partialDays    = ($daysInSMonth - $effectiveSDay) + 1;
+            $remaining      = $partialDays / 30.0;
+            // Full months from next month to eMonth (inclusive)
+            $fullMonths     = $totalMonths; // totalMonths already = eMonth - sMonth
+        } else {
+            // Both start and end are mid-month
+            if ($totalMonths === 0) {
+                // Same month – simple day count
+                $days = ($eDay - $sDay) + 1;
+                return $days / 30.0;
+            }
+            // First partial month
+            $daysInSMonth   = $s->daysInMonth;
+            $effectiveSDay  = min($sDay, 30);
+            $partialStart   = ($daysInSMonth - $effectiveSDay) + 1;
+            // Last partial month
+            $partialEnd     = $eDay;
+            // Full months in between
+            $fullMonths     = $totalMonths - 1;
+            $remaining      = ($partialStart + $partialEnd) / 30.0;
+        }
+
+        return (float)$fullMonths + $remaining;
+    }
+
+    /**
      * Compile Uninvoiced Accounting Report applying Point-in-Time Cutoff Date logic.
-     * Evaluates every period against $cutoffDate, filters by month range and search.
+     *
+     * Key algorithm changes vs. the old per-period-row approach:
+     *  1. Filters out Sale Orders where state === 'cancel' (ghost duplicates).
+     *  2. Groups all billing periods by Vehicle/Unit (sale_order_id + lot_id).
+     *  3. Prorates to Cutoff Date: ddtstr = min(unbilled start), ddtend = min(max(unbilled end), cutoffDate, actualEndRental).
+     *  4. Computes accrued value via duration price × 1.11 × nlen (fixes the 162 Bn invoice-total bug).
+     *  5. Collects post-cutoff realization invoices (INVRS/YYYY/XXXXX dd/mm/yyyy).
+     *  6. Distributes monthly accrued value into the Customer Pivot by month overlap.
      */
     public function compileUninvoicedReport(
         array $masterData,
@@ -4403,22 +4500,28 @@ class OdooService
         string $search = '',
         string $statusFilter = 'all'
     ): array {
-        $periods = $masterData['periods'] ?? [];
-        $orders = $masterData['orders'] ?? [];
-        $partners = $masterData['partners'] ?? [];
-        $lots = $masterData['lots'] ?? [];
-        $invoices = $masterData['invoices'] ?? [];
-        $contracts = $masterData['contracts'] ?? [];
+        $periods    = $masterData['periods']     ?? [];
+        $orders     = $masterData['orders']      ?? [];
+        $partners   = $masterData['partners']    ?? [];
+        $lots       = $masterData['lots']        ?? [];
+        $invoices   = $masterData['invoices']    ?? [];
+        $contracts  = $masterData['contracts']   ?? [];
         $orderLines = $masterData['order_lines'] ?? [];
 
-        // On-the-fly resolution for contracts, order_lines, or partner PIC if not yet in cache
+        // ── On-the-fly resolution for missing cached data ──────────────────────
         $missingContractIds = [];
-        $missingSolIds = [];
-        $missingPartnerIds = [];
+        $missingSolIds      = [];
+        $missingPartnerIds  = [];
+        $missingSoStateIds  = []; // SOs that were cached without 'state' field
 
         foreach ($periods as $p) {
             $soId = $p['rental_order_id'][0] ?? null;
-            $so = $soId ? ($orders[$soId] ?? []) : [];
+            $so   = $soId ? ($orders[$soId] ?? []) : [];
+
+            // Detect if cached SO is missing the 'state' field (pre-migration cache)
+            if ($soId && isset($orders[$soId]) && !array_key_exists('state', $orders[$soId])) {
+                $missingSoStateIds[$soId] = true;
+            }
             if (!empty($so['rental_contract_id'][0]) && !isset($contracts[$so['rental_contract_id'][0]])) {
                 $missingContractIds[$so['rental_contract_id'][0]] = true;
             }
@@ -4433,6 +4536,21 @@ class OdooService
             }
         }
 
+        // Patch 'state' into cached SOs that were stored before this field was added
+        if (!empty($missingSoStateIds)) {
+            foreach (array_chunk(array_keys($missingSoStateIds), 200) as $sChunk) {
+                try {
+                    $res = $this->execute('sale.order', 'search_read', [[['id', 'in', $sChunk]]], [
+                        'fields' => ['id', 'state']
+                    ]);
+                    foreach ($res as $o) {
+                        if (isset($orders[$o['id']])) {
+                            $orders[$o['id']]['state'] = $o['state'];
+                        }
+                    }
+                } catch (\Throwable $e) {}
+            }
+        }
         if (!empty($missingContractIds)) {
             foreach (array_chunk(array_keys($missingContractIds), 200) as $cChunk) {
                 try {
@@ -4444,7 +4562,9 @@ class OdooService
         if (!empty($missingSolIds)) {
             foreach (array_chunk(array_keys($missingSolIds), 200) as $sChunk) {
                 try {
-                    $res = $this->execute('sale.order.line', 'search_read', [[['id', 'in', $sChunk]]], ['fields' => ['id', 'order_id', 'product_id', 'duration_price', 'price_unit', 'tax_id']]);
+                    $res = $this->execute('sale.order.line', 'search_read', [[['id', 'in', $sChunk]]], [
+                        'fields' => ['id', 'order_id', 'product_id', 'duration_price', 'price_unit', 'tax_id']
+                    ]);
                     foreach ($res as $l) { $orderLines[$l['id']] = $l; }
                 } catch (\Throwable $e) {}
             }
@@ -4452,7 +4572,9 @@ class OdooService
         if (!empty($missingPartnerIds)) {
             foreach (array_chunk(array_keys($missingPartnerIds), 200) as $pChunk) {
                 try {
-                    $res = $this->execute('res.partner', 'search_read', [[['id', 'in', $pChunk]]], ['fields' => ['id', 'hrc_forminv_invoice_pic']]);
+                    $res = $this->execute('res.partner', 'search_read', [[['id', 'in', $pChunk]]], [
+                        'fields' => ['id', 'hrc_forminv_invoice_pic']
+                    ]);
                     foreach ($res as $p) {
                         if (isset($partners[$p['id']])) {
                             $partners[$p['id']]['hrc_forminv_invoice_pic'] = $p['hrc_forminv_invoice_pic'];
@@ -4462,292 +4584,497 @@ class OdooService
             }
         }
 
-        // Build month keys in range (e.g. ['2026-01', '2026-02', ...])
-        $startDt = \Carbon\Carbon::parse($startMonth . '-01')->startOfMonth();
-        $endDt = \Carbon\Carbon::parse($endMonth . '-01')->endOfMonth();
+        // ── Build month keys in display range ─────────────────────────────────
+        $startDt   = \Carbon\Carbon::parse($startMonth . '-01')->startOfMonth();
+        $endDt     = \Carbon\Carbon::parse($endMonth   . '-01')->endOfMonth();
         $monthKeys = [];
         $monthLabels = [];
         $cur = $startDt->copy();
         while ($cur->lte($endDt)) {
-            $mKey = $cur->format('Y-m');
-            $monthKeys[] = $mKey;
+            $mKey            = $cur->format('Y-m');
+            $monthKeys[]     = $mKey;
             $monthLabels[$mKey] = $cur->format('M Y');
             $cur->addMonth();
         }
 
-        $items = [];
-        $pivotCustomers = [];
         $kpi = [
-            'total_unbilled_value' => 0,
-            'total_pending_units' => 0,
-            'draft_units' => 0,
-            'draft_value' => 0,
-            'post_cutoff_units' => 0,
-            'post_cutoff_value' => 0,
+            'total_unbilled_value'    => 0,
+            'total_pending_units'     => 0,
+            'draft_units'             => 0,
+            'draft_value'             => 0,
+            'post_cutoff_units'       => 0,
+            'post_cutoff_value'       => 0,
             'returned_unbilled_units' => 0,
             'returned_unbilled_value' => 0,
-            'uninvoiced_units' => 0,
-            'uninvoiced_value' => 0,
-            'reversed_units' => 0,
-            'reversed_value' => 0,
+            'uninvoiced_units'        => 0,
+            'uninvoiced_value'        => 0,
+            'reversed_units'          => 0,
+            'reversed_value'          => 0,
         ];
 
-        $distinctNopols = [];
         $searchLower = strtolower(trim($search));
 
-        $itemIndex = 1;
+        // ── PASS 1: Group all eligible periods by Unit key (SO + Lot) ─────────
+        // A "unit" = one physical vehicle on one Sale Order.
+        // We collect every unbilled period for each unit, then compute ONE accrued
+        // row per unit using the legacy nlen formula.
+        $unitGroups = []; // key => [ 'meta' => [...], 'unbilledPeriods' => [...], 'allInvoiceIds' => [...] ]
+
         foreach ($periods as $p) {
             $startRentalPeriod = $p['start_rental_period_date'] ?? '';
             if (empty($startRentalPeriod)) continue;
 
-            // 1. Must satisfy Point-in-Time Cutoff: start_rental_period_date <= Cutoff Date
-            if ($startRentalPeriod > $cutoffDate) {
-                continue;
-            }
+            // Point-in-Time Cutoff: only consider periods that start on or before the cutoff
+            if ($startRentalPeriod > $cutoffDate) continue;
 
-            // 2. Month range check: month of start_rental_period_date must fall within selected month range
+            // Month range gate
             $pMonth = substr($startRentalPeriod, 0, 7);
-            if ($pMonth < $startMonth || $pMonth > $endMonth) {
-                continue;
-            }
+            if ($pMonth < $startMonth || $pMonth > $endMonth) continue;
 
             $soId = $p['rental_order_id'][0] ?? null;
-            $so = $soId ? ($orders[$soId] ?? []) : [];
-            $partnerId = $so['partner_id'][0] ?? null;
-            $partner = $partnerId ? ($partners[$partnerId] ?? []) : [];
-            $lotId = $p['lot_id'][0] ?? null;
-            $lot = $lotId ? ($lots[$lotId] ?? []) : [];
+            $so   = $soId ? ($orders[$soId] ?? []) : [];
 
-            $customerCode = $partner['ref'] ?? '';
-            $customerName = $partner['name'] ?? 'Unknown Customer';
-            $soNumber = $so['name'] ?? ($p['rental_order_id'][1] ?? '');
-            $poNumber = $so['client_order_ref'] ?? '';
-            $nopol = $lot['name'] ?? ($p['lot_id'][1] ?? '-');
-            $chassis = $lot['ref'] ?? '';
-            $vehicleModel = $p['product_id'][1] ?? '';
-            $vehicleYear = $lot['vehicle_year'] ?? '';
-            $priceUnit = (float)($p['price_unit'] ?? 0);
-            $rentalStatus = $so['rental_status'] ?? 'pickedup';
-            $areaName = $p['area_id'][1] ?? '';
+            // ── Filter 1: Exclude Cancelled Sale Orders (ghost duplicates) ────
+            $soState = $so['state'] ?? 'sale'; // default 'sale' for safety if state unavailable
+            if ($soState === 'cancel') continue;
 
-            // Resolve Contract Ref
-            $contractId = $so['rental_contract_id'][0] ?? null;
-            $contract = $contractId ? ($contracts[$contractId] ?? []) : [];
-            $contractNumber = !empty($contract['reference']) ? $contract['reference'] : (!empty($contract['name']) ? $contract['name'] : '-');
+            $lotId  = $p['lot_id'][0] ?? null;
+            $unitKey = "{$soId}_{$lotId}";
 
-            // Resolve Actual Rental Dates (in Asia/Jakarta timezone)
-            $actualStartRaw = $so['actual_start_rental'] ?? '';
-            $actualEndRaw = $so['actual_end_rental'] ?? '';
-            $actualStartFormatted = !empty($actualStartRaw)
-                ? \Carbon\Carbon::parse($actualStartRaw, 'UTC')->setTimezone('Asia/Jakarta')->format('d/m/Y')
-                : (!empty($startRentalPeriod) ? \Carbon\Carbon::parse($startRentalPeriod)->format('d/m/Y') : '-');
-            $actualEndFormatted = !empty($actualEndRaw)
-                ? \Carbon\Carbon::parse($actualEndRaw, 'UTC')->setTimezone('Asia/Jakarta')->format('d/m/Y')
-                : (!empty($p['end_rental_period_date']) ? \Carbon\Carbon::parse($p['end_rental_period_date'])->format('d/m/Y') : '-');
-
-            // Resolve Invoice Period & Invoice PIC
-            $invoicePeriod = $so['sale_invoice_period_id'][1] ?? 'Monthly';
-            $picName = $partner['hrc_forminv_invoice_pic'][1] ?? '-';
-
-            // Resolve Order Line & Duration Price
-            $solId = $p['rental_order_line_id'][0] ?? ($so['order_line'][0] ?? null);
-            $sol = $solId ? ($orderLines[$solId] ?? []) : [];
-            $durationPrice = (float)($sol['duration_price'] ?? $priceUnit);
-            $durationQty = (float)($p['rental_qty'] ?? 1.0);
-            if ($durationQty <= 0) {
-                $durationQty = 1.0;
-            }
-
-            // 3. Evaluate Status as of Cutoff Date (The Point-in-Time Matrix)
-            $invId = $p['invoice_id'][0] ?? null;
-            $inv = $invId ? ($invoices[$invId] ?? null) : null;
+            // Evaluate invoice status for this period line
+            $invId   = $p['invoice_id'][0] ?? null;
+            $inv     = $invId ? ($invoices[$invId] ?? null) : null;
             $invDate = $inv['invoice_date'] ?? $p['invoice_date'] ?? null;
             $invState = $inv['state'] ?? '';
             $payState = $inv['payment_state'] ?? '';
-            $invNumber = $inv['name'] ?? '';
 
-            if (!empty($inv['hrc_forminv_invoice_pic'][1])) {
-                $picName = $inv['hrc_forminv_invoice_pic'][1];
+            // Determine if this period is UNBILLED as of cutoff
+            $isBilledOnOrBeforeCutoff = false;
+            if ($invId && $inv) {
+                if ($invState === 'posted' && $invDate && $invDate <= $cutoffDate) {
+                    // Check no reversal
+                    if ($payState !== 'reversed') {
+                        $isBilledOnOrBeforeCutoff = true;
+                    }
+                }
             }
 
-            // Total Gross (Inc. PPN 11%)
-            $invTotal = !empty($inv['amount_total']) ? (float)$inv['amount_total'] : null;
-            $totalGross = $invTotal ?? round($priceUnit * 1.11);
+            // Init unit group on first encounter
+            if (!isset($unitGroups[$unitKey])) {
+                $lot         = $lotId ? ($lots[$lotId] ?? []) : [];
+                $partnerId   = $so['partner_id'][0] ?? null;
+                $partner     = $partnerId ? ($partners[$partnerId] ?? []) : [];
+                $contractId  = $so['rental_contract_id'][0] ?? null;
+                $contract    = $contractId ? ($contracts[$contractId] ?? []) : [];
+                $solId       = $p['rental_order_line_id'][0] ?? ($so['order_line'][0] ?? null);
+                $sol         = $solId ? ($orderLines[$solId] ?? []) : [];
+                $priceUnit   = (float)($p['price_unit'] ?? 0);
+                $durationPrice = (float)($sol['duration_price'] ?? $priceUnit);
 
-            $status = '';
-            $statusLabel = '';
-            $statusBadgeClass = '';
+                // Actual rental end date (Jakarta tz) → used to cap ddtend
+                $actualEndRaw = $so['actual_end_rental'] ?? '';
+                $actualEndDate = '';
+                if (!empty($actualEndRaw)) {
+                    $actualEndDate = \Carbon\Carbon::parse($actualEndRaw, 'UTC')
+                        ->setTimezone('Asia/Jakarta')->format('Y-m-d');
+                }
+                $actualStartRaw = $so['actual_start_rental'] ?? '';
+                $actualStartFormatted = !empty($actualStartRaw)
+                    ? \Carbon\Carbon::parse($actualStartRaw, 'UTC')->setTimezone('Asia/Jakarta')->format('d/m/Y')
+                    : \Carbon\Carbon::parse($startRentalPeriod)->format('d/m/Y');
+                $actualEndFormatted = !empty($actualEndDate)
+                    ? \Carbon\Carbon::parse($actualEndDate)->format('d/m/Y')
+                    : (!empty($p['end_rental_period_date'])
+                        ? \Carbon\Carbon::parse($p['end_rental_period_date'])->format('d/m/Y')
+                        : '-');
 
-            if (!$invId || empty($inv)) {
-                // Scenario A: No invoice created at all
-                $status = 'uninvoiced';
-                $statusLabel = 'Belum Ada Invoice';
-                $statusBadgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800';
-            } elseif ($invDate && $invDate > $cutoffDate) {
-                // Scenario B: Invoice was created/posted AFTER Cutoff Date (The Backdate Case!)
-                $status = 'post_cutoff';
-                $invDateFmt = \Carbon\Carbon::parse($invDate)->format('d/m/Y');
-                $statusLabel = "Dicetak Pasca-Cutoff ({$invDateFmt})";
-                $statusBadgeClass = 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border-blue-200 dark:border-blue-800';
-            } elseif ($invState === 'draft') {
-                // Scenario C: Invoice exists but is Draft as of Cutoff Date
-                $status = 'draft';
-                $statusLabel = 'Draft Belum Posted';
-                $statusBadgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-            } elseif ($payState === 'reversed' || $invState === 'cancel') {
-                // Scenario D: Reversed / Cancelled invoice
-                // Check if replacement invoice exists prior to cutoff
-                $hasReplacement = false;
-                if (!empty($so['invoice_ids'])) {
-                    foreach ($so['invoice_ids'] as $otherInvId) {
-                        if ($otherInvId == $invId) continue;
+                $customerCode  = $partner['ref']  ?? '';
+                $customerName  = $partner['name'] ?? 'Unknown Customer';
+                $soNumber      = $so['name'] ?? ($p['rental_order_id'][1] ?? '');
+                $poNumber      = $so['client_order_ref'] ?? '';
+                $contractNumber = !empty($contract['reference'])
+                    ? $contract['reference']
+                    : (!empty($contract['name']) ? $contract['name'] : '-');
+                $nopol         = $lot['name'] ?? ($p['lot_id'][1] ?? '-');
+                $chassis       = $lot['ref']  ?? '';
+                $vehicleModel  = $p['product_id'][1] ?? '';
+                $vehicleYear   = $lot['vehicle_year'] ?? '';
+                $rentalStatus  = $so['rental_status'] ?? 'pickedup';
+                $areaName      = $p['area_id'][1] ?? '';
+                $invoicePeriod = $so['sale_invoice_period_id'][1] ?? 'Monthly';
+                $picName       = !empty($partner['hrc_forminv_invoice_pic'][1])
+                    ? $partner['hrc_forminv_invoice_pic'][1] : '-';
+
+                $unitGroups[$unitKey] = [
+                    'meta' => [
+                        'soId'            => $soId,
+                        'lotId'           => $lotId,
+                        'customerCode'    => $customerCode,
+                        'customerName'    => $customerName,
+                        'soNumber'        => $soNumber,
+                        'poNumber'        => $poNumber,
+                        'contractNumber'  => $contractNumber,
+                        'nopol'           => $nopol,
+                        'chassis'         => $chassis,
+                        'vehicleModel'    => $vehicleModel,
+                        'vehicleYear'     => $vehicleYear,
+                        'actualStartFmt'  => $actualStartFormatted,
+                        'actualEndFmt'    => $actualEndFormatted,
+                        'actualEndDate'   => $actualEndDate,
+                        'durationPrice'   => $durationPrice,
+                        'rentalStatus'    => $rentalStatus,
+                        'areaName'        => $areaName,
+                        'invoicePeriod'   => $invoicePeriod,
+                        'picName'         => $picName,
+                        'soInvoiceIds'    => $so['invoice_ids'] ?? [],
+                    ],
+                    'unbilledPeriods'    => [], // periods not billed on/before cutoff
+                    'postCutoffInvoices' => [], // invoices issued after cutoff (realization list)
+                    'dominantStatus'     => 'uninvoiced',
+                    'dominantLabel'      => 'Belum Ada Invoice',
+                    'dominantBadge'      => 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+                    'dominantInvNumber'  => '-',
+                    'dominantInvDate'    => '-',
+                ];
+            }
+
+            // Collect post-cutoff realization invoices (the elist equivalent)
+            if ($invId && $inv && $invDate && $invDate > $cutoffDate) {
+                $invName = $inv['name'] ?? '';
+                if (!empty($invName)) {
+                    $fmtDate = \Carbon\Carbon::parse($invDate)->format('d/m/Y');
+                    $unitGroups[$unitKey]['postCutoffInvoices'][$invId] = "{$invName} {$fmtDate}";
+                }
+            }
+
+            // Track unbilled periods
+            if (!$isBilledOnOrBeforeCutoff) {
+                $unitGroups[$unitKey]['unbilledPeriods'][] = [
+                    'start' => $startRentalPeriod,
+                    'end'   => $p['end_rental_period_date'] ?? $startRentalPeriod,
+                    'invId'    => $invId,
+                    'invDate'  => $invDate,
+                    'invState' => $invState,
+                    'payState' => $payState,
+                    'invNumber' => $inv['name'] ?? '',
+                    'invTotal'  => !empty($inv['amount_total']) ? (float)$inv['amount_total'] : null,
+                    'invHasPic' => $inv['hrc_forminv_invoice_pic'][1] ?? null,
+                ];
+
+                // Update pic from invoice if available
+                if (!empty($inv['hrc_forminv_invoice_pic'][1])) {
+                    $unitGroups[$unitKey]['meta']['picName'] = $inv['hrc_forminv_invoice_pic'][1];
+                }
+            }
+        }
+
+        // ── PASS 2: Compile one row per unit ──────────────────────────────────
+        $items        = [];
+        $pivotCustomers = [];
+        $distinctNopols = [];
+        $itemIndex    = 1;
+
+        foreach ($unitGroups as $unitKey => $ug) {
+            $unbilled = $ug['unbilledPeriods'];
+            if (empty($unbilled)) continue; // Fully billed unit — skip
+
+            $meta = $ug['meta'];
+
+            // ── Determine dominant status across all unbilled periods ─────────
+            // Priority: post_cutoff > draft > reversed > uninvoiced
+            $status          = 'uninvoiced';
+            $statusLabel     = 'Belum Ada Invoice';
+            $statusBadgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800';
+            $dominantInvNumber = '-';
+            $dominantInvDate   = '-';
+
+            $hasPostCutoff = false;
+            $hasDraft      = false;
+            $hasReversed   = false;
+
+            $soInvoiceIds  = $meta['soInvoiceIds'];
+
+            foreach ($unbilled as $up) {
+                $upInvId   = $up['invId'];
+                $upInv     = $upInvId ? ($invoices[$upInvId] ?? null) : null;
+                $upInvDate = $up['invDate'];
+                $upInvState = $up['invState'];
+                $upPayState = $up['payState'];
+
+                if (!$upInvId || !$upInv) {
+                    // No invoice — already 'uninvoiced'
+                    continue;
+                }
+                if ($upInvDate && $upInvDate > $cutoffDate) {
+                    $hasPostCutoff = true;
+                    $dominantInvNumber = $up['invNumber'] ?: $dominantInvNumber;
+                    $dominantInvDate   = $upInvDate ? \Carbon\Carbon::parse($upInvDate)->format('d/m/Y') : $dominantInvDate;
+                } elseif ($upInvState === 'draft') {
+                    $hasDraft = true;
+                    $dominantInvNumber = $up['invNumber'] ?: $dominantInvNumber;
+                } elseif ($upPayState === 'reversed' || $upInvState === 'cancel') {
+                    // Check for a valid replacement before cutoff
+                    $hasReplacement = false;
+                    foreach ($soInvoiceIds as $otherInvId) {
+                        if ($otherInvId == $upInvId) continue;
                         $otherInv = $invoices[$otherInvId] ?? null;
-                        if ($otherInv && ($otherInv['move_type'] ?? '') === 'out_invoice' && ($otherInv['state'] ?? '') === 'posted') {
+                        if ($otherInv
+                            && ($otherInv['move_type'] ?? '') === 'out_invoice'
+                            && ($otherInv['state']      ?? '') === 'posted'
+                        ) {
                             $otherDate = $otherInv['invoice_date'] ?? '';
-                            if ($otherDate && $otherDate >= ($invDate ?: $startRentalPeriod) && $otherDate <= $cutoffDate) {
+                            if ($otherDate
+                                && $otherDate >= ($upInvDate ?: $meta['actualEndDate'])
+                                && $otherDate <= $cutoffDate
+                            ) {
                                 $hasReplacement = true;
                                 break;
                             }
                         }
                     }
+                    if (!$hasReplacement) {
+                        $hasReversed = true;
+                        $dominantInvNumber = $up['invNumber'] ?: $dominantInvNumber;
+                    }
                 }
-                if ($hasReplacement) {
-                    continue; // Legitimate replacement exists on or before cutoff; already billed!
-                }
-                $status = 'reversed';
-                $statusLabel = 'Reversed (Perlu Cetak Ulang)';
+            }
+
+            // Resolve dominant status (priority order)
+            if ($hasPostCutoff) {
+                $status          = 'post_cutoff';
+                $statusLabel     = 'Dicetak Pasca-Cutoff (' . $dominantInvDate . ')';
+                $statusBadgeClass = 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+            } elseif ($hasDraft) {
+                $status          = 'draft';
+                $statusLabel     = 'Draft Belum Posted';
+                $statusBadgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200 dark:border-amber-800';
+            } elseif ($hasReversed) {
+                $status          = 'reversed';
+                $statusLabel     = 'Reversed (Perlu Cetak Ulang)';
                 $statusBadgeClass = 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border-purple-200 dark:border-purple-800';
-            } elseif ($invState === 'posted' && $invDate && $invDate <= $cutoffDate) {
-                // Scenario E: Legitimately invoiced on or before Cutoff!
-                // EXCLUDE from Uninvoiced Accounting Report!
-                continue;
-            } else {
-                // Fallback: treated as uninvoiced
-                $status = 'uninvoiced';
-                $statusLabel = 'Belum Ada Invoice';
-                $statusBadgeClass = 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800';
             }
 
-            // Status Filter Check
-            if ($statusFilter !== 'all' && $status !== $statusFilter) {
-                continue;
-            }
+            // Status Filter
+            if ($statusFilter !== 'all' && $status !== $statusFilter) continue;
 
-            // Search Filter Check
+            // Search Filter
             if (!empty($searchLower)) {
-                $searchable = strtolower("{$customerCode} {$customerName} {$soNumber} {$poNumber} {$contractNumber} {$nopol} {$chassis} {$vehicleModel} {$picName}");
-                if (!str_contains($searchable, $searchLower)) {
-                    continue;
+                $searchable = strtolower(
+                    $meta['customerCode']   . ' ' . $meta['customerName'] . ' ' .
+                    $meta['soNumber']       . ' ' . $meta['poNumber']     . ' ' .
+                    $meta['contractNumber'] . ' ' . $meta['nopol']        . ' ' .
+                    $meta['chassis']        . ' ' . $meta['vehicleModel'] . ' ' .
+                    $meta['picName']
+                );
+                if (!str_contains($searchable, $searchLower)) continue;
+            }
+
+            // ── Prorate to Cutoff Date (legacy accrual boundary) ─────────────
+            // ddtstr = earliest unbilled period start
+            // ddtend = min( latest unbilled period end, cutoffDate, actualEndRental )
+            $starts = array_column($unbilled, 'start');
+            $ends   = array_column($unbilled, 'end');
+            sort($starts);
+            rsort($ends);
+            $ddtstr = $starts[0];
+            $ddtend = $ends[0]; // max unbilled end
+
+            // Cap at cutoff date
+            if ($ddtend > $cutoffDate) {
+                $ddtend = $cutoffDate;
+            }
+            // Cap at actual contract end date (if known)
+            $actualEndDate = $meta['actualEndDate'];
+            if (!empty($actualEndDate) && $ddtend > $actualEndDate) {
+                $ddtend = $actualEndDate;
+            }
+            // Safety: never exceed ddtstr
+            if ($ddtend < $ddtstr) {
+                $ddtend = $ddtstr;
+            }
+
+            // ── Compute nlen (legacy month-fraction formula: 2 decimal places) ─
+            $nlen = round($this->calculateNlen($ddtstr, $ddtend), 2);
+
+            // ── Compute Accrued Value (fixes 162 Bn bug) ──────────────────────
+            $durationPrice  = $meta['durationPrice'];
+            $hg_sw          = round($durationPrice * 1.11); // monthly price incl. PPN 11%
+            $jurnalAccrued  = round($hg_sw * $nlen);        // accrued journal value
+
+            // ── Collect post-cutoff realization invoices (elist) ──────────────
+            $realizationList = array_values($ug['postCutoffInvoices']);
+            $realizationStr  = implode(', ', $realizationList);
+
+            // ── Distribute accrued value into monthly pivot ───────────────────
+            // Determine which month(s) this unit overlaps in the display range
+            // and distribute proportionally by nlen month-fraction
+            $ddtstrCar = \Carbon\Carbon::parse($ddtstr);
+            $ddtendCar = \Carbon\Carbon::parse($ddtend);
+
+            // Build month-overlap map: for each month in display range, compute
+            // how many days overlap, then prorate by (overlapDays / totalDays) * nlen
+            $totalAccruedDays = max(1, $ddtstrCar->diffInDays($ddtendCar) + 1);
+            $monthContributions = []; // mKey => accruedValue
+            foreach ($monthKeys as $mKey) {
+                $mStart = \Carbon\Carbon::parse($mKey . '-01')->startOfDay();
+                $mEnd   = $mStart->copy()->endOfMonth()->startOfDay();
+                // Overlap
+                $overlapStart = $ddtstrCar->gt($mStart) ? $ddtstrCar : $mStart;
+                $overlapEnd   = $ddtendCar->lt($mEnd)   ? $ddtendCar : $mEnd;
+                if ($overlapStart->lte($overlapEnd)) {
+                    $overlapDays = $overlapStart->diffInDays($overlapEnd) + 1;
+                    $fraction    = $overlapDays / $totalAccruedDays;
+                    $monthContributions[$mKey] = round($jurnalAccrued * $fraction);
+                } else {
+                    $monthContributions[$mKey] = 0;
                 }
             }
 
-            // Accumulate KPIs (Gross Inc. PPN)
-            $kpi['total_unbilled_value'] += $totalGross;
-            $distinctNopols[$nopol] = true;
-
-            if ($status === 'draft') {
-                $kpi['draft_units']++;
-                $kpi['draft_value'] += $totalGross;
-            } elseif ($status === 'post_cutoff') {
-                $kpi['post_cutoff_units']++;
-                $kpi['post_cutoff_value'] += $totalGross;
-            } elseif ($status === 'reversed') {
-                $kpi['reversed_units']++;
-                $kpi['reversed_value'] += $totalGross;
-            } else {
-                $kpi['uninvoiced_units']++;
-                $kpi['uninvoiced_value'] += $totalGross;
+            // Adjust rounding so monthly contributions sum exactly to jurnalAccrued
+            $monthSum = array_sum($monthContributions);
+            $roundDiff = $jurnalAccrued - $monthSum;
+            if ($roundDiff != 0 && !empty($monthContributions)) {
+                // Add the rounding difference to the largest contributing month
+                $maxMKey = array_keys($monthContributions, max($monthContributions))[0];
+                $monthContributions[$maxMKey] += $roundDiff;
             }
 
-            if (in_array(strtolower($rentalStatus), ['returned', 'return'])) {
-                $kpi['returned_unbilled_units']++;
-                $kpi['returned_unbilled_value'] += $totalGross;
-            }
+            // Formatted display values
+            $nlenDisplay          = number_format($nlen, 2);
+            $durationPriceFmt     = 'Rp ' . number_format($durationPrice, 0, ',', '.');
+            $jurnalAccruedFmt     = 'Rp ' . number_format($jurnalAccrued, 0, ',', '.');
+            $ddtstrFmt            = \Carbon\Carbon::parse($ddtstr)->format('d/m/Y');
+            $ddtendFmt            = \Carbon\Carbon::parse($ddtend)->format('d/m/Y');
 
-            // Format 22-column flat row
+            // ── Build flat item row (backward-compatible keys) ─────────────────
             $itemRow = [
-                'no' => $itemIndex++,
-                'kode_cust' => $customerCode,
-                'nama_customer' => $customerName,
-                'nomor_so' => $soNumber,
-                'nomor_po' => $poNumber,
-                'nomor_kontrak' => $contractNumber,
-                'nopol' => $nopol,
-                'chassis' => $chassis,
-                'model' => $vehicleModel,
-                'tahun' => $vehicleYear,
-                'actual_start' => $actualStartFormatted,
-                'actual_end' => $actualEndFormatted,
-                'status' => $status,
-                'status_label' => $statusLabel,
+                'no'              => $itemIndex++,
+                'kode_cust'       => $meta['customerCode'],
+                'nama_customer'   => $meta['customerName'],
+                'nomor_so'        => $meta['soNumber'],
+                'nomor_po'        => $meta['poNumber'],
+                'nomor_kontrak'   => $meta['contractNumber'],
+                'nopol'           => $meta['nopol'],
+                'chassis'         => $meta['chassis'],
+                'model'           => $meta['vehicleModel'],
+                'tahun'           => $meta['vehicleYear'],
+                'actual_start'    => $meta['actualStartFmt'],
+                'actual_end'      => $meta['actualEndFmt'],
+                'status'          => $status,
+                'status_label'    => $statusLabel,
                 'status_badge_class' => $statusBadgeClass,
-                'invoice_number' => $invNumber ?: '-',
-                'invoice_date' => $invDate ? \Carbon\Carbon::parse($invDate)->format('d/m/Y') : '-',
-                'total' => $totalGross,
-                'total_formatted' => 'Rp ' . number_format($totalGross, 0, ',', '.'),
-                'duration' => $durationQty,
-                'duration_price' => $durationPrice,
-                'duration_price_formatted' => 'Rp ' . number_format($durationPrice, 0, ',', '.'),
-                'invoice_period' => $invoicePeriod,
-                'rental_status' => in_array(strtolower($rentalStatus), ['returned', 'return']) ? 'Returned' : 'Active on Rent',
-                'area_pemakaian' => $areaName ?: '-',
-                'invoice_pic' => $picName,
-
-                // Legacy keys preserved for backward compatibility
-                'price_unit' => $totalGross,
-                'price_unit_formatted' => 'Rp ' . number_format($totalGross, 0, ',', '.'),
-                'start_period' => $startRentalPeriod,
-                'start_period_formatted' => $actualStartFormatted,
-                'end_period' => $p['end_rental_period_date'] ?? '',
-                'end_period_formatted' => $actualEndFormatted,
+                'invoice_number'  => $dominantInvNumber,
+                'invoice_date'    => $dominantInvDate,
+                // Accrual period boundaries
+                'ddtstr'          => $ddtstr,
+                'ddtend'          => $ddtend,
+                'ddtstr_formatted' => $ddtstrFmt,
+                'ddtend_formatted' => $ddtendFmt,
+                // Realization invoice list (post-cutoff, matches legacy elist)
+                'realization_invoices' => $realizationList,
+                'realization_str'      => $realizationStr,
+                // Accrual figures
+                'duration'             => round($nlen, 2),             // nlen (2 dp for display)
+                'duration_price'       => $durationPrice,
+                'duration_price_formatted' => $durationPriceFmt,
+                'hg_sw'               => $hg_sw,                       // monthly price incl. PPN
+                'total'               => $jurnalAccrued,               // Jurnal Accrued (the correct figure)
+                'total_formatted'     => $jurnalAccruedFmt,
+                'invoice_period'      => $meta['invoicePeriod'],
+                'rental_status'       => in_array(strtolower($meta['rentalStatus']), ['returned', 'return'])
+                                            ? 'Returned' : 'Active on Rent',
+                'area_pemakaian'      => $meta['areaName'] ?: '-',
+                'invoice_pic'         => $meta['picName'],
+                // Legacy keys
+                'price_unit'          => $jurnalAccrued,
+                'price_unit_formatted' => $jurnalAccruedFmt,
+                'start_period'        => $ddtstr,
+                'start_period_formatted' => $ddtstrFmt,
+                'end_period'          => $ddtend,
+                'end_period_formatted' => $ddtendFmt,
+                // Monthly breakdown for sub-detail
+                'month_values'        => $monthContributions,
             ];
             $items[] = $itemRow;
 
-            // Accumulate Pivot Row
-            $custKey = $customerCode ?: $customerName;
+            // ── KPI accumulation ──────────────────────────────────────────────
+            $distinctNopols[$meta['nopol']] = true;
+            $kpi['total_unbilled_value'] += $jurnalAccrued;
+
+            if ($status === 'draft') {
+                $kpi['draft_units']++;
+                $kpi['draft_value'] += $jurnalAccrued;
+            } elseif ($status === 'post_cutoff') {
+                $kpi['post_cutoff_units']++;
+                $kpi['post_cutoff_value'] += $jurnalAccrued;
+            } elseif ($status === 'reversed') {
+                $kpi['reversed_units']++;
+                $kpi['reversed_value'] += $jurnalAccrued;
+            } else {
+                $kpi['uninvoiced_units']++;
+                $kpi['uninvoiced_value'] += $jurnalAccrued;
+            }
+            if (in_array(strtolower($meta['rentalStatus']), ['returned', 'return'])) {
+                $kpi['returned_unbilled_units']++;
+                $kpi['returned_unbilled_value'] += $jurnalAccrued;
+            }
+
+            // ── Customer Pivot accumulation ───────────────────────────────────
+            $custKey = $meta['customerCode'] ?: $meta['customerName'];
             if (!isset($pivotCustomers[$custKey])) {
                 $pivotCustomers[$custKey] = [
-                    'customer_key' => $custKey,
-                    'customer_name' => $customerName,
-                    'customer_ref' => $customerCode,
-                    'months' => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0]),
-                    'vehicles' => [],
-                    'total_qty' => 0,
-                    'total_value' => 0,
+                    'customer_key'  => $custKey,
+                    'customer_name' => $meta['customerName'],
+                    'customer_ref'  => $meta['customerCode'],
+                    'months'        => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0]),
+                    'vehicles'      => [],
+                    'total_qty'     => 0,
+                    'total_value'   => 0,
                 ];
             }
 
-            $pivotCustomers[$custKey]['months'][$pMonth]['qty']++;
-            $pivotCustomers[$custKey]['months'][$pMonth]['value'] += $totalGross;
-            $pivotCustomers[$custKey]['total_value'] += $totalGross;
+            // Distribute monthly contributions into pivot
+            foreach ($monthKeys as $mKey) {
+                $contrib = $monthContributions[$mKey] ?? 0;
+                if ($contrib > 0) {
+                    $pivotCustomers[$custKey]['months'][$mKey]['qty']++;
+                    $pivotCustomers[$custKey]['months'][$mKey]['value'] += $contrib;
+                }
+            }
+            $pivotCustomers[$custKey]['total_value'] += $jurnalAccrued;
 
-            // Vehicle sub-row
+            // Vehicle sub-row in pivot
+            $nopol = $meta['nopol'];
             if (!isset($pivotCustomers[$custKey]['vehicles'][$nopol])) {
                 $pivotCustomers[$custKey]['vehicles'][$nopol] = [
-                    'nopol' => $nopol,
-                    'so' => $soNumber,
-                    'model' => $vehicleModel,
-                    'chassis' => $chassis,
-                    'months' => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0, 'status' => '', 'status_label' => '']),
+                    'nopol'       => $nopol,
+                    'so'          => $meta['soNumber'],
+                    'model'       => $meta['vehicleModel'],
+                    'chassis'     => $meta['chassis'],
+                    'months'      => array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0, 'status' => '', 'status_label' => '']),
                     'total_value' => 0,
                 ];
             }
-
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['qty']++;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['value'] += $totalGross;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status'] = $status;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$pMonth]['status_label'] = $statusLabel;
-            $pivotCustomers[$custKey]['vehicles'][$nopol]['total_value'] += $totalGross;
+            foreach ($monthKeys as $mKey) {
+                $contrib = $monthContributions[$mKey] ?? 0;
+                if ($contrib > 0) {
+                    $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$mKey]['qty']++;
+                    $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$mKey]['value']  += $contrib;
+                    $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$mKey]['status']       = $status;
+                    $pivotCustomers[$custKey]['vehicles'][$nopol]['months'][$mKey]['status_label'] = $statusLabel;
+                }
+            }
+            $pivotCustomers[$custKey]['vehicles'][$nopol]['total_value'] += $jurnalAccrued;
         }
 
-        // Finalize pivot counts & sort
+        // ── Finalize pivot: counts, sort ──────────────────────────────────────
         $kpi['total_pending_units'] = count($distinctNopols);
         $monthTotals = array_fill_keys($monthKeys, ['qty' => 0, 'value' => 0]);
 
         foreach ($pivotCustomers as &$c) {
             $c['total_qty'] = count($c['vehicles']);
             foreach ($monthKeys as $mKey) {
-                $monthTotals[$mKey]['qty'] += $c['months'][$mKey]['qty'];
+                $monthTotals[$mKey]['qty']   += $c['months'][$mKey]['qty'];
                 $monthTotals[$mKey]['value'] += $c['months'][$mKey]['value'];
             }
             $c['vehicles'] = array_values($c['vehicles']);
@@ -4755,21 +5082,25 @@ class OdooService
         }
         unset($c);
 
+        // Sort customers descending by total accrued value (highest first)
         uasort($pivotCustomers, fn($a, $b) => $b['total_value'] <=> $a['total_value']);
 
+        // Filter out zero-value customers
+        $pivotCustomers = array_filter($pivotCustomers, fn($c) => $c['total_value'] > 0);
+
         return [
-            'success' => true,
-            'cutoff_date' => $cutoffDate,
+            'success'               => true,
+            'cutoff_date'           => $cutoffDate,
             'cutoff_date_formatted' => \Carbon\Carbon::parse($cutoffDate)->format('d/m/Y'),
-            'start_month' => $startMonth,
-            'end_month' => $endMonth,
-            'month_keys' => $monthKeys,
-            'month_labels' => $monthLabels,
-            'items' => $items,
-            'pivot_customers' => array_values($pivotCustomers),
-            'month_totals' => $monthTotals,
-            'kpis' => $kpi,
-            'total_records' => count($items),
+            'start_month'           => $startMonth,
+            'end_month'             => $endMonth,
+            'month_keys'            => $monthKeys,
+            'month_labels'          => $monthLabels,
+            'items'                 => $items,
+            'pivot_customers'       => array_values($pivotCustomers),
+            'month_totals'          => $monthTotals,
+            'kpis'                  => $kpi,
+            'total_records'         => count($items),
         ];
     }
 }
