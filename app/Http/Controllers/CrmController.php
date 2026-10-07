@@ -38,7 +38,7 @@ class CrmController extends Controller
         foreach ($customers as $c) {
             $c->rentals = \App\Models\Item::where('current_customer', $c->customer)
                 ->whereNotNull('rental_id')
-                ->select('rental_id', 'product', 'reserved_lot', 'rental_period_start', 'rental_period_end', 'lot_number')
+                ->select('rental_id', 'sales_team', 'product', 'reserved_lot', 'rental_period_start', 'rental_period_end', 'lot_number')
                 ->orderBy('rental_id')
                 ->get();
         }
