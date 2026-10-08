@@ -170,6 +170,7 @@
                                         <thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                                             <tr>
                                                 <th class="py-3 px-4">Rental ID</th>
+                                                <th class="py-3 px-4">Sales Team</th>
                                                 <th class="py-3 px-4">Product</th>
                                                 <th class="py-3 px-4">Reserved Lot</th>
                                                 <th class="py-3 px-4">Rental period</th>
@@ -180,6 +181,15 @@
                                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                                 <td class="py-3 px-4 font-medium text-slate-800 dark:text-slate-200">
                                                     <span class="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs border border-slate-200 dark:border-slate-700">{{ $rental->rental_id }}</span>
+                                                </td>
+                                                <td class="py-3 px-4 text-slate-700 dark:text-slate-300 font-medium">
+                                                    @if($rental->sales_team)
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                            {{ $rental->sales_team }}
+                                                        </span>
+                                                    @else
+                                                        <span class="text-slate-400 text-xs">-</span>
+                                                    @endif
                                                 </td>
                                                 <td class="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-normal min-w-[200px]">{{ $rental->product ?: '-' }}</td>
                                                 <td class="py-3 px-4 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">

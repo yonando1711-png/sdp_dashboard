@@ -116,6 +116,7 @@ class UserController extends Controller
             'can_export_disposal' => 'nullable|boolean',
             'can_view_accounting_report' => 'nullable|boolean',
             'can_view_summary_rented_vehicle' => 'nullable|boolean',
+            'can_view_uninvoiced_accounting' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
@@ -134,6 +135,7 @@ class UserController extends Controller
         $canAccessDisposal = ($validated['role'] === 'it_admin') || in_array('disposal', (array) $request->input('menu_permissions', []));
         $canViewAccounting = $request->boolean('can_view_accounting_report');
         $canViewSummaryRented = $canViewAccounting && $request->boolean('can_view_summary_rented_vehicle');
+        $canViewUninvoiced = $canViewAccounting && $request->boolean('can_view_uninvoiced_accounting');
 
         User::create([
             'name' => $validated['name'],
@@ -149,6 +151,7 @@ class UserController extends Controller
             'can_export_disposal' => $canAccessDisposal && $request->boolean('can_export_disposal'),
             'can_view_accounting_report' => $canViewAccounting,
             'can_view_summary_rented_vehicle' => $canViewSummaryRented,
+            'can_view_uninvoiced_accounting' => $canViewUninvoiced,
             'allowed_salespersons' => $allowedSalespersons,
             'allowed_sales_teams' => $allowedSalesTeams,
         ]);
@@ -177,6 +180,7 @@ class UserController extends Controller
             'can_export_disposal' => 'nullable|boolean',
             'can_view_accounting_report' => 'nullable|boolean',
             'can_view_summary_rented_vehicle' => 'nullable|boolean',
+            'can_view_uninvoiced_accounting' => 'nullable|boolean',
             'allowed_salespersons' => 'nullable|array',
             'allowed_sales_teams' => 'nullable|array',
         ]);
@@ -195,6 +199,7 @@ class UserController extends Controller
         $canAccessDisposal = ($validated['role'] === 'it_admin') || in_array('disposal', (array) $request->input('menu_permissions', []));
         $canViewAccounting = $request->boolean('can_view_accounting_report');
         $canViewSummaryRented = $canViewAccounting && $request->boolean('can_view_summary_rented_vehicle');
+        $canViewUninvoiced = $canViewAccounting && $request->boolean('can_view_uninvoiced_accounting');
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
@@ -208,6 +213,7 @@ class UserController extends Controller
         $user->can_export_disposal = $canAccessDisposal && $request->boolean('can_export_disposal');
         $user->can_view_accounting_report = $canViewAccounting;
         $user->can_view_summary_rented_vehicle = $canViewSummaryRented;
+        $user->can_view_uninvoiced_accounting = $canViewUninvoiced;
         $user->allowed_salespersons = $allowedSalespersons;
         $user->allowed_sales_teams = $allowedSalesTeams;
 
