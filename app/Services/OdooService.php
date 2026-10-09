@@ -4712,8 +4712,16 @@ class OdooService
 
             $endRentalPeriod = $p['end_rental_period_date'] ?? $startRentalPeriod;
 
-            // Month range gate: include periods that start in range OR overlap active window (carryovers)
-            if ($startRentalPeriod > $endMonthLimit || $endRentalPeriod < $startMonthLimit) continue;
+            // Month range gate:
+            // Standard monthly periods (span <= 35 days) are bounded by their start month.
+            // Multi-month / annual billing periods (span > 35 days, e.g. TASPEN) are checked for window overlap.
+            $spanDays = \Carbon\Carbon::parse($startRentalPeriod)->diffInDays(\Carbon\Carbon::parse($endRentalPeriod));
+            if ($spanDays > 35) {
+                if ($startRentalPeriod > $endMonthLimit || $endRentalPeriod < $startMonthLimit) continue;
+            } else {
+                $pMonth = substr($startRentalPeriod, 0, 7);
+                if ($pMonth < $startMonth || $pMonth > $endMonth) continue;
+            }
 
             $soId = $p['rental_order_id'][0] ?? null;
             $so   = $soId ? ($orders[$soId] ?? []) : [];
