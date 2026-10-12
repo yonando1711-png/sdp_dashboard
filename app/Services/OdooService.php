@@ -3690,7 +3690,8 @@ class OdooService
         string $startMonth,
         string $endMonth,
         bool $excludeOthersLt = true,
-        ?string $customerSearch = null
+        ?string $customerSearch = null,
+        bool $splitVehiclesBySo = false
     ): array {
         $mStart = \Carbon\Carbon::parse("$startMonth-01")->startOfMonth();
         $mEnd = \Carbon\Carbon::parse("$endMonth-01")->endOfMonth();
@@ -3909,7 +3910,9 @@ class OdooService
                             'price_change' => $priceChangeNote,
                         ];
 
-                        $vKey = ($lotName !== '-' && $lotName !== '') ? $lotName : ($order['name'] . '_' . $lotKey);
+                        $vKey = $splitVehiclesBySo
+                            ? ($order['name'] . '_' . (($lotName !== '-' && $lotName !== '') ? $lotName : $lotKey))
+                            : (($lotName !== '-' && $lotName !== '') ? $lotName : ($order['name'] . '_' . $lotKey));
 
                         if (!isset($customerReport[$customerKey]['vehicles'][$vKey])) {
                             $vDefaultMonths = [];
@@ -4107,7 +4110,7 @@ class OdooService
 
             if (!empty($cData['vehicles'])) {
                 $vehiclesArr = array_values($cData['vehicles']);
-                usort($vehiclesArr, fn($a, $b) => strcmp($a['nopol'] ?? '', $b['nopol'] ?? ''));
+                usort($vehiclesArr, fn($a, $b) => strcmp($a['nopol'] ?? '', $b['nopol'] ?? '') ?: strcmp($a['so'] ?? '', $b['so'] ?? ''));
                 $cData['vehicles'] = $vehiclesArr;
             } else {
                 $cData['vehicles'] = [];
