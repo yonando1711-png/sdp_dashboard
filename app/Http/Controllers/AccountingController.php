@@ -241,6 +241,9 @@ class AccountingController extends Controller
         $search = trim((string) $request->input('search', ''));
         $changesOnly = $request->boolean('changes_only', false);
 
+        $format = $request->input('format', 'multitab');
+        $splitVehiclesBySo = ($format === 'multitab' || empty($format));
+
         // Retrieve from cached year master data and compute pivot instantly
         $masterData = $this->odooService->fetchAccountingSubscriptionMaster($year);
         $reportData = $this->odooService->computeSummaryRentedVehiclePivot(
@@ -248,7 +251,8 @@ class AccountingController extends Controller
             $startMonth,
             $endMonth,
             $excludeOthersLt,
-            $search !== '' ? $search : null
+            $search !== '' ? $search : null,
+            $splitVehiclesBySo
         );
 
         if ($changesOnly && !empty($reportData['customers'])) {
@@ -273,7 +277,6 @@ class AccountingController extends Controller
             $reportData['totals']['grand_total_value'] = $newGrandTotal;
         }
 
-        $format = $request->input('format', 'multitab');
 
         if ($format === 'hierarchical') {
             $fileName = sprintf('Summary_Rented_Vehicle_Hierarchical_%s_to_%s.xlsx', $startMonth, $endMonth);
@@ -590,7 +593,7 @@ class AccountingController extends Controller
         }
         $search = trim((string)$request->input('search', ''));
         $status = $request->input('status', 'all');
-        $format = $request->input('format', 'multitab');
+        $format = $request->input('format', 'detailed');
 
         $masterCacheKey = "uninvoiced_accounting_master_{$year}";
         $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);

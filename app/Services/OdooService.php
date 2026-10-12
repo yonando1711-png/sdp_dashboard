@@ -3690,7 +3690,8 @@ class OdooService
         string $startMonth,
         string $endMonth,
         bool $excludeOthersLt = true,
-        ?string $customerSearch = null
+        ?string $customerSearch = null,
+        bool $splitVehiclesBySo = false
     ): array {
         $mStart = \Carbon\Carbon::parse("$startMonth-01")->startOfMonth();
         $mEnd = \Carbon\Carbon::parse("$endMonth-01")->endOfMonth();
@@ -3909,7 +3910,9 @@ class OdooService
                             'price_change' => $priceChangeNote,
                         ];
 
-                        $vKey = ($lotName !== '-' && $lotName !== '') ? $lotName : ($order['name'] . '_' . $lotKey);
+                        $vKey = $splitVehiclesBySo
+                            ? ($order['name'] . '_' . (($lotName !== '-' && $lotName !== '') ? $lotName : $lotKey))
+                            : (($lotName !== '-' && $lotName !== '') ? $lotName : ($order['name'] . '_' . $lotKey));
 
                         if (!isset($customerReport[$customerKey]['vehicles'][$vKey])) {
                             $vDefaultMonths = [];
@@ -4107,7 +4110,7 @@ class OdooService
 
             if (!empty($cData['vehicles'])) {
                 $vehiclesArr = array_values($cData['vehicles']);
-                usort($vehiclesArr, fn($a, $b) => strcmp($a['nopol'] ?? '', $b['nopol'] ?? ''));
+                usort($vehiclesArr, fn($a, $b) => strcmp($a['nopol'] ?? '', $b['nopol'] ?? '') ?: strcmp($a['so'] ?? '', $b['so'] ?? ''));
                 $cData['vehicles'] = $vehiclesArr;
             } else {
                 $cData['vehicles'] = [];
@@ -4227,6 +4230,54 @@ class OdooService
             }
 
             if (count($batch) < $limit) break;
+        }
+
+        // 1b. Fetch active cross-year / carryover periods (started before fiscal year, but ending in or after fiscal year)
+        // that are unbilled, draft, reversed, or invoiced during the fiscal year.
+        $carryoverDomain = [
+            ['start_rental_period_date', '<', $yearStart],
+            ['end_rental_period_date', '>=', $yearStart],
+            ['price_unit', '>', 0],
+            '|', '|', '|',
+            ['invoice_id', '=', false],
+            ['invoice_id.state', '=', 'draft'],
+            ['invoice_id.payment_state', '=', 'reversed'],
+            ['invoice_date', '>=', $yearStart],
+        ];
+
+        try {
+            $carryoverPeriods = $this->execute('rental.period.invoice', 'search_read', [$carryoverDomain], [
+                'fields' => [
+                    'id', 'rental_order_id', 'rental_order_line_id', 'invoice_id', 'invoice_date',
+                    'start_rental_period_date', 'end_rental_period_date',
+                    'price_unit', 'rental_qty', 'rental_uom',
+                    'lot_id', 'product_id', 'area_id', 'write_date'
+                ],
+                'order' => 'start_rental_period_date asc, id asc',
+            ]);
+
+            if (!empty($carryoverPeriods)) {
+                $existingPeriodIds = array_flip(array_column($rawPeriods, 'id'));
+                foreach ($carryoverPeriods as $cp) {
+                    if (!isset($existingPeriodIds[$cp['id']])) {
+                        $rawPeriods[] = $cp;
+                        if (!empty($cp['rental_order_id'][0])) {
+                            $soIdsMap[$cp['rental_order_id'][0]] = true;
+                        }
+                        if (!empty($cp['rental_order_line_id'][0])) {
+                            $solIdsMap[$cp['rental_order_line_id'][0]] = true;
+                        }
+                        if (!empty($cp['invoice_id'][0])) {
+                            $invoiceIdsMap[$cp['invoice_id'][0]] = true;
+                        }
+                        if (!empty($cp['lot_id'][0])) {
+                            $lotIdsMap[$cp['lot_id'][0]] = true;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Uninvoiced carryover periods fetch error: " . $e->getMessage());
         }
 
         // 2. Fetch linked sale.order records in 200-item chunks
@@ -4404,7 +4455,7 @@ class OdooService
      * @param string $endDate    Y-m-d  (inclusive)
      * @return float
      */
-    private function calculateNlen(string $startDate, string $endDate): float
+    public function calculateNlen(string $startDate, string $endDate): float
     {
         if ($startDate >= $endDate) {
             // Same day or reversed – treat as 1 day = 1/30
@@ -4620,6 +4671,41 @@ class OdooService
         // row per unit using the legacy nlen formula.
         $unitGroups = []; // key => [ 'meta' => [...], 'unbilledPeriods' => [...], 'allInvoiceIds' => [...] ]
 
+        $startMonthLimit = "{$startMonth}-01";
+        $endMonthLimit   = \Carbon\Carbon::parse("{$endMonth}-01")->endOfMonth()->format('Y-m-d');
+
+        // Pre-build claimed invoices map from periods that have a posted, unreversed invoice <= cutoff
+        $claimedInvoiceIds = [];
+        foreach ($periods as $p) {
+            $pInvId = $p['invoice_id'][0] ?? null;
+            $pInv   = $pInvId ? ($invoices[$pInvId] ?? null) : null;
+            if ($pInv 
+                && ($pInv['move_type'] ?? '') === 'out_invoice'
+                && ($pInv['state'] ?? '') === 'posted' 
+                && ($pInv['payment_state'] ?? '') !== 'reversed' 
+                && ($pInv['invoice_date'] ?? '') <= $cutoffDate
+            ) {
+                $claimedInvoiceIds[$pInvId] = true;
+            }
+        }
+
+        // Available unclaimed pre-cutoff invoices per SO (replacement candidates)
+        $soUnclaimedInvoices = [];
+        foreach ($orders as $soId => $so) {
+            foreach ($so['invoice_ids'] ?? [] as $invId) {
+                if (isset($claimedInvoiceIds[$invId])) continue;
+                $inv = $invoices[$invId] ?? null;
+                if ($inv 
+                    && ($inv['move_type'] ?? '') === 'out_invoice' 
+                    && ($inv['state'] ?? '') === 'posted'
+                    && ($inv['payment_state'] ?? '') !== 'reversed'
+                    && ($inv['invoice_date'] ?? '') <= $cutoffDate
+                ) {
+                    $soUnclaimedInvoices[$soId][$invId] = $inv;
+                }
+            }
+        }
+
         foreach ($periods as $p) {
             $startRentalPeriod = $p['start_rental_period_date'] ?? '';
             if (empty($startRentalPeriod)) continue;
@@ -4627,9 +4713,18 @@ class OdooService
             // Point-in-Time Cutoff: only consider periods that start on or before the cutoff
             if ($startRentalPeriod > $cutoffDate) continue;
 
-            // Month range gate
-            $pMonth = substr($startRentalPeriod, 0, 7);
-            if ($pMonth < $startMonth || $pMonth > $endMonth) continue;
+            $endRentalPeriod = $p['end_rental_period_date'] ?? $startRentalPeriod;
+
+            // Month range gate:
+            // Standard monthly periods (span <= 35 days) are bounded by their start month.
+            // Multi-month / annual billing periods (span > 35 days, e.g. TASPEN) are checked for window overlap.
+            $spanDays = \Carbon\Carbon::parse($startRentalPeriod)->diffInDays(\Carbon\Carbon::parse($endRentalPeriod));
+            if ($spanDays > 35) {
+                if ($startRentalPeriod > $endMonthLimit || $endRentalPeriod < $startMonthLimit) continue;
+            } else {
+                $pMonth = substr($startRentalPeriod, 0, 7);
+                if ($pMonth < $startMonth || $pMonth > $endMonth) continue;
+            }
 
             $soId = $p['rental_order_id'][0] ?? null;
             $so   = $soId ? ($orders[$soId] ?? []) : [];
@@ -4655,6 +4750,18 @@ class OdooService
                     // Check no reversal
                     if ($payState !== 'reversed') {
                         $isBilledOnOrBeforeCutoff = true;
+                    } else {
+                        // Invoice was reversed: check if an unclaimed replacement invoice exists on this SO <= cutoff
+                        if (!empty($soUnclaimedInvoices[$soId])) {
+                            foreach ($soUnclaimedInvoices[$soId] as $replId => $replInv) {
+                                $replDate = $replInv['invoice_date'] ?? '';
+                                if (!$invDate || $replDate >= $invDate) {
+                                    $isBilledOnOrBeforeCutoff = true;
+                                    unset($soUnclaimedInvoices[$soId][$replId]); // consume replacement
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -4744,6 +4851,22 @@ class OdooService
                 if (!empty($invName)) {
                     $fmtDate = \Carbon\Carbon::parse($invDate)->format('d/m/Y');
                     $unitGroups[$unitKey]['postCutoffInvoices'][$invId] = "{$invName} {$fmtDate}";
+                }
+            }
+            // Also inspect SO invoices for post-cutoff realizations on unbilled units (e.g. TASPEN)
+            if (!$isBilledOnOrBeforeCutoff && !empty($so['invoice_ids'])) {
+                foreach ($so['invoice_ids'] as $otherInvId) {
+                    $otherInv = $invoices[$otherInvId] ?? null;
+                    if ($otherInv
+                        && ($otherInv['move_type'] ?? '') === 'out_invoice'
+                        && ($otherInv['state'] ?? '') === 'posted'
+                        && ($otherInv['payment_state'] ?? '') !== 'reversed'
+                        && ($otherInv['invoice_date'] ?? '') > $cutoffDate
+                    ) {
+                        $otherName = $otherInv['name'] ?? '';
+                        $fmtDate = \Carbon\Carbon::parse($otherInv['invoice_date'])->format('d/m/Y');
+                        $unitGroups[$unitKey]['postCutoffInvoices'][$otherInvId] = "{$otherName} {$fmtDate}";
+                    }
                 }
             }
 
@@ -4839,6 +4962,15 @@ class OdooService
                 }
             }
 
+            // If post-cutoff realizations were discovered via SO invoices (e.g. TASPEN), reflect in dominant status
+            if (!empty($ug['postCutoffInvoices']) && !$hasPostCutoff) {
+                $hasPostCutoff = true;
+                $firstPostCutoff = reset($ug['postCutoffInvoices']);
+                $pcParts = explode(' ', $firstPostCutoff);
+                $dominantInvNumber = $pcParts[0] ?? $dominantInvNumber;
+                $dominantInvDate   = $pcParts[1] ?? $dominantInvDate;
+            }
+
             // Resolve dominant status (priority order)
             if ($hasPostCutoff) {
                 $status          = 'post_cutoff';
@@ -4896,10 +5028,10 @@ class OdooService
             // ── Compute nlen (legacy month-fraction formula: 2 decimal places) ─
             $nlen = round($this->calculateNlen($ddtstr, $ddtend), 2);
 
-            // ── Compute Accrued Value (fixes 162 Bn bug) ──────────────────────
+            // ── Compute Accrued Value (Untaxed / Exc PPN for accounting accrual journal) ──
             $durationPrice  = $meta['durationPrice'];
-            $hg_sw          = round($durationPrice * 1.11); // monthly price incl. PPN 11%
-            $jurnalAccrued  = round($hg_sw * $nlen);        // accrued journal value
+            $hg_sw          = $durationPrice;               // monthly price exc. PPN
+            $jurnalAccrued  = round($hg_sw * $nlen);        // accrued journal value (exc. PPN)
 
             // ── Collect post-cutoff realization invoices (elist) ──────────────
             $realizationList = array_values($ug['postCutoffInvoices']);
@@ -4977,7 +5109,7 @@ class OdooService
                 'duration'             => round($nlen, 2),             // nlen (2 dp for display)
                 'duration_price'       => $durationPrice,
                 'duration_price_formatted' => $durationPriceFmt,
-                'hg_sw'               => $hg_sw,                       // monthly price incl. PPN
+                'hg_sw'               => $hg_sw,                       // monthly price exc. PPN
                 'total'               => $jurnalAccrued,               // Jurnal Accrued (the correct figure)
                 'total_formatted'     => $jurnalAccruedFmt,
                 'invoice_period'      => $meta['invoicePeriod'],
