@@ -593,7 +593,7 @@ class AccountingController extends Controller
         }
         $search = trim((string)$request->input('search', ''));
         $status = $request->input('status', 'all');
-        $format = $request->input('format', 'multitab');
+        $format = $request->input('format', 'detailed');
 
         $masterCacheKey = "uninvoiced_accounting_master_{$year}";
         $masterData = \Illuminate\Support\Facades\Cache::get($masterCacheKey);

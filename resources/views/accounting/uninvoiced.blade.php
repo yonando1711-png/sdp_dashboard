@@ -99,74 +99,22 @@
                         </div>
 
                         <div class="py-1 space-y-1">
-                            <!-- Multi-Tab (Recommended) -->
-                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'multitab'])) }}"
+                            <!-- Detailed Audit (25 Cols) -->
+                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'detailed'])) }}"
                                @click="openExport = false"
                                class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors">
                                 <div class="mt-0.5 p-2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-lg group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800 transition-colors shrink-0">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Multi-Tab Excel (2 Sheets)</span>
-                                        <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300 text-[9px] font-bold rounded">Recommended</span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                        <strong>Sheet 1:</strong> Customer Summary (Pivot)<br>
-                                        <strong>Sheet 2:</strong> Detailed Line-Item Audit (22 Cols)
-                                    </p>
-                                </div>
-                            </a>
-
-                            <!-- Detailed Audit (22 Cols) -->
-                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'detailed'])) }}"
-                               @click="openExport = false"
-                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
-                                <div class="mt-0.5 p-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg group-hover:bg-slate-200 dark:group-hover:bg-slate-600 transition-colors shrink-0">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                     </svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white">Detailed Line-Item Audit (.xlsx)</span>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Detailed Line-Item Audit (.xlsx)</span>
+                                        <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300 text-[9px] font-bold rounded">Active</span>
+                                    </div>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                        Single sheet containing all 22 audit columns with formatted Rupiah currency and auto-filter.
-                                    </p>
-                                </div>
-                            </a>
-
-                            <!-- Customer Summary (Pivot) -->
-                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'pivot'])) }}"
-                               @click="openExport = false"
-                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
-                                <div class="mt-0.5 p-2 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800 transition-colors shrink-0">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-400">Customer Summary Pivot (.xlsx)</span>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                        Grouped by Customer with monthly unbilled values and unit counts.
-                                    </p>
-                                </div>
-                            </a>
-
-                            <!-- Raw CSV -->
-                            <a href="{{ route('accounting.uninvoiced.export', array_merge($exportParams, ['format' => 'csv'])) }}"
-                               @click="openExport = false"
-                               class="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors">
-                                <div class="mt-0.5 p-2 bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-lg group-hover:bg-amber-200 dark:group-hover:bg-amber-800 transition-colors shrink-0">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-400">CSV Export (.csv)</span>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                        Standard comma-separated file for fast processing.
+                                        Single sheet containing all 25 audit columns with formatted Rupiah currency and auto-filter.
                                     </p>
                                 </div>
                             </a>
