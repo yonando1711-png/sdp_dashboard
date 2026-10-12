@@ -494,6 +494,18 @@ class AccountingController extends Controller
             'updated_at' => microtime(true),
         ], 600);
 
+        // If running under PHP-FPM, flush 200 OK immediately to browser to prevent gateway proxy timeouts
+        $isFpm = function_exists('fastcgi_finish_request');
+        if ($isFpm) {
+            response()->json([
+                'status' => 'running',
+                'message' => 'Sync initiated in background for year ' . $year,
+                'percent' => 5,
+                'stage' => 'init',
+            ])->send();
+            fastcgi_finish_request();
+        }
+
         try {
             $onProgress = function (string $stage, int $percent, int $records, int $total, string $message) use ($progressKey) {
                 \Illuminate\Support\Facades\Cache::put($progressKey, [
