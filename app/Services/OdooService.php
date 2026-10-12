@@ -4154,6 +4154,9 @@ class OdooService
         bool $forceFull = false,
         ?callable $onProgress = null
     ): array {
+        set_time_limit(600);
+        ini_set('memory_limit', '1024M');
+
         $cacheKey = "uninvoiced_accounting_master_{$year}";
 
         if (!$forceFull) {
@@ -4280,7 +4283,7 @@ class OdooService
             \Illuminate\Support\Facades\Log::warning("Uninvoiced carryover periods fetch error: " . $e->getMessage());
         }
 
-        // 2. Fetch linked sale.order records in 200-item chunks
+        // 2. Fetch linked sale.order records in 500-item chunks
         $soCount = count($soIdsMap);
         if ($onProgress) {
             $onProgress('orders', 48, 0, $soCount, "Resolving contracts for {$soCount} rental orders...");
@@ -4289,7 +4292,7 @@ class OdooService
         $orders = [];
         $partnerIdsMap = [];
         $contractIdsMap = [];
-        $soChunks = array_chunk(array_keys($soIdsMap), 200);
+        $soChunks = array_chunk(array_keys($soIdsMap), 500);
         foreach ($soChunks as $sChunk) {
             $res = $this->execute('sale.order', 'search_read', [
                 [['id', 'in', $sChunk]]
@@ -4321,14 +4324,14 @@ class OdooService
             }
         }
 
-        // 3. Fetch linked res.partner in 200-item chunks
+        // 3. Fetch linked res.partner in 500-item chunks
         $partnerCount = count($partnerIdsMap);
         if ($onProgress) {
             $onProgress('partners', 60, 0, $partnerCount, "Resolving customer information for {$partnerCount} partners...");
         }
 
         $partners = [];
-        $partnerChunks = array_chunk(array_keys($partnerIdsMap), 200);
+        $partnerChunks = array_chunk(array_keys($partnerIdsMap), 500);
         foreach ($partnerChunks as $pChunk) {
             $res = $this->execute('res.partner', 'search_read', [
                 [['id', 'in', $pChunk]]
@@ -4340,14 +4343,14 @@ class OdooService
             }
         }
 
-        // 4. Fetch linked stock.lot (Nopol & Chassis Number) in 200-item chunks
+        // 4. Fetch linked stock.lot (Nopol & Chassis Number) in 500-item chunks
         $lotCount = count($lotIdsMap);
         if ($onProgress) {
             $onProgress('lots', 70, 0, $lotCount, "Resolving vehicle chassis & specifications for {$lotCount} units...");
         }
 
         $lots = [];
-        $lotChunks = array_chunk(array_keys($lotIdsMap), 200);
+        $lotChunks = array_chunk(array_keys($lotIdsMap), 500);
         foreach ($lotChunks as $lChunk) {
             $res = $this->execute('stock.lot', 'search_read', [
                 [['id', 'in', $lChunk]]
@@ -4359,14 +4362,15 @@ class OdooService
             }
         }
 
-        // 5. Fetch linked account.move (Invoices) in 200-item chunks
+        // 5. Fetch linked account.move (Invoices) in 1,000-item chunks with live progress
         $invCount = count($invoiceIdsMap);
         if ($onProgress) {
-            $onProgress('invoices', 80, 0, $invCount, "Resolving {$invCount} invoice records from accounting journal...");
+            $onProgress('invoices', 75, 0, $invCount, "Resolving {$invCount} invoice records from accounting journal...");
         }
 
         $invoices = [];
-        $invChunks = array_chunk(array_keys($invoiceIdsMap), 200);
+        $invChunks = array_chunk(array_keys($invoiceIdsMap), 1000);
+        $processedInv = 0;
         foreach ($invChunks as $iChunk) {
             $res = $this->execute('account.move', 'search_read', [
                 [['id', 'in', $iChunk]]
@@ -4379,11 +4383,16 @@ class OdooService
             foreach ($res as $inv) {
                 $invoices[$inv['id']] = $inv;
             }
+            $processedInv += count($iChunk);
+            if ($onProgress) {
+                $invPct = $invCount > 0 ? min(93, (int)(75 + (18 * ($processedInv / $invCount)))) : 90;
+                $onProgress('invoices', $invPct, $processedInv, $invCount, "Resolving invoices: " . number_format($processedInv) . " of " . number_format($invCount) . " records...");
+            }
         }
 
-        // 6. Fetch linked rental.contract in 200-item chunks
+        // 6. Fetch linked rental.contract in 500-item chunks
         $contracts = [];
-        $contractChunks = array_chunk(array_keys($contractIdsMap), 200);
+        $contractChunks = array_chunk(array_keys($contractIdsMap), 500);
         foreach ($contractChunks as $cChunk) {
             try {
                 $res = $this->execute('rental.contract', 'search_read', [
@@ -4397,9 +4406,9 @@ class OdooService
             } catch (\Throwable $e) {}
         }
 
-        // 7. Fetch linked sale.order.line in 200-item chunks
+        // 7. Fetch linked sale.order.line in 500-item chunks
         $orderLines = [];
-        $solChunks = array_chunk(array_keys($solIdsMap ?? []), 200);
+        $solChunks = array_chunk(array_keys($solIdsMap ?? []), 500);
         foreach ($solChunks as $solChunk) {
             try {
                 $res = $this->execute('sale.order.line', 'search_read', [

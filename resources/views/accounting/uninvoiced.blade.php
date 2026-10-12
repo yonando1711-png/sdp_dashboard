@@ -789,7 +789,12 @@ function uninvoicedPage() {
                 },
                 body: JSON.stringify({ year: this.syncModal.year })
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().catch(() => ({ status: 'running' }));
+                }
+                return res.json().catch(() => ({ status: 'running' }));
+            })
             .then(data => {
                 if (data.status === 'completed') {
                     this.syncModal.status = 'completed';
@@ -806,10 +811,25 @@ function uninvoicedPage() {
                 }
             })
             .catch(err => {
-                this.syncModal.status = 'error';
-                this.syncModal.message = 'Network error during sync: ' + err;
-                if (this.syncModal.pollInterval) clearInterval(this.syncModal.pollInterval);
-                if (this.syncModal.timerInterval) clearInterval(this.syncModal.timerInterval);
+                // If initial trigger has network timeout, check if server background sync is still running
+                fetch('{{ route('accounting.uninvoiced.sync-progress') }}?year=' + this.syncModal.year)
+                .then(r => r.json())
+                .then(p => {
+                    if (p && (p.status === 'running' || p.status === 'completed')) {
+                        // Background sync is active on the server, continue polling!
+                        return;
+                    }
+                    this.syncModal.status = 'error';
+                    this.syncModal.message = 'Network error during sync: ' + err;
+                    if (this.syncModal.pollInterval) clearInterval(this.syncModal.pollInterval);
+                    if (this.syncModal.timerInterval) clearInterval(this.syncModal.timerInterval);
+                })
+                .catch(() => {
+                    this.syncModal.status = 'error';
+                    this.syncModal.message = 'Network error during sync: ' + err;
+                    if (this.syncModal.pollInterval) clearInterval(this.syncModal.pollInterval);
+                    if (this.syncModal.timerInterval) clearInterval(this.syncModal.timerInterval);
+                });
             });
 
             // Poll progress
