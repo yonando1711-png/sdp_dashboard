@@ -5028,10 +5028,10 @@ class OdooService
             // ── Compute nlen (legacy month-fraction formula: 2 decimal places) ─
             $nlen = round($this->calculateNlen($ddtstr, $ddtend), 2);
 
-            // ── Compute Accrued Value (fixes 162 Bn bug) ──────────────────────
+            // ── Compute Accrued Value (Untaxed / Exc PPN for accounting accrual journal) ──
             $durationPrice  = $meta['durationPrice'];
-            $hg_sw          = round($durationPrice * 1.11); // monthly price incl. PPN 11%
-            $jurnalAccrued  = round($hg_sw * $nlen);        // accrued journal value
+            $hg_sw          = $durationPrice;               // monthly price exc. PPN
+            $jurnalAccrued  = round($hg_sw * $nlen);        // accrued journal value (exc. PPN)
 
             // ── Collect post-cutoff realization invoices (elist) ──────────────
             $realizationList = array_values($ug['postCutoffInvoices']);
@@ -5109,7 +5109,7 @@ class OdooService
                 'duration'             => round($nlen, 2),             // nlen (2 dp for display)
                 'duration_price'       => $durationPrice,
                 'duration_price_formatted' => $durationPriceFmt,
-                'hg_sw'               => $hg_sw,                       // monthly price incl. PPN
+                'hg_sw'               => $hg_sw,                       // monthly price exc. PPN
                 'total'               => $jurnalAccrued,               // Jurnal Accrued (the correct figure)
                 'total_formatted'     => $jurnalAccruedFmt,
                 'invoice_period'      => $meta['invoicePeriod'],

@@ -94,7 +94,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
             'Uninvoiced Start (ddtstr)',
             'Uninvoiced End (ddtend)',
             'Duration (nlen)',
-            'Hg Sewa Inc PPN',
+            'Hg Sewa Exc PPN',
             'Total Accrued',
             'Status per Cutoff',
             'Nomor Invoice Odoo',
@@ -114,7 +114,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
         foreach ($items as $item) {
             $totalGross = (float) ($item['total'] ?? $item['price_unit'] ?? 0);
             $durationQty = (float) ($item['duration'] ?? 1.0);
-            $hgSw = (float) ($item['hg_sw'] ?? round(($item['duration_price'] ?? 0) * 1.11));
+            $hgSw = (float) ($item['hg_sw'] ?? $item['duration_price'] ?? 0);
 
             $totalGrossSum += $totalGross;
             $totalHgSwSum += $hgSw;
@@ -165,7 +165,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
             '',            // M
             '',            // N
             '',            // O: Duration (nlen)
-            $totalHgSwSum, // P: Hg Sewa Inc PPN sum
+            $totalHgSwSum, // P: Hg Sewa Exc PPN sum
             $totalGrossSum,// Q: Total Accrued sum
             '',            // R: Status
             '',            // S: Nomor Invoice
@@ -247,7 +247,7 @@ class UninvoicedAccountingDetailedExport extends DefaultValueBinder implements F
                 $sheet->getStyle("O{$firstRow}:O{$lastRow}")
                     ->getNumberFormat()->setFormatCode('0.00');
 
-                // Currency format for Column P (Hg Sewa Inc PPN) and Column Q (Total Accrued)
+                // Currency format for Column P (Hg Sewa Exc PPN) and Column Q (Total Accrued)
                 $sheet->getStyle("P{$firstRow}:P{$lastRow}")
                     ->getNumberFormat()->setFormatCode('#,##0');
                 $sheet->getStyle("P{$firstRow}:P{$lastRow}")
