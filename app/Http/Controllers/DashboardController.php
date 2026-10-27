@@ -393,7 +393,8 @@ class DashboardController extends Controller
                   ->orWhere('current_customer', 'like', "%$searchQuery%")
                   ->orWhere('last_customer', 'like', "%$searchQuery%")
                   ->orWhere('location', 'like', "%$searchQuery%")
-                  ->orWhere('internal_reference', 'like', "%$searchQuery%");
+                  ->orWhere('internal_reference', 'like', "%$searchQuery%")
+                  ->orWhere('sales_team', 'like', "%$searchQuery%");
             });
         } elseif ($category == 'active_rentals') {
             // Complex logic: "Active Rental"
