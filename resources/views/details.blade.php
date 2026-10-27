@@ -226,6 +226,10 @@
                         <div @click="sortBy('warehouse')" class="flex items-center gap-1">Warehouse <span x-show="sortCol === 'warehouse'" x-text="sortAsc ? '↑' : '↓'"></span></div>
                          <div @mousedown="startResize($event, 'warehouse')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
                     </th>
+                    <th x-show="columns.sales_team.visible" :style="'width: ' + columns.sales_team.width + 'px'" class="relative p-4 border-b border-slate-100 dark:border-slate-800 text-left cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none group">
+                        <div @click="sortBy('sales_team')" class="flex items-center gap-1">Sales Team <span x-show="sortCol === 'sales_team'" x-text="sortAsc ? '↑' : '↓'"></span></div>
+                         <div @mousedown="startResize($event, 'sales_team')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
+                    </th>
                     <th x-show="columns.status.visible" :style="'width: ' + columns.status.width + 'px'" class="relative p-4 border-b border-slate-100 dark:border-slate-800 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none group">
                         <div @click="sortBy('rental_id')" class="flex items-center justify-center gap-1">Rental Status <span x-show="sortCol === 'rental_id'" x-text="sortAsc ? '↑' : '↓'"></span></div>
                          <div @mousedown="startResize($event, 'status')" class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 group-hover:bg-slate-300 dark:group-hover:bg-slate-700 transition-colors"></div>
@@ -315,6 +319,7 @@
                         </td>
                         <td x-show="columns.current_customer.visible" class="p-4 break-words text-xs text-slate-600 dark:text-slate-400" x-text="item.current_customer || '-'"></td>
                         <td x-show="columns.warehouse.visible" class="p-4 break-words text-xs text-slate-600 dark:text-slate-400" x-text="item.warehouse || '-'"></td>
+                        <td x-show="columns.sales_team.visible" class="p-4 break-words text-xs text-slate-600 dark:text-slate-400" x-text="item.sales_team || '-'"></td>
                         <td x-show="columns.status.visible" class="p-4 text-center">
                             <template x-if="item.rental_id">
                                 <div class="flex flex-col items-center">
@@ -672,6 +677,7 @@
                 type: { label: 'Type', visible: true, width: 80 },
                 current_customer: { label: 'Customer', visible: true, width: 150 },
                 warehouse: { label: 'Warehouse', visible: true, width: 120 },
+                sales_team: { label: 'Sales Team', visible: true, width: 150 },
                 status: { label: 'Rental Status', visible: true, width: 140 },
                 contract_ref: { label: 'Contract', visible: true, width: 140 },
                 start_date: { label: 'Start', visible: false, width: 100 },
@@ -832,7 +838,8 @@
                                         (item.location && item.location.toLowerCase().includes(term)) ||
                                         (item.rental_id && item.rental_id.toLowerCase().includes(term)) ||
                                         (item.internal_reference && item.internal_reference.toLowerCase().includes(term)) ||
-                                        (item.year && String(item.year).includes(term));
+                                        (item.year && String(item.year).includes(term)) ||
+                                        (item.sales_team && item.sales_team.toLowerCase().includes(term));
                     }
                     
                     // Specific Filters
