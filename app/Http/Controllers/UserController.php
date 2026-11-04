@@ -113,6 +113,7 @@ class UserController extends Controller
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
             'can_view_et_report' => 'nullable|boolean',
+            'can_view_cadangan_biaya' => 'nullable|boolean',
             'can_export_disposal' => 'nullable|boolean',
             'can_view_accounting_report' => 'nullable|boolean',
             'can_view_summary_rented_vehicle' => 'nullable|boolean',
@@ -148,6 +149,7 @@ class UserController extends Controller
             'can_view_smd_last_invoice_date' => $canViewSmd && $request->boolean('can_view_smd_last_invoice_date'),
             'can_export_lor_smd' => $canViewSmd && $request->boolean('can_export_lor_smd'),
             'can_view_et_report' => $canViewSmd && $request->boolean('can_view_et_report'),
+            'can_view_cadangan_biaya' => $canViewSmd && $request->boolean('can_view_cadangan_biaya'),
             'can_export_disposal' => $canAccessDisposal && $request->boolean('can_export_disposal'),
             'can_view_accounting_report' => $canViewAccounting,
             'can_view_summary_rented_vehicle' => $canViewSummaryRented,
@@ -177,6 +179,7 @@ class UserController extends Controller
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
             'can_view_et_report' => 'nullable|boolean',
+            'can_view_cadangan_biaya' => 'nullable|boolean',
             'can_export_disposal' => 'nullable|boolean',
             'can_view_accounting_report' => 'nullable|boolean',
             'can_view_summary_rented_vehicle' => 'nullable|boolean',
@@ -210,6 +213,7 @@ class UserController extends Controller
         $user->can_view_smd_last_invoice_date = $canViewSmd && $request->boolean('can_view_smd_last_invoice_date');
         $user->can_export_lor_smd = $canViewSmd && $request->boolean('can_export_lor_smd');
         $user->can_view_et_report = $canViewSmd && $request->boolean('can_view_et_report');
+        $user->can_view_cadangan_biaya = $canViewSmd && $request->boolean('can_view_cadangan_biaya');
         $user->can_export_disposal = $canAccessDisposal && $request->boolean('can_export_disposal');
         $user->can_view_accounting_report = $canViewAccounting;
         $user->can_view_summary_rented_vehicle = $canViewSummaryRented;

@@ -58,6 +58,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/lor/smd/et-report', [LorController::class, 'etReport'])->middleware(CheckMenuPermission::class . ':et-report')->name('lor.et-report');
     Route::get('/lor/smd/et-report/export', [LorController::class, 'exportEtReport'])->middleware(CheckMenuPermission::class . ':et-report')->name('lor.et-report.export');
 
+    // Cadangan Biaya Report Routes under LoR SMD (Protected by Cadangan Biaya Permission)
+    Route::get('/lor/smd/cadangan-biaya', [LorController::class, 'cadanganBiaya'])->middleware(CheckMenuPermission::class . ':cadangan-biaya')->name('lor.cadangan-biaya');
+    Route::get('/lor/smd/cadangan-biaya/export', [LorController::class, 'exportCadanganBiaya'])->middleware(CheckMenuPermission::class . ':cadangan-biaya')->name('lor.cadangan-biaya.export');
+
     // LoR Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':lor'])->group(function () {
         Route::get('/lor', [LorController::class, 'index'])->name('lor.index');
