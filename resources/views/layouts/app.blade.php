@@ -228,10 +228,10 @@
                 @endif
 
                 @if(auth()->check() && auth()->user()->canAccessSmd())
-                    @if(auth()->user()->canViewEtReport())
-                    <div x-data="{ open: {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*')) ? 'true' : 'false' }} }" class="space-y-1">
+                    @if(auth()->user()->canViewEtReport() || auth()->user()->canViewCadanganBiaya())
+                    <div x-data="{ open: {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*')) ? 'true' : 'false' }} }" class="space-y-1">
                         <button type="button" @click="open = !open"
-                            class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*')) ? 'active' : '' }}"
+                            class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*')) ? 'active' : '' }}"
                             title="LoR (SMD)">
                             <div class="flex items-center gap-3">
                                 <!-- LoR SMD Briefcase/Sales Icon -->
@@ -253,10 +253,18 @@
                                 class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.smd') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
                                 LoR (SMD)
                             </a>
+                            @if(auth()->user()->canViewEtReport())
                             <a href="{{ route('lor.et-report') }}"
                                 class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.et-report*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
                                 ET Report
                             </a>
+                            @endif
+                            @if(auth()->user()->canViewCadanganBiaya())
+                            <a href="{{ route('lor.cadangan-biaya') }}"
+                                class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.cadangan-biaya*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
+                                Cadangan Biaya
+                            </a>
+                            @endif
                         </div>
                     </div>
                     @else

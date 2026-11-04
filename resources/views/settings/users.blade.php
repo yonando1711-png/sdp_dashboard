@@ -15,6 +15,7 @@
             'can_view_smd_last_invoice_date' => (bool) $u->can_view_smd_last_invoice_date,
             'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
             'can_view_et_report' => (bool) $u->can_view_et_report,
+            'can_view_cadangan_biaya' => (bool) $u->can_view_cadangan_biaya,
             'can_export_disposal' => (bool) $u->can_export_disposal,
             'can_view_accounting_report' => (bool) $u->can_view_accounting_report,
             'can_view_summary_rented_vehicle' => (bool) $u->can_view_summary_rented_vehicle,
@@ -45,6 +46,7 @@ function userManagementApp() {
             can_view_smd_last_invoice_date: {{ old('can_view_smd_last_invoice_date') ? 'true' : 'false' }},
             can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }},
             can_view_et_report: {{ old('can_view_et_report') ? 'true' : 'false' }},
+            can_view_cadangan_biaya: {{ old('can_view_cadangan_biaya') ? 'true' : 'false' }},
             can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }},
             can_view_accounting_report: {{ old('can_view_accounting_report') ? 'true' : 'false' }},
             can_view_summary_rented_vehicle: {{ old('can_view_summary_rented_vehicle') ? 'true' : 'false' }},
@@ -80,6 +82,7 @@ function userManagementApp() {
                 can_view_smd_last_invoice_date: false,
                 can_export_lor_smd: false,
                 can_view_et_report: false,
+                can_view_cadangan_biaya: false,
                 can_export_disposal: false,
                 can_view_accounting_report: false,
                 can_view_summary_rented_vehicle: false,
@@ -105,6 +108,7 @@ function userManagementApp() {
                 can_view_smd_last_invoice_date: Boolean(u.can_view_smd_last_invoice_date),
                 can_export_lor_smd: Boolean(u.can_export_lor_smd),
                 can_view_et_report: Boolean(u.can_view_et_report),
+                can_view_cadangan_biaya: Boolean(u.can_view_cadangan_biaya),
                 can_export_disposal: Boolean(u.can_export_disposal),
                 can_view_accounting_report: Boolean(u.can_view_accounting_report),
                 can_view_summary_rented_vehicle: Boolean(u.can_view_summary_rented_vehicle),
@@ -225,6 +229,7 @@ function userManagementApp() {
                                             LoR (SMD)
                                             @if($u->canExportSmd()) <span class="text-[9px] opacity-75 font-normal">(Export)</span> @endif
                                             @if($u->canViewEtReport()) <span class="text-[9px] font-bold text-indigo-800 dark:text-indigo-200 bg-indigo-200/60 dark:bg-indigo-800/40 px-1 rounded">(ET)</span> @endif
+                                            @if($u->canViewCadanganBiaya()) <span class="text-[9px] font-bold text-indigo-800 dark:text-indigo-200 bg-indigo-200/60 dark:bg-indigo-800/40 px-1 rounded">(CB)</span> @endif
                                         </span> 
                                     @endif
                                     @if($u->hasMenuPermission('disposal')) 
@@ -421,7 +426,7 @@ function userManagementApp() {
                         </label>
                         <!-- LoR (SMD) Navigation Item Checkbox -->
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300 border border-indigo-500/20 bg-indigo-500/5">
-                            <input type="checkbox" name="can_view_lor_smd" value="1" x-model="form.can_view_lor_smd" @change="if(!form.can_view_lor_smd) { form.can_view_smd_last_invoice_date = false; form.can_export_lor_smd = false; form.can_view_et_report = false; form.allowed_salespersons = []; form.allowed_sales_teams = []; }" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                            <input type="checkbox" name="can_view_lor_smd" value="1" x-model="form.can_view_lor_smd" @change="if(!form.can_view_lor_smd) { form.can_view_smd_last_invoice_date = false; form.can_export_lor_smd = false; form.can_view_et_report = false; form.can_view_cadangan_biaya = false; form.allowed_salespersons = []; form.allowed_sales_teams = []; }" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
                             <div class="flex items-center justify-between w-full">
                                 <span class="font-bold text-indigo-600 dark:text-indigo-400">LoR (SMD)</span>
                                 <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">SMD</span>
@@ -464,7 +469,7 @@ function userManagementApp() {
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             <span>LoR (SMD) Granular Permissions</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
                             <label class="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors">
                                 <input type="checkbox" name="can_view_smd_last_invoice_date" value="1" x-model="form.can_view_smd_last_invoice_date" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
                                 <div class="flex flex-col">
@@ -484,6 +489,13 @@ function userManagementApp() {
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-200">View ET Report</span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing Early Termination (ET) Report under LoR (SMD)</span>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                <input type="checkbox" name="can_view_cadangan_biaya" value="1" x-model="form.can_view_cadangan_biaya" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">View Cadangan Biaya</span>
+                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing Cadangan Biaya Report under LoR (SMD)</span>
                                 </div>
                             </label>
                         </div>

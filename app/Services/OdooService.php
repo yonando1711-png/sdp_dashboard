@@ -2904,6 +2904,316 @@ class OdooService
     }
 
     /**
+     * Fetch Cadangan Biaya Report under LoR (SMD)
+     * Queries Rental ID Subscriptions that have CADANGAN BIAYA product,
+     * flattens the Cadangan Biaya amount into its own dedicated column alongside vehicle details.
+     *
+     * @param array $allowedSalespersons
+     * @param array $allowedSalesTeams
+     * @param string|null $search
+     * @param string|null $salespersonFilter
+     * @param string|null $salesTeamFilter
+     * @param string|null $customerFilter
+     * @param string|null $statusFilter
+     * @param bool $isItAdmin
+     * @param bool $forceRefresh
+     * @return array
+     */
+    public function fetchCadanganBiayaReport(
+        array $allowedSalespersons = [],
+        array $allowedSalesTeams = [],
+        ?string $search = null,
+        ?string $salespersonFilter = null,
+        ?string $salesTeamFilter = null,
+        ?string $customerFilter = null,
+        ?string $statusFilter = null,
+        bool $isItAdmin = false,
+        bool $forceRefresh = false
+    ): array {
+        try {
+            $cacheKey = 'odoo_cadangan_biaya_master_records_v3';
+            if ($forceRefresh) {
+                \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            }
+
+            $masterRecords = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () {
+                $statusLabels = [
+                    'draft' => 'Quotation',
+                    'sent' => 'Quotation Sent',
+                    'pickup' => 'Reserved',
+                    'return' => 'Pickedup',
+                    'returned' => 'Returned',
+                    'cancel' => 'Cancelled',
+                ];
+
+                // 1. Find product ID for CADANGAN BIAYA if not fixed
+                $prodIds = $this->execute('product.product', 'search', [
+                    [['name', '=', 'CADANGAN BIAYA']]
+                ], ['limit' => 1]);
+                $cadanganProductId = !empty($prodIds[0]) ? (int)$prodIds[0] : 9145;
+
+                // 2. Fetch all CADANGAN BIAYA order lines
+                $cadLines = $this->execute('sale.order.line', 'search_read', [
+                    [['product_id', '=', $cadanganProductId]]
+                ], [
+                    'fields' => ['id', 'order_id', 'price_unit', 'duration_price']
+                ]);
+
+                if (empty($cadLines)) {
+                    return [];
+                }
+
+                $cadMap = [];
+                $orderIds = [];
+                foreach ($cadLines as $cl) {
+                    if (!empty($cl['order_id'][0])) {
+                        $oid = (int)$cl['order_id'][0];
+                        $orderIds[] = $oid;
+                        $cadMap[$oid] = (float)($cl['price_unit'] ?? 0);
+                    }
+                }
+                $orderIds = array_values(array_unique($orderIds));
+
+                // 3. Batch fetch sale.order records in chunks
+                $orders = [];
+                foreach (array_chunk($orderIds, 200) as $chunk) {
+                    $recs = $this->execute('sale.order', 'search_read', [
+                        [['id', 'in', $chunk]]
+                    ], [
+                        'fields' => [
+                            'id', 'name', 'partner_id', 'create_date', 'actual_start_rental', 'actual_end_rental',
+                            'duration_months', 'is_tender', 'rental_status', 'state', 'is_include_driver', 'user_id', 'team_id', 'order_line'
+                        ]
+                    ]);
+                    foreach ($recs as $r) {
+                        // Exclude cancelled sales orders
+                        if (in_array(strtolower($r['rental_status'] ?? ''), ['cancel', 'cancelled']) || strtolower($r['state'] ?? '') === 'cancel') {
+                            continue;
+                        }
+                        $orders[$r['id']] = $r;
+                    }
+                }
+
+                // 4. Batch fetch vehicle lines (non-cadangan lines on these orders)
+                $allLineIds = [];
+                foreach ($orders as $o) {
+                    if (!empty($o['order_line'])) {
+                        foreach ($o['order_line'] as $lid) {
+                            $allLineIds[] = $lid;
+                        }
+                    }
+                }
+
+                $vehicleLines = [];
+                foreach (array_chunk(array_values(array_unique($allLineIds)), 300) as $lchunk) {
+                    $recs = $this->execute('sale.order.line', 'search_read', [
+                        [
+                            ['id', 'in', $lchunk],
+                            ['product_id', '!=', $cadanganProductId],
+                            ['display_type', '=', false], // Strictly exclude line_note & line_section
+                        ]
+                    ], [
+                        'fields' => ['id', 'order_id', 'product_id', 'name', 'duration_price', 'price_unit', 'reserved_lot_ids', 'pickedup_lot_ids', 'returned_lot_ids', 'is_cop', 'product_uom_qty']
+                    ]);
+                    foreach ($recs as $r) {
+                        if (empty($r['product_id'])) continue;
+                        $hasLots = !empty($r['reserved_lot_ids']) || !empty($r['pickedup_lot_ids']) || !empty($r['returned_lot_ids']);
+                        if (($r['product_uom_qty'] ?? 0) <= 0 && !$hasLots) continue;
+
+                        $oid = $r['order_id'][0] ?? null;
+                        if ($oid) {
+                            $vehicleLines[$oid][] = $r;
+                        }
+                    }
+                }
+
+                // 5. Batch fetch lot records
+                $lotIds = [];
+                foreach ($vehicleLines as $oid => $lines) {
+                    foreach ($lines as $l) {
+                        foreach (['reserved_lot_ids', 'pickedup_lot_ids', 'returned_lot_ids'] as $f) {
+                            if (!empty($l[$f])) {
+                                foreach ($l[$f] as $lid) {
+                                    $lotIds[] = $lid;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                $lotNames = [];
+                foreach (array_chunk(array_values(array_unique($lotIds)), 300) as $lotChunk) {
+                    $recs = $this->execute('stock.lot', 'read', [$lotChunk, ['id', 'name']]);
+                    foreach ($recs as $lot) {
+                        $lotNames[$lot['id']] = $lot['name'];
+                    }
+                }
+
+                // 6. Compile single-row records
+                $compiled = [];
+                foreach ($orderIds as $oid) {
+                    if (!isset($orders[$oid])) continue;
+                    $o = $orders[$oid];
+                    $vLines = $vehicleLines[$oid] ?? [];
+
+                    $createDate = !empty($o['create_date'])
+                        ? \Carbon\Carbon::parse($o['create_date'], 'UTC')->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s')
+                        : '';
+                    $startDate = !empty($o['actual_start_rental'])
+                        ? \Carbon\Carbon::parse($o['actual_start_rental'], 'UTC')->setTimezone('Asia/Jakarta')->format('Y-m-d')
+                        : '';
+                    $endDate = !empty($o['actual_end_rental'])
+                        ? \Carbon\Carbon::parse($o['actual_end_rental'], 'UTC')->setTimezone('Asia/Jakarta')->format('Y-m-d')
+                        : '';
+
+                    $rawStatus = $o['rental_status'] ?? '';
+                    $state = $o['state'] ?? '';
+                    if (in_array(strtolower($rawStatus), ['cancel', 'cancelled']) || strtolower($state) === 'cancel') {
+                        continue;
+                    }
+                    $dispStatus = $statusLabels[$rawStatus] ?? ucfirst($rawStatus);
+                    $cadanganAmt = (float)($cadMap[$oid] ?? 0);
+
+                    // If multiple vehicle lines exist, create a row for each vehicle line
+                    $linesToIterate = !empty($vLines) ? $vLines : [[]];
+
+                    foreach ($linesToIterate as $vLine) {
+                        $targetLots = !empty($vLine['reserved_lot_ids'])
+                            ? $vLine['reserved_lot_ids']
+                            : (!empty($vLine['pickedup_lot_ids']) ? $vLine['pickedup_lot_ids'] : ($vLine['returned_lot_ids'] ?? []));
+                        $lotName = !empty($targetLots[0]) ? ($lotNames[$targetLots[0]] ?? '-') : '-';
+
+                        $compiled[] = [
+                            'customer' => is_array($o['partner_id']) ? $o['partner_id'][1] : '',
+                            'order_reference' => $o['name'] ?? '',
+                            'creation_date' => $createDate,
+                            'actual_start_rental' => $startDate,
+                            'actual_end_rental' => $endDate,
+                            'duration_months' => (int)($o['duration_months'] ?? 0),
+                            'lot_number' => $lotName,
+                            'duration_price' => (float)($vLine['duration_price'] ?? 0),
+                            'unit_price' => (float)($vLine['price_unit'] ?? 0),
+                            'cadangan_biaya' => $cadanganAmt,
+                            'is_tender' => (bool)($o['is_tender'] ?? false),
+                            'rental_status' => $dispStatus,
+                            'raw_status' => $rawStatus,
+                            'is_cop' => (bool)($vLine['is_cop'] ?? false),
+                            'driver' => (bool)($o['is_include_driver'] ?? false),
+                            'salesperson' => is_array($o['user_id']) ? $o['user_id'][1] : '',
+                            'sales_team' => is_array($o['team_id']) ? $o['team_id'][1] : '',
+                        ];
+                    }
+                }
+
+                return $compiled;
+            });
+
+            // Apply SMD Scoping Rules
+            $scopedRecords = $masterRecords;
+            if (!$isItAdmin) {
+                if (!empty($allowedSalespersons) && !empty($allowedSalesTeams)) {
+                    $scopedRecords = array_values(array_filter($scopedRecords, function ($r) use ($allowedSalespersons, $allowedSalesTeams) {
+                        return in_array($r['salesperson'], $allowedSalespersons) && in_array($r['sales_team'], $allowedSalesTeams);
+                    }));
+                } elseif (!empty($allowedSalespersons)) {
+                    $scopedRecords = array_values(array_filter($scopedRecords, function ($r) use ($allowedSalespersons) {
+                        return in_array($r['salesperson'], $allowedSalespersons);
+                    }));
+                } elseif (!empty($allowedSalesTeams)) {
+                    $scopedRecords = array_values(array_filter($scopedRecords, function ($r) use ($allowedSalesTeams) {
+                        return in_array($r['sales_team'], $allowedSalesTeams);
+                    }));
+                } else {
+                    $scopedRecords = [];
+                }
+            }
+
+            // Available Dropdown Options from Scoped Records
+            $availableSalespersons = collect($scopedRecords)->pluck('salesperson')->filter()->unique()->sort()->values()->all();
+            $availableSalesTeams = collect($scopedRecords)->pluck('sales_team')->filter()->unique()->sort()->values()->all();
+            $availableCustomers = collect($scopedRecords)->pluck('customer')->filter()->unique()->sort()->values()->all();
+            $availableStatuses = ['Pickedup', 'Reserved', 'Returned', 'Quotation'];
+
+            // Apply User Filters
+            $filtered = $scopedRecords;
+
+            if ($salespersonFilter) {
+                $filtered = array_values(array_filter($filtered, fn($r) => $r['salesperson'] === $salespersonFilter));
+            }
+            if ($salesTeamFilter) {
+                $filtered = array_values(array_filter($filtered, fn($r) => $r['sales_team'] === $salesTeamFilter));
+            }
+            if ($customerFilter) {
+                $filtered = array_values(array_filter($filtered, fn($r) => $r['customer'] === $customerFilter));
+            }
+            if ($statusFilter) {
+                $filtered = array_values(array_filter($filtered, fn($r) => strcasecmp($r['rental_status'], $statusFilter) === 0 || strcasecmp($r['raw_status'], $statusFilter) === 0));
+            }
+            if ($search) {
+                $q = strtolower(trim($search));
+                $filtered = array_values(array_filter($filtered, function ($r) use ($q) {
+                    return str_contains(strtolower($r['order_reference']), $q)
+                        || str_contains(strtolower($r['customer']), $q)
+                        || str_contains(strtolower($r['lot_number']), $q)
+                        || str_contains(strtolower($r['salesperson']), $q)
+                        || str_contains(strtolower($r['sales_team']), $q);
+                }));
+            }
+
+            // Summary Totals
+            $totalCadangan = 0;
+            $totalUnitPrice = 0;
+            $uniqueCustomers = [];
+            foreach ($filtered as $r) {
+                $totalCadangan += $r['cadangan_biaya'];
+                $totalUnitPrice += $r['unit_price'];
+                if (!empty($r['customer'])) {
+                    $uniqueCustomers[$r['customer']] = true;
+                }
+            }
+
+            return [
+                'success' => true,
+                'records' => $filtered,
+                'total_count' => count($filtered),
+                'summary' => [
+                    'total_units' => count($filtered),
+                    'total_cadangan_biaya' => $totalCadangan,
+                    'total_unit_price' => $totalUnitPrice,
+                    'total_customers' => count($uniqueCustomers),
+                ],
+                'filter_options' => [
+                    'salespersons' => $availableSalespersons,
+                    'sales_teams' => $availableSalesTeams,
+                    'customers' => $availableCustomers,
+                    'statuses' => $availableStatuses,
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('fetchCadanganBiayaReport failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'records' => [],
+                'total_count' => 0,
+                'summary' => [
+                    'total_units' => 0,
+                    'total_cadangan_biaya' => 0,
+                    'total_unit_price' => 0,
+                    'total_customers' => 0,
+                ],
+                'filter_options' => [
+                    'salespersons' => [],
+                    'sales_teams' => [],
+                    'customers' => [],
+                    'statuses' => [],
+                ]
+            ];
+        }
+    }
+
+    /**
      * Fetch Multi-Month Summary of Rented Vehicles (Untaxed)
      * Matches the paper report with normalized monthly pricing, period change detection, and price delta indicators.
      *

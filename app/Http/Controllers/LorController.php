@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
 use App\Models\Item;
@@ -864,6 +865,145 @@ class LorController extends Controller
                 $dateFrom,
                 $dateTo
             ),
+            $filename
+        );
+    }
+
+    /**
+     * Display Cadangan Biaya Report under LoR (SMD)
+     */
+    public function cadanganBiaya(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewCadanganBiaya()) {
+            abort(403, 'Access Denied: Your account does not have permission to view Cadangan Biaya Report.');
+        }
+
+        $search = $request->input('search');
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+        $customerFilter = $request->input('customer');
+        $statusFilter = $request->input('status');
+        $sortBy = $request->input('sort_by', 'order_reference');
+        $sortDir = strtolower($request->input('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $forceRefresh = $request->boolean('refresh');
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $result = $odooService->fetchCadanganBiayaReport(
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $search,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $customerFilter,
+            $statusFilter,
+            $user->isItAdmin(),
+            $forceRefresh
+        );
+
+        $records = $result['records'] ?? [];
+
+        // Sorting
+        if (!empty($records) && $sortBy) {
+            usort($records, function ($a, $b) use ($sortBy, $sortDir) {
+                $valA = $a[$sortBy] ?? '';
+                $valB = $b[$sortBy] ?? '';
+                if (is_numeric($valA) && is_numeric($valB)) {
+                    $cmp = $valA <=> $valB;
+                } else {
+                    $cmp = strcasecmp((string)$valA, (string)$valB);
+                }
+                return $sortDir === 'desc' ? -$cmp : $cmp;
+            });
+        }
+
+        // Pagination (50 items per page)
+        $perPage = 50;
+        $currentPage = (int) $request->input('page', 1);
+        $total = count($records);
+        $offset = ($currentPage - 1) * $perPage;
+        $itemsForCurrentPage = array_slice($records, $offset, $perPage);
+
+        $paginatedRecords = new LengthAwarePaginator(
+            $itemsForCurrentPage,
+            $total,
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('lor.cadangan_biaya', [
+            'records' => $paginatedRecords,
+            'summary' => $result['summary'] ?? ['total_units' => 0, 'total_cadangan_biaya' => 0, 'total_unit_price' => 0, 'total_customers' => 0],
+            'filterSalespersons' => $result['filter_options']['salespersons'] ?? [],
+            'filterSalesTeams' => $result['filter_options']['sales_teams'] ?? [],
+            'filterCustomers' => $result['filter_options']['customers'] ?? [],
+            'filterStatuses' => $result['filter_options']['statuses'] ?? [],
+            'salespersonFilter' => $salespersonFilter,
+            'salesTeamFilter' => $salesTeamFilter,
+            'customerFilter' => $customerFilter,
+            'statusFilter' => $statusFilter,
+            'search' => $search,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+        ]);
+    }
+
+    /**
+     * Export Cadangan Biaya Report as Excel (.xlsx)
+     */
+    public function exportCadanganBiaya(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user->canViewCadanganBiaya()) {
+            abort(403, 'Access Denied: Your account does not have permission to export Cadangan Biaya Report.');
+        }
+
+        $search = $request->input('search');
+        $salespersonFilter = $request->input('salesperson');
+        $salesTeamFilter = $request->input('sales_team');
+        $customerFilter = $request->input('customer');
+        $statusFilter = $request->input('status');
+        $sortBy = $request->input('sort_by', 'order_reference');
+        $sortDir = strtolower($request->input('sort_dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        $allowedSalespersons = $user->getAllowedSalespersons();
+        $allowedSalesTeams = $user->getAllowedSalesTeams();
+
+        $odooService = app(\App\Services\OdooService::class);
+        $result = $odooService->fetchCadanganBiayaReport(
+            $allowedSalespersons,
+            $allowedSalesTeams,
+            $search,
+            $salespersonFilter,
+            $salesTeamFilter,
+            $customerFilter,
+            $statusFilter,
+            $user->isItAdmin()
+        );
+
+        $records = $result['records'] ?? [];
+
+        // Sorting
+        if (!empty($records) && $sortBy) {
+            usort($records, function ($a, $b) use ($sortBy, $sortDir) {
+                $valA = $a[$sortBy] ?? '';
+                $valB = $b[$sortBy] ?? '';
+                if (is_numeric($valA) && is_numeric($valB)) {
+                    $cmp = $valA <=> $valB;
+                } else {
+                    $cmp = strcasecmp((string)$valA, (string)$valB);
+                }
+                return $sortDir === 'desc' ? -$cmp : $cmp;
+            });
+        }
+
+        $filename = 'Report_Cadangan_Biaya_' . date('Y-m-d') . '.xlsx';
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\CadanganBiayaExport($records),
             $filename
         );
     }
