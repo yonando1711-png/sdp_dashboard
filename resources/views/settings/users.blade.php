@@ -11,6 +11,7 @@
             'branch' => $u->branch,
             'role' => $u->role,
             'menu_permissions' => $u->getEffectiveMenuPermissions(),
+            'can_view_stock_nasional' => (bool) $u->can_view_stock_nasional,
             'can_view_lor_smd' => (bool) $u->can_view_lor_smd,
             'can_view_smd_last_invoice_date' => (bool) $u->can_view_smd_last_invoice_date,
             'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
@@ -33,6 +34,7 @@ function userManagementApp() {
     return {
         showModal: {{ $errors->any() ? 'true' : 'false' }},
         editMode: {{ old('_method') === 'PUT' ? 'true' : 'false' }},
+        changePassword: {{ (old('change_password') || $errors->has('password')) ? 'true' : 'false' }},
         users: usersMap,
         form: {
             id: {{ old('user_id', 'null') }},
@@ -42,6 +44,7 @@ function userManagementApp() {
             branch: @json(old('branch', 'ALL')),
             role: @json(old('role', 'branch_user')),
             menu_permissions: @json(old('menu_permissions', [])),
+            can_view_stock_nasional: {{ old('can_view_stock_nasional') ? 'true' : 'false' }},
             can_view_lor_smd: {{ old('can_view_lor_smd') ? 'true' : 'false' }},
             can_view_smd_last_invoice_date: {{ old('can_view_smd_last_invoice_date') ? 'true' : 'false' }},
             can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }},
@@ -70,6 +73,7 @@ function userManagementApp() {
         },
         openCreateModal() {
             this.editMode = false;
+            this.changePassword = false;
             this.form = {
                 id: null,
                 name: '',
@@ -78,6 +82,7 @@ function userManagementApp() {
                 branch: 'ALL',
                 role: 'branch_user',
                 menu_permissions: [],
+                can_view_stock_nasional: false,
                 can_view_lor_smd: false,
                 can_view_smd_last_invoice_date: false,
                 can_export_lor_smd: false,
@@ -96,6 +101,7 @@ function userManagementApp() {
             const u = this.users[userId];
             if (!u) return;
             this.editMode = true;
+            this.changePassword = false;
             this.form = {
                 id: u.id,
                 name: u.name,
@@ -104,6 +110,7 @@ function userManagementApp() {
                 branch: u.branch,
                 role: u.role,
                 menu_permissions: Array.isArray(u.menu_permissions) ? [...u.menu_permissions] : [],
+                can_view_stock_nasional: Boolean(u.can_view_stock_nasional),
                 can_view_lor_smd: Boolean(u.can_view_lor_smd),
                 can_view_smd_last_invoice_date: Boolean(u.can_view_smd_last_invoice_date),
                 can_export_lor_smd: Boolean(u.can_export_lor_smd),
@@ -216,6 +223,7 @@ function userManagementApp() {
                             <td class="py-4 px-6">
                                 <div class="flex flex-wrap gap-1.5">
                                     @if($u->hasMenuPermission('dashboard')) <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Dashboard</span> @endif
+                                    @if($u->canViewStockNasional()) <span class="px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950/80 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700/80">Stock Nasional</span> @endif
                                     @if($u->hasMenuPermission('total-stock')) <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Total Stock</span> @endif
                                     @if($u->hasMenuPermission('rental-pairs')) <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Rental Pairs</span> @endif
                                     @if($u->hasMenuPermission('in-stock')) <span class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/80">In Stock</span> @endif
@@ -293,7 +301,7 @@ function userManagementApp() {
             </div>
 
             <!-- Form Body with Scrollable Middle -->
-            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" class="flex flex-col flex-1 min-h-0 overflow-hidden mt-4">
+            <form :action="editMode ? '{{ url('/settings/users') }}/' + form.id : '{{ route('users.store') }}'" method="POST" autocomplete="off" class="flex flex-col flex-1 min-h-0 overflow-hidden mt-4">
                 @csrf
                 <template x-if="editMode">
                     <input type="hidden" name="_method" value="PUT">
@@ -334,7 +342,7 @@ function userManagementApp() {
                             <svg class="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                             <span>Email Address</span>
                         </label>
-                        <input type="email" name="email" x-model="form.email" required placeholder="name@harent.co.id" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
+                        <input type="email" name="email" x-model="form.email" required autocomplete="off" placeholder="name@harent.co.id" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
                     </div>
                 </div>
 
@@ -342,14 +350,30 @@ function userManagementApp() {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <!-- Password Field -->
                     <div class="space-y-1.5">
-                        <label class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 justify-between">
+                        <div class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5 justify-between">
                             <span class="flex items-center gap-1.5">
                                 <svg class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                                 Password
                             </span>
-                            <span class="text-[10px] font-normal text-slate-400" x-text="editMode ? '(Leave blank to keep)' : '(min. 6 chars)'"></span>
-                        </label>
-                        <input type="password" name="password" :required="!editMode" minlength="6" placeholder="••••••••" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
+                            <span x-show="!editMode" class="text-[10px] font-normal text-slate-400">(min. 6 chars)</span>
+                            <label x-show="editMode" class="inline-flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500">
+                                <input type="checkbox" name="change_password" value="1" x-model="changePassword" @change="form.password = ''" class="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                                <span>Change Password</span>
+                            </label>
+                        </div>
+
+                        <!-- Locked display in Edit Mode unless Change Password is checked (prevents browser autofill) -->
+                        <template x-if="editMode && !changePassword">
+                            <div class="w-full px-4 py-2.5 rounded-2xl bg-slate-100/80 dark:bg-[#050913]/60 border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-xs font-medium select-none flex items-center justify-between">
+                                <span>Unchanged (kept)</span>
+                                <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-600">Locked</span>
+                            </div>
+                        </template>
+
+                        <!-- Active Password input only when creating or explicitly changing password -->
+                        <template x-if="!editMode || changePassword">
+                            <input type="password" name="password" x-model="form.password" :required="!editMode || changePassword" minlength="6" autocomplete="new-password" readonly @focus="$el.removeAttribute('readonly')" placeholder="Min. 6 characters" class="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-[#050913] border border-slate-300 dark:border-slate-700/80 text-slate-900 dark:text-white text-xs font-semibold focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600">
+                        </template>
                     </div>
 
                     <!-- Role Type Field -->
@@ -396,6 +420,14 @@ function userManagementApp() {
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-200">
                             <input type="checkbox" name="menu_permissions[]" value="dashboard" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
                             <span class="font-semibold">Dashboard</span>
+                        </label>
+                        <!-- Stock Nasional Navigation Item Checkbox -->
+                        <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-300 border border-cyan-500/20 bg-cyan-500/5">
+                            <input type="checkbox" name="can_view_stock_nasional" value="1" x-model="form.can_view_stock_nasional" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-cyan-600 focus:ring-cyan-500">
+                            <div class="flex items-center justify-between w-full">
+                                <span class="font-bold text-cyan-700 dark:text-cyan-400">Stock Nasional</span>
+                                <span class="text-[9px] font-bold px-1 py-0.5 rounded bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300">NAS</span>
+                            </div>
                         </label>
                         <label class="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-900 cursor-pointer transition-colors text-slate-800 dark:text-slate-200">
                             <input type="checkbox" name="menu_permissions[]" value="total-stock" x-model="form.menu_permissions" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">

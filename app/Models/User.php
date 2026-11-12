@@ -22,6 +22,7 @@ class User extends Authenticatable
         'branch',
         'role',
         'menu_permissions',
+        'can_view_stock_nasional',
         'can_view_lor_smd',
         'can_view_smd_last_invoice_date',
         'can_export_lor_smd',
@@ -56,6 +57,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'menu_permissions' => 'array',
+            'can_view_stock_nasional' => 'boolean',
             'can_view_lor_smd' => 'boolean',
             'can_view_smd_last_invoice_date' => 'boolean',
             'can_export_lor_smd' => 'boolean',
@@ -76,6 +78,14 @@ class User extends Authenticatable
     public function isItAdmin(): bool
     {
         return $this->role === 'it_admin';
+    }
+
+    /**
+     * Check if user can view Stock Nasional under Dashboard
+     */
+    public function canViewStockNasional(): bool
+    {
+        return $this->isItAdmin() || (bool) $this->can_view_stock_nasional;
     }
 
     /**
@@ -185,6 +195,10 @@ class User extends Authenticatable
 
         // Standardize key hyphens/underscores
         $key = str_replace('_', '-', strtolower($menu));
+
+        if ($key === 'stock-nasional' || $key === 'dashboard-stock-nasional') {
+            return $this->canViewStockNasional();
+        }
 
         if ($key === 'lor-smd') {
             return $this->canAccessSmd();
