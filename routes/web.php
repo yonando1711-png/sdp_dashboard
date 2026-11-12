@@ -25,6 +25,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Main Dashboard & Analytics
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/stock-nasional', [DashboardController::class, 'stockNasional'])->middleware(CheckMenuPermission::class . ':stock-nasional')->name('stock-nasional');
+    Route::get('/stock-nasional/export-excel', [DashboardController::class, 'exportStockNasionalExcel'])->middleware(CheckMenuPermission::class . ':stock-nasional')->name('stock-nasional.export-excel');
+    Route::get('/stock-nasional/export-pdf', [DashboardController::class, 'exportStockNasionalPdf'])->middleware(CheckMenuPermission::class . ':stock-nasional')->name('stock-nasional.export-pdf');
     Route::get('/details', [DashboardController::class, 'details'])->name('details');
     Route::get('/export', [DashboardController::class, 'export'])->name('export');
     Route::get('/print', [DashboardController::class, 'print'])->name('print');

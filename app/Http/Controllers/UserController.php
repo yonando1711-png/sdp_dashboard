@@ -109,6 +109,7 @@ class UserController extends Controller
             'branch' => 'required|string',
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
+            'can_view_stock_nasional' => 'nullable|boolean',
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
@@ -145,6 +146,7 @@ class UserController extends Controller
             'branch' => strtoupper(trim($validated['branch'])),
             'role' => $validated['role'],
             'menu_permissions' => $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [],
+            'can_view_stock_nasional' => $request->boolean('can_view_stock_nasional'),
             'can_view_lor_smd' => $canViewSmd,
             'can_view_smd_last_invoice_date' => $canViewSmd && $request->boolean('can_view_smd_last_invoice_date'),
             'can_export_lor_smd' => $canViewSmd && $request->boolean('can_export_lor_smd'),
@@ -175,6 +177,7 @@ class UserController extends Controller
             'branch' => 'required|string',
             'role' => 'required|in:it_admin,branch_user',
             'menu_permissions' => 'nullable|array',
+            'can_view_stock_nasional' => 'nullable|boolean',
             'can_view_lor_smd' => 'nullable|boolean',
             'can_view_smd_last_invoice_date' => 'nullable|boolean',
             'can_export_lor_smd' => 'nullable|boolean',
@@ -209,6 +212,7 @@ class UserController extends Controller
         $user->branch = strtoupper(trim($validated['branch']));
         $user->role = $validated['role'];
         $user->menu_permissions = $request->has('menu_permissions') ? array_values(array_filter((array)$request->input('menu_permissions'))) : [];
+        $user->can_view_stock_nasional = $request->boolean('can_view_stock_nasional');
         $user->can_view_lor_smd = $canViewSmd;
         $user->can_view_smd_last_invoice_date = $canViewSmd && $request->boolean('can_view_smd_last_invoice_date');
         $user->can_export_lor_smd = $canViewSmd && $request->boolean('can_export_lor_smd');

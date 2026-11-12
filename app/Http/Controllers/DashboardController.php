@@ -16,6 +16,9 @@ class DashboardController extends Controller
     {
         $user = auth()->user();
         if ($user && !$user->hasMenuPermission('dashboard')) {
+            if ($user->canViewStockNasional()) {
+                return redirect()->route('stock-nasional');
+            }
             if ($user->canAccessSmd()) {
                 return redirect()->route('lor.smd');
             }
@@ -880,6 +883,73 @@ class DashboardController extends Controller
         }
 
         return response()->json($results);
+    }
+
+    /**
+     * Display Stock Nasional Report (Laporan Harian Jumlah Mobil - Nationwide)
+     */
+    public function stockNasional(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->canViewStockNasional()) {
+            abort(403, 'Access Denied: You do not have permission to view Stock Nasional.');
+        }
+
+        $forceRefresh = $request->boolean('refresh');
+        $odooService = app(\App\Services\OdooService::class);
+        $report = $odooService->fetchStockNasionalReport($forceRefresh);
+
+        return view('dashboard.stock_nasional', [
+            'report' => $report,
+        ]);
+    }
+
+    /**
+     * Export Stock Nasional Report as Excel (.xlsx)
+     */
+    public function exportStockNasionalExcel(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->canViewStockNasional()) {
+            abort(403, 'Access Denied: You do not have permission to export Stock Nasional.');
+        }
+
+        $odooService = app(\App\Services\OdooService::class);
+        $report = $odooService->fetchStockNasionalReport($request->boolean('refresh'));
+
+        $filename = 'Stock_Nasional_' . date('Y-m-d') . '.xlsx';
+        return Excel::download(new \App\Exports\StockNasionalExport($report), $filename);
+    }
+
+    /**
+     * Export Stock Nasional Report as PDF (.pdf)
+     */
+    public function exportStockNasionalPdf(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->canViewStockNasional()) {
+            abort(403, 'Access Denied: You do not have permission to export Stock Nasional.');
+        }
+
+        $odooService = app(\App\Services\OdooService::class);
+        $report = $odooService->fetchStockNasionalReport($request->boolean('refresh'));
+
+        $options = new \Dompdf\Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', true);
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $html = view('exports.stock_nasional_pdf', ['report' => $report])->render();
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = 'Stock_Nasional_' . date('Y-m-d') . '.pdf';
+        return response()->streamDownload(
+            fn () => print($dompdf->output()),
+            $filename,
+            ['Content-Type' => 'application/pdf']
+        );
     }
 }
 

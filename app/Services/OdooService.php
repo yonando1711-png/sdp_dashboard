@@ -3214,6 +3214,426 @@ class OdooService
     }
 
     /**
+     * Fetch nationwide Stock Nasional report ("Laporan Harian Jumlah Mobil") directly from Odoo.
+     * Enforces mutually exclusive classification across all active stock.lot vehicles
+     * and provides a separate Empty Status Kendaraan audit dataset.
+     *
+     * @param bool $forceRefresh
+     * @return array
+     */
+    public function fetchStockNasionalReport(bool $forceRefresh = false): array
+    {
+        try {
+            $cacheKey = 'odoo_stock_nasional_report_v2';
+            if ($forceRefresh) {
+                \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            }
+
+            return \Illuminate\Support\Facades\Cache::remember($cacheKey, 900, function () {
+                // 1. Fetch active vehicle lots from Odoo (matching SummaryGenerator stock domain)
+                $lots = $this->execute('stock.lot', 'search_read', [
+                    [['product_qty', '>', 0], ['location_id', '!=', 5], ['product_id', '!=', 10170]]
+                ], [
+                    'fields' => [
+                        'id', 'name', 'ref', 'product_id', 'location_id', 'product_qty',
+                        'is_vendor_rent', 'rental_id', 'vehicle_status_id',
+                        'vehicle_condition', 'x_studio_related_field_7i9_1jf5ourt4'
+                    ]
+                ]);
+
+                // 2. Batch fetch linked sale.order details & active lot IDs for Job Order lookup
+                $activeLotIds = [];
+                $soIds = [];
+                $replacementCheckSoIds = [];
+                foreach ($lots as $l) {
+                    $loc = is_array($l['location_id'] ?? null) ? $l['location_id'][1] : '';
+                    if ($loc !== 'SDP/SOLD') {
+                        $activeLotIds[] = (int) $l['id'];
+                    }
+                    if (!empty($l['rental_id'][0])) {
+                        $oid = (int) $l['rental_id'][0];
+                        $soIds[] = $oid;
+                        $resv = trim((string)($l['x_studio_related_field_7i9_1jf5ourt4'] ?? ''));
+                        if ($resv !== '' && $resv !== trim((string)$l['name'])) {
+                            $replacementCheckSoIds[$oid] = true;
+                        }
+                    }
+                }
+                $soIds = array_values(array_unique($soIds));
+
+                $soMap = [];
+                $replacementSoNames = [];
+                foreach (array_chunk($soIds, 300) as $chunk) {
+                    $recs = $this->execute('sale.order', 'read', [
+                        $chunk,
+                        ['id', 'name', 'partner_id', 'rental_status', 'rental_type', 'duration_uom_type']
+                    ]);
+                    if (is_array($recs)) {
+                        foreach ($recs as $r) {
+                            $soMap[$r['id']] = $r;
+                            if (isset($replacementCheckSoIds[$r['id']])) {
+                                $replacementSoNames[] = $r['name'];
+                            }
+                        }
+                    }
+                }
+
+                // 3. Query product.movement counts for replacement orders & confirmed Job Orders for Idle detection
+                $movementCounts = [];
+                foreach (array_chunk(array_values(array_unique($replacementSoNames)), 300) as $mchunk) {
+                    $movementCounts = array_merge($movementCounts, $this->fetchProductMovementCounts($mchunk));
+                }
+                $confirmedJoMap = $this->fetchConfirmedJobOrdersByLot($activeLotIds);
+
+                // 4. Initialize mutually exclusive buckets matching PDF sub-rows + audit lists
+                $bucketKeys = [
+                    '1_bulanan_tahunan', '1_st_avis', '1_rbo_sdp', '1_rbo_external',
+                    '2a_ready', '2a_moving', '2a_tunggu', '2a_asuransi', '2a_service', '2a_rbo',
+                    '2b_ready', '2b_replace', '2b_compliment', '2b_idle', '2b_service', '2b_asuransi',
+                    '2c_ready', '2c_replace', '2c_compliment', '2c_idle', '2c_service', '2c_asuransi',
+                    '2d_ready', '2d_replace', '2d_compliment', '2d_idle', '2d_service', '2d_asuransi', '2d_rusak',
+                    '3a_ok', '3b_or',
+                    '4_siap_jual', '4_tidak_siap_jual', '4_rusak',
+                    'external_standby', 'untagged_non_rented',
+                ];
+                $buckets = array_fill_keys($bucketKeys, []);
+
+                $emptyAuditBuckets = [
+                    'all' => [],
+                    'at_customer' => [],
+                    'rented_service_ins' => [],
+                    'rented_stock_car' => [],
+                    'untagged_non_rented' => [],
+                ];
+
+                $totalActiveLots = 0;
+
+                foreach ($lots as $l) {
+                    $loc = is_array($l['location_id'] ?? null) ? $l['location_id'][1] : '';
+                    if ($loc === 'SDP/SOLD') {
+                        continue; // Exclude finalized SDP/SOLD
+                    }
+
+                    $totalActiveLots++;
+                    $lotName = trim((string)($l['name'] ?? ''));
+                    $vs = is_array($l['vehicle_status_id'] ?? null) ? strtoupper(trim($l['vehicle_status_id'][1])) : '';
+                    $isVendorRent = !empty($l['is_vendor_rent']);
+                    $so = !empty($l['rental_id'][0]) ? ($soMap[(int)$l['rental_id'][0]] ?? null) : null;
+                    $soName = $so['name'] ?? '';
+                    $soStatus = $so['rental_status'] ?? '';
+                    $rentalType = $so['rental_type'] ?? '';
+                    $customer = (!empty($so['partner_id']) && is_array($so['partner_id'])) ? $so['partner_id'][1] : '';
+                    $resvLot = trim((string)($l['x_studio_related_field_7i9_1jf5ourt4'] ?? ''));
+                    $confirmedJos = $confirmedJoMap[(int) $l['id']] ?? [];
+                    $confirmedJoNames = !empty($confirmedJos) ? implode(', ', array_column($confirmedJos, 'name')) : '-';
+
+                    $item = [
+                        'id' => (int) $l['id'],
+                        'lot_number' => $lotName,
+                        'chassis' => trim((string)($l['ref'] ?? '')) ?: '-',
+                        'product' => is_array($l['product_id'] ?? null) ? $l['product_id'][1] : '-',
+                        'location' => $loc ?: '-',
+                        'vehicle_status' => $vs ?: 'Empty',
+                        'confirmed_jo' => $confirmedJoNames,
+                        'branch_condition' => trim((string)($l['vehicle_condition'] ?? '')) ?: '-',
+                        'rental_id' => $soName ?: '-',
+                        'customer' => $customer ?: '-',
+                        'rental_status' => $soStatus ?: '-',
+                        'rental_type' => $rentalType ?: '-',
+                        'reserved_lot' => $resvLot ?: '-',
+                        'is_vendor_rent' => $isVendorRent,
+                    ];
+
+                    $locFlags = [
+                        'is_cust' => ($loc === 'Partners/Customers/Rental'),
+                        'is_svc' => (stripos($loc, 'Service') !== false),
+                        'is_ins' => (stripos($loc, 'Insurance') !== false),
+                        'is_lost' => (stripos($loc, 'SDP/LOST') !== false),
+                        'is_transit' => (stripos($loc, 'TRANSIT') !== false),
+                    ];
+
+                    // Track separate Empty Status Kendaraan audit dataset
+                    if ($vs === '') {
+                        $emptyAuditBuckets['all'][] = $item;
+                        if ($so && $soStatus === 'return') {
+                            if ($locFlags['is_cust']) {
+                                $emptyAuditBuckets['at_customer'][] = $item;
+                            } elseif ($locFlags['is_svc'] || $locFlags['is_ins']) {
+                                $emptyAuditBuckets['rented_service_ins'][] = $item;
+                            } else {
+                                $emptyAuditBuckets['rented_stock_car'][] = $item;
+                            }
+                        } else {
+                            $emptyAuditBuckets['untagged_non_rented'][] = $item;
+                        }
+                    }
+
+                    // Classify lot into single mutually exclusive bucket
+                    $bucketKey = $this->classifyStockNasionalBucket(
+                        $vs,
+                        $isVendorRent,
+                        $locFlags,
+                        $so,
+                        $lotName,
+                        $resvLot,
+                        $movementCounts[$soName] ?? 0,
+                        !empty($confirmedJos)
+                    );
+                    $buckets[$bucketKey][] = $item;
+                }
+
+                // 5. Compute hierarchy subtotals and percentages matching PDF layout
+                $count = fn(string $key): int => count($buckets[$key] ?? []);
+
+                $totalTersewa = $count('1_bulanan_tahunan') + $count('1_st_avis') + $count('1_rbo_sdp') + $count('1_rbo_external');
+
+                $totalBN = $count('2a_ready') + $count('2a_moving') + $count('2a_tunggu') + $count('2a_asuransi') + $count('2a_service') + $count('2a_rbo');
+                $totalSR = $count('2b_ready') + $count('2b_replace') + $count('2b_compliment') + $count('2b_idle') + $count('2b_service') + $count('2b_asuransi');
+                $totalGS = $count('2c_ready') + $count('2c_replace') + $count('2c_compliment') + $count('2c_idle') + $count('2c_service') + $count('2c_asuransi');
+                $totalPJ = $count('2d_ready') + $count('2d_replace') + $count('2d_compliment') + $count('2d_idle') + $count('2d_service') + $count('2d_asuransi') + $count('2d_rusak');
+                $totalStockSewaReplace = $totalBN + $totalSR + $totalGS + $totalPJ;
+
+                $totalOperasional = $count('3a_ok') + $count('3b_or');
+                $totalStockJual = $count('4_siap_jual') + $count('4_tidak_siap_jual') + $count('4_rusak');
+
+                $jumlahKeseluruhan = $totalTersewa + $totalStockSewaReplace + $totalOperasional + $totalStockJual;
+                $mobilSewaExternal = $count('1_rbo_external');
+                $jumlahMobilSdp = max(0, $jumlahKeseluruhan - $mobilSewaExternal);
+
+                $pctTersewa = fn(int $n): ?float => $totalTersewa > 0 ? round(($n / $totalTersewa) * 100, 2) : 0.0;
+                $pctTotal = fn(int $n): ?float => $jumlahKeseluruhan > 0 ? round(($n / $jumlahKeseluruhan) * 100, 2) : 0.0;
+
+                // Structured rows representing the exact PDF table hierarchy
+                $rows = [
+                    ['type' => 'section', 'label' => '1. Mobil Tersewa', 'total' => null, 'pct_rented' => null, 'pct_total' => null, 'bucket' => null],
+                    ['type' => 'item', 'label' => '- Sewa Bulanan & Tahunan', 'total' => $count('1_bulanan_tahunan'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '1_bulanan_tahunan'],
+                    ['type' => 'item', 'label' => '- Sewa ST & AVIS', 'total' => $count('1_st_avis'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '1_st_avis'],
+                    ['type' => 'item', 'label' => '- RBO - Unit SDP', 'total' => $count('1_rbo_sdp'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '1_rbo_sdp'],
+                    ['type' => 'item', 'label' => '- RBO - Sewa External', 'total' => $count('1_rbo_external'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '1_rbo_external'],
+                    ['type' => 'subtotal', 'label' => 'Sub Total Mobil Tersewa', 'total' => $totalTersewa, 'pct_rented' => null, 'pct_total' => $pctTotal($totalTersewa), 'bucket' => 'group_1'],
+
+                    ['type' => 'section', 'label' => '2. Mobil Stock Sewa & Replace', 'total' => null, 'pct_rented' => null, 'pct_total' => null, 'bucket' => null],
+                    ['type' => 'group', 'label' => 'A. Stock Rent Brand New', 'total' => $totalBN, 'pct_rented' => $pctTersewa($totalBN), 'pct_total' => $pctTotal($totalBN), 'bucket' => 'group_2a'],
+                    ['type' => 'item', 'label' => '- Ready', 'total' => $count('2a_ready'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_ready'],
+                    ['type' => 'item', 'label' => '- Moving Out Start Sewa', 'total' => $count('2a_moving'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_moving'],
+                    ['type' => 'item', 'label' => '- Tunggu Start Sewa', 'total' => $count('2a_tunggu'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_tunggu'],
+                    ['type' => 'item', 'label' => '- Asuransi', 'total' => $count('2a_asuransi'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_asuransi'],
+                    ['type' => 'item', 'label' => '- Service', 'total' => $count('2a_service'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_service'],
+                    ['type' => 'item', 'label' => '- RBO', 'total' => $count('2a_rbo'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2a_rbo'],
+
+                    ['type' => 'group', 'label' => 'B. Stock Rent', 'total' => $totalSR, 'pct_rented' => $pctTersewa($totalSR), 'pct_total' => $pctTotal($totalSR), 'bucket' => 'group_2b'],
+                    ['type' => 'item', 'label' => '- Ready', 'total' => $count('2b_ready'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_ready'],
+                    ['type' => 'item', 'label' => '- Replace', 'total' => $count('2b_replace'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_replace'],
+                    ['type' => 'item', 'label' => '- Compliment', 'total' => $count('2b_compliment'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_compliment'],
+                    ['type' => 'item', 'label' => '- Idle', 'total' => $count('2b_idle'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_idle'],
+                    ['type' => 'item', 'label' => '- Service', 'total' => $count('2b_service'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_service'],
+                    ['type' => 'item', 'label' => '- Asuransi', 'total' => $count('2b_asuransi'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2b_asuransi'],
+
+                    ['type' => 'group', 'label' => 'C. Stock GS', 'total' => $totalGS, 'pct_rented' => $pctTersewa($totalGS), 'pct_total' => $pctTotal($totalGS), 'bucket' => 'group_2c'],
+                    ['type' => 'item', 'label' => '- Ready', 'total' => $count('2c_ready'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_ready'],
+                    ['type' => 'item', 'label' => '- Replace', 'total' => $count('2c_replace'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_replace'],
+                    ['type' => 'item', 'label' => '- Compliment', 'total' => $count('2c_compliment'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_compliment'],
+                    ['type' => 'item', 'label' => '- Idle', 'total' => $count('2c_idle'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_idle'],
+                    ['type' => 'item', 'label' => '- Service', 'total' => $count('2c_service'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_service'],
+                    ['type' => 'item', 'label' => '- Asuransi', 'total' => $count('2c_asuransi'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2c_asuransi'],
+
+                    ['type' => 'group', 'label' => 'D. Stock Plan Jual', 'total' => $totalPJ, 'pct_rented' => $pctTersewa($totalPJ), 'pct_total' => $pctTotal($totalPJ), 'bucket' => 'group_2d'],
+                    ['type' => 'item', 'label' => '- Ready', 'total' => $count('2d_ready'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_ready'],
+                    ['type' => 'item', 'label' => '- Replace', 'total' => $count('2d_replace'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_replace'],
+                    ['type' => 'item', 'label' => '- Compliment', 'total' => $count('2d_compliment'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_compliment'],
+                    ['type' => 'item', 'label' => '- Idle', 'total' => $count('2d_idle'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_idle'],
+                    ['type' => 'item', 'label' => '- Service', 'total' => $count('2d_service'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_service'],
+                    ['type' => 'item', 'label' => '- Asuransi', 'total' => $count('2d_asuransi'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_asuransi'],
+                    ['type' => 'item', 'label' => '- Rusak', 'total' => $count('2d_rusak'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '2d_rusak'],
+
+                    ['type' => 'subtotal', 'label' => 'Sub Total Mobil Stock Sewa & Replace', 'total' => $totalStockSewaReplace, 'pct_rented' => $pctTersewa($totalStockSewaReplace), 'pct_total' => $pctTotal($totalStockSewaReplace), 'bucket' => 'group_2'],
+
+                    ['type' => 'section', 'label' => '3. Operasional', 'total' => null, 'pct_rented' => null, 'pct_total' => null, 'bucket' => null],
+                    ['type' => 'group', 'label' => 'A. Operasional Khusus', 'total' => $count('3a_ok'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '3a_ok'],
+                    ['type' => 'group', 'label' => 'B. Operasional Rutin', 'total' => $count('3b_or'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '3b_or'],
+                    ['type' => 'subtotal', 'label' => 'Sub Total Mobil Operasional', 'total' => $totalOperasional, 'pct_rented' => null, 'pct_total' => $pctTotal($totalOperasional), 'bucket' => 'group_3'],
+
+                    ['type' => 'section', 'label' => '4. Mobil Stock Jual', 'total' => null, 'pct_rented' => null, 'pct_total' => null, 'bucket' => null],
+                    ['type' => 'item', 'label' => '- Stock Siap Jual', 'total' => $count('4_siap_jual'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '4_siap_jual'],
+                    ['type' => 'item', 'label' => '- Stock Tidak Siap Jual', 'total' => $count('4_tidak_siap_jual'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '4_tidak_siap_jual'],
+                    ['type' => 'item', 'label' => '- Stock Jual Rusak', 'total' => $count('4_rusak'), 'pct_rented' => null, 'pct_total' => null, 'bucket' => '4_rusak'],
+                    ['type' => 'subtotal', 'label' => 'Sub Total Mobil Stock Jual', 'total' => $totalStockJual, 'pct_rented' => null, 'pct_total' => $pctTotal($totalStockJual), 'bucket' => 'group_4'],
+                ];
+
+                // Group rollups for drill-down clicks on parent headers
+                $buckets['group_1'] = array_merge($buckets['1_bulanan_tahunan'], $buckets['1_st_avis'], $buckets['1_rbo_sdp'], $buckets['1_rbo_external']);
+                $buckets['group_2a'] = array_merge($buckets['2a_ready'], $buckets['2a_moving'], $buckets['2a_tunggu'], $buckets['2a_asuransi'], $buckets['2a_service'], $buckets['2a_rbo']);
+                $buckets['group_2b'] = array_merge($buckets['2b_ready'], $buckets['2b_replace'], $buckets['2b_compliment'], $buckets['2b_idle'], $buckets['2b_service'], $buckets['2b_asuransi']);
+                $buckets['group_2c'] = array_merge($buckets['2c_ready'], $buckets['2c_replace'], $buckets['2c_compliment'], $buckets['2c_idle'], $buckets['2c_service'], $buckets['2c_asuransi']);
+                $buckets['group_2d'] = array_merge($buckets['2d_ready'], $buckets['2d_replace'], $buckets['2d_compliment'], $buckets['2d_idle'], $buckets['2d_service'], $buckets['2d_asuransi'], $buckets['2d_rusak']);
+                $buckets['group_2'] = array_merge($buckets['group_2a'], $buckets['group_2b'], $buckets['group_2c'], $buckets['group_2d']);
+                $buckets['group_3'] = array_merge($buckets['3a_ok'], $buckets['3b_or']);
+                $buckets['group_4'] = array_merge($buckets['4_siap_jual'], $buckets['4_tidak_siap_jual'], $buckets['4_rusak']);
+                $buckets['grand_total'] = array_merge($buckets['group_1'], $buckets['group_2'], $buckets['group_3'], $buckets['group_4']);
+                $buckets['sewa_external'] = $buckets['1_rbo_external'];
+
+                return [
+                    'success' => true,
+                    'fetched_at' => now()->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s'),
+                    'report_date_formatted' => now()->setTimezone('Asia/Jakarta')->locale('id')->translatedFormat('d F Y'),
+                    'rows' => $rows,
+                    'totals' => [
+                        'total_tersewa' => $totalTersewa,
+                        'total_stock_sewa_replace' => $totalStockSewaReplace,
+                        'pct_stock_vs_tersewa' => $pctTersewa($totalStockSewaReplace),
+                        'pct_stock_vs_total' => $pctTotal($totalStockSewaReplace),
+                        'total_operasional' => $totalOperasional,
+                        'total_stock_jual' => $totalStockJual,
+                        'jumlah_keseluruhan' => $jumlahKeseluruhan,
+                        'mobil_sewa_external' => $mobilSewaExternal,
+                        'jumlah_mobil_sdp' => $jumlahMobilSdp,
+                        'total_active_odoo_lots' => $totalActiveLots,
+                        'untagged_non_rented' => $count('untagged_non_rented'),
+                        'external_standby' => $count('external_standby'),
+                    ],
+                    'empty_audit' => [
+                        'total_empty' => count($emptyAuditBuckets['all']),
+                        'at_customer' => count($emptyAuditBuckets['at_customer']),
+                        'rented_service_ins' => count($emptyAuditBuckets['rented_service_ins']),
+                        'rented_stock_car' => count($emptyAuditBuckets['rented_stock_car']),
+                        'untagged_non_rented' => count($emptyAuditBuckets['untagged_non_rented']),
+                        'buckets' => $emptyAuditBuckets,
+                    ],
+                    'buckets' => $buckets,
+                ];
+            });
+        } catch (\Exception $e) {
+            \Log::error('fetchStockNasionalReport failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'fetched_at' => now()->setTimezone('Asia/Jakarta')->format('Y-m-d H:i:s'),
+                'report_date_formatted' => now()->setTimezone('Asia/Jakarta')->format('d M Y'),
+                'rows' => [],
+                'totals' => [
+                    'total_tersewa' => 0, 'total_stock_sewa_replace' => 0,
+                    'pct_stock_vs_tersewa' => 0, 'pct_stock_vs_total' => 0,
+                    'total_operasional' => 0, 'total_stock_jual' => 0,
+                    'jumlah_keseluruhan' => 0, 'mobil_sewa_external' => 0,
+                    'jumlah_mobil_sdp' => 0, 'total_active_odoo_lots' => 0,
+                    'untagged_non_rented' => 0, 'external_standby' => 0,
+                ],
+                'empty_audit' => [
+                    'total_empty' => 0, 'at_customer' => 0,
+                    'rented_service_ins' => 0, 'rented_stock_car' => 0,
+                    'untagged_non_rented' => 0, 'buckets' => [],
+                ],
+                'buckets' => [],
+            ];
+        }
+    }
+
+    /**
+     * Fetch open 'confirmed' Job Orders (repair.order) keyed by Odoo lot_id.
+     * Used to detect Idle stock units (confirmed JO not yet moved to Service/Insurance).
+     */
+    private function fetchConfirmedJobOrdersByLot(array $lotIds): array
+    {
+        if (empty($lotIds)) {
+            return [];
+        }
+
+        $byLot = [];
+        try {
+            foreach (array_chunk(array_values(array_unique($lotIds)), 1500) as $chunk) {
+                $repairs = $this->execute('repair.order', 'search_read', [
+                    [['lot_id', 'in', $chunk], ['state', '=', 'confirmed']]
+                ], ['fields' => ['lot_id', 'name', 'service_type', 'schedule_date']]);
+
+                if (!is_array($repairs)) {
+                    continue;
+                }
+
+                foreach ($repairs as $rep) {
+                    $lid = is_array($rep['lot_id'] ?? null) ? (int) $rep['lot_id'][0] : 0;
+                    if ($lid <= 0) {
+                        continue;
+                    }
+                    $byLot[$lid][] = [
+                        'name' => trim((string) ($rep['name'] ?? '')),
+                        'service_type' => trim((string) ($rep['service_type'] ?? '')),
+                        'schedule_date' => !empty($rep['schedule_date']) ? substr((string) $rep['schedule_date'], 0, 10) : '',
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Failed to fetch confirmed Job Orders for Stock Nasional: ' . $e->getMessage());
+        }
+
+        return $byLot;
+    }
+
+    /**
+     * Classify a single active stock.lot vehicle into its mutually exclusive Stock Nasional bucket.
+     */
+    private function classifyStockNasionalBucket(
+        string $vs,
+        bool $isVendorRent,
+        array $locFlags,
+        ?array $so,
+        string $lotName,
+        string $resvLot,
+        int $movementCount,
+        bool $hasConfirmedJo = false
+    ): string {
+        $soStatus = $so['rental_status'] ?? '';
+
+        // 1. Vendor Rent / Sewa External
+        if ($vs === 'SE' || $isVendorRent) {
+            return ($so && $soStatus === 'return') ? '1_rbo_external' : 'external_standby';
+        }
+
+        // 2A. Stock Rent Brand New (BN)
+        if ($vs === 'BN') {
+            if ($locFlags['is_ins']) return '2a_asuransi';
+            if ($locFlags['is_svc']) return '2a_service';
+            if ($locFlags['is_cust']) return '2a_rbo';
+            if ($locFlags['is_transit'] && $so && $soStatus === 'pickup') return '2a_moving';
+            if ($so && $soStatus === 'pickup') return '2a_tunggu';
+            return '2a_ready';
+        }
+
+        // 2B / 2C / 2D. Stock Rent (SR), Stock GS (GS), Plan Jual (PJ) - handled uniformly
+        $stockMap = ['SR' => '2b', 'GS' => '2c', 'PJ' => '2d'];
+        if (isset($stockMap[$vs])) {
+            $prefix = $stockMap[$vs];
+            if ($vs === 'PJ' && $locFlags['is_lost']) return '2d_rusak';
+            if ($locFlags['is_ins']) return "{$prefix}_asuransi";
+            if ($locFlags['is_svc']) return "{$prefix}_service";
+            if ($locFlags['is_cust']) return "{$prefix}_replace";
+            if ($hasConfirmedJo) return "{$prefix}_idle";
+            return "{$prefix}_ready";
+        }
+
+        // 3. Operasional
+        if ($vs === 'OK') return '3a_ok';
+        if ($vs === 'OR') return '3b_or';
+
+        // 4. Mobil Stock Jual (SJ)
+        if ($vs === 'SJ') {
+            return $locFlags['is_lost'] ? '4_rusak' : '4_siap_jual';
+        }
+
+        // Empty Status Kendaraan: active rentals -> Section 1; otherwise untagged non-rented audit
+        if ($so && $soStatus === 'return') {
+            if (($so['rental_type'] ?? '') === 'regular') {
+                return '1_st_avis';
+            }
+            if ($resvLot !== '' && $resvLot !== $lotName && $movementCount <= 1) {
+                return '1_rbo_sdp';
+            }
+            return '1_bulanan_tahunan';
+        }
+
+        return 'untagged_non_rented';
+    }
+
+    /**
      * Fetch Multi-Month Summary of Rented Vehicles (Untaxed)
      * Matches the paper report with normalized monthly pricing, period change detection, and price delta indicators.
      *
