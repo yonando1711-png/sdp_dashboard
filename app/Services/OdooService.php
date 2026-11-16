@@ -5413,26 +5413,32 @@ class OdooService
         $startMonthLimit = "{$startMonth}-01";
         $endMonthLimit   = \Carbon\Carbon::parse("{$endMonth}-01")->endOfMonth()->format('Y-m-d');
 
-        // Pre-build claimed invoices map from periods that have a posted, unreversed invoice <= cutoff
-        $claimedInvoiceIds = [];
+        // Pre-build per-SO claimed invoices map from periods that have a posted, unreversed invoice <= cutoff.
+        // Using a per-SO map (instead of global) ensures combined invoices covering multiple SOs
+        // (e.g. INVRS/2026/10921 or INVRS/2026/10804) remain available as replacement candidates
+        // on sibling SOs whose own period lines still point to the original reversed invoice.
+        $soClaimedInvoiceIds = [];
         foreach ($periods as $p) {
+            $pSoId  = $p['rental_order_id'][0] ?? null;
             $pInvId = $p['invoice_id'][0] ?? null;
             $pInv   = $pInvId ? ($invoices[$pInvId] ?? null) : null;
-            if ($pInv 
+            if ($pSoId
+                && $pInv 
                 && ($pInv['move_type'] ?? '') === 'out_invoice'
                 && ($pInv['state'] ?? '') === 'posted' 
                 && ($pInv['payment_state'] ?? '') !== 'reversed' 
                 && ($pInv['invoice_date'] ?? '') <= $cutoffDate
             ) {
-                $claimedInvoiceIds[$pInvId] = true;
+                $soClaimedInvoiceIds[$pSoId][$pInvId] = true;
             }
         }
 
-        // Available unclaimed pre-cutoff invoices per SO (replacement candidates)
+        // Available unclaimed pre-cutoff invoices per SO (replacement candidates), sorted chronologically
         $soUnclaimedInvoices = [];
         foreach ($orders as $soId => $so) {
+            $cands = [];
             foreach ($so['invoice_ids'] ?? [] as $invId) {
-                if (isset($claimedInvoiceIds[$invId])) continue;
+                if (isset($soClaimedInvoiceIds[$soId][$invId])) continue;
                 $inv = $invoices[$invId] ?? null;
                 if ($inv 
                     && ($inv['move_type'] ?? '') === 'out_invoice' 
@@ -5440,8 +5446,12 @@ class OdooService
                     && ($inv['payment_state'] ?? '') !== 'reversed'
                     && ($inv['invoice_date'] ?? '') <= $cutoffDate
                 ) {
-                    $soUnclaimedInvoices[$soId][$invId] = $inv;
+                    $cands[$invId] = $inv;
                 }
+            }
+            if (!empty($cands)) {
+                uasort($cands, fn($a, $b) => strcmp($a['invoice_date'] ?? '', $b['invoice_date'] ?? '') ?: (($a['id'] ?? 0) <=> ($b['id'] ?? 0)));
+                $soUnclaimedInvoices[$soId] = $cands;
             }
         }
 
@@ -5496,7 +5506,6 @@ class OdooService
                                 $replDate = $replInv['invoice_date'] ?? '';
                                 if (!$invDate || $replDate >= $invDate) {
                                     $isBilledOnOrBeforeCutoff = true;
-                                    unset($soUnclaimedInvoices[$soId][$replId]); // consume replacement
                                     break;
                                 }
                             }
@@ -5574,6 +5583,7 @@ class OdooService
                         'picName'         => $picName,
                         'soInvoiceIds'    => $so['invoice_ids'] ?? [],
                     ],
+                    'billedPeriods'      => [], // periods billed on/before cutoff
                     'unbilledPeriods'    => [], // periods not billed on/before cutoff
                     'postCutoffInvoices' => [], // invoices issued after cutoff (realization list)
                     'dominantStatus'     => 'uninvoiced',
@@ -5609,8 +5619,13 @@ class OdooService
                 }
             }
 
-            // Track unbilled periods
-            if (!$isBilledOnOrBeforeCutoff) {
+            // Track billed vs unbilled periods
+            if ($isBilledOnOrBeforeCutoff) {
+                $unitGroups[$unitKey]['billedPeriods'][] = [
+                    'start' => $startRentalPeriod,
+                    'end'   => $p['end_rental_period_date'] ?? $startRentalPeriod,
+                ];
+            } else {
                 $unitGroups[$unitKey]['unbilledPeriods'][] = [
                     'start' => $startRentalPeriod,
                     'end'   => $p['end_rental_period_date'] ?? $startRentalPeriod,
@@ -5638,6 +5653,21 @@ class OdooService
 
         foreach ($unitGroups as $unitKey => $ug) {
             $unbilled = $ug['unbilledPeriods'];
+            $billed   = $ug['billedPeriods'] ?? [];
+
+            // Filter out leftover cancelled/unlinked period lines that overlap an already-billed period on the same unit
+            // (e.g. Taiyo R/2025/02793 B1477HZB old 14/03–13/04 cancelled period after switching to calendar-month billing)
+            if (!empty($unbilled) && !empty($billed)) {
+                $unbilled = array_values(array_filter($unbilled, function ($up) use ($billed) {
+                    foreach ($billed as $bp) {
+                        if ($up['start'] <= $bp['end'] && $up['end'] >= $bp['start']) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }));
+            }
+
             if (empty($unbilled)) continue; // Fully billed unit — skip
 
             $meta = $ug['meta'];
@@ -5683,6 +5713,7 @@ class OdooService
                         if ($otherInv
                             && ($otherInv['move_type'] ?? '') === 'out_invoice'
                             && ($otherInv['state']      ?? '') === 'posted'
+                            && ($otherInv['payment_state'] ?? '') !== 'reversed'
                         ) {
                             $otherDate = $otherInv['invoice_date'] ?? '';
                             if ($otherDate
@@ -5764,8 +5795,27 @@ class OdooService
                 $ddtend = $ddtstr;
             }
 
+            // Identify any already-billed periods that fall inside [ddtstr, ddtend]
+            // so intermediate paid months are never bridged/accrued (Bug 3).
+            $bridgedBilled = [];
+            foreach ($billed as $bp) {
+                $bStart = max($bp['start'], $ddtstr);
+                $bEnd   = min($bp['end'], $ddtend);
+                if ($bStart <= $bEnd) {
+                    $bridgedBilled[] = ['start' => $bStart, 'end' => $bEnd];
+                }
+            }
+
             // ── Compute nlen (legacy month-fraction formula: 2 decimal places) ─
             $nlen = round($this->calculateNlen($ddtstr, $ddtend), 2);
+            if (!empty($bridgedBilled)) {
+                $billedNlen = 0.0;
+                foreach ($bridgedBilled as $bb) {
+                    $billedNlen += round($this->calculateNlen($bb['start'], $bb['end']), 2);
+                }
+                $nlen = max(0.0, round($nlen - $billedNlen, 2));
+                if ($nlen <= 0) continue;
+            }
 
             // ── Compute Accrued Value (Untaxed / Exc PPN for accounting accrual journal) ──
             $durationPrice  = $meta['durationPrice'];
@@ -5783,18 +5833,37 @@ class OdooService
             $ddtendCar = \Carbon\Carbon::parse($ddtend);
 
             // Build month-overlap map: for each month in display range, compute
-            // how many days overlap, then prorate by (overlapDays / totalDays) * nlen
-            $totalAccruedDays = max(1, $ddtstrCar->diffInDays($ddtendCar) + 1);
-            $monthContributions = []; // mKey => accruedValue
+            // how many unbilled days overlap, then prorate by (overlapDays / totalDays) * nlen
+            $monthOverlapDays = [];
             foreach ($monthKeys as $mKey) {
                 $mStart = \Carbon\Carbon::parse($mKey . '-01')->startOfDay();
                 $mEnd   = $mStart->copy()->endOfMonth()->startOfDay();
-                // Overlap
                 $overlapStart = $ddtstrCar->gt($mStart) ? $ddtstrCar : $mStart;
                 $overlapEnd   = $ddtendCar->lt($mEnd)   ? $ddtendCar : $mEnd;
                 if ($overlapStart->lte($overlapEnd)) {
-                    $overlapDays = $overlapStart->diffInDays($overlapEnd) + 1;
-                    $fraction    = $overlapDays / $totalAccruedDays;
+                    $days = $overlapStart->diffInDays($overlapEnd) + 1;
+                    if (!empty($bridgedBilled)) {
+                        foreach ($bridgedBilled as $bb) {
+                            $bbStart = \Carbon\Carbon::parse($bb['start'])->startOfDay();
+                            $bbEnd   = \Carbon\Carbon::parse($bb['end'])->startOfDay();
+                            $bOvStart = $overlapStart->gt($bbStart) ? $overlapStart : $bbStart;
+                            $bOvEnd   = $overlapEnd->lt($bbEnd)     ? $overlapEnd   : $bbEnd;
+                            if ($bOvStart->lte($bOvEnd)) {
+                                $days -= ($bOvStart->diffInDays($bOvEnd) + 1);
+                            }
+                        }
+                    }
+                    $monthOverlapDays[$mKey] = max(0, $days);
+                } else {
+                    $monthOverlapDays[$mKey] = 0;
+                }
+            }
+            $totalAccruedDays = max(1, array_sum($monthOverlapDays));
+            $monthContributions = []; // mKey => accruedValue
+            foreach ($monthKeys as $mKey) {
+                $overlapDays = $monthOverlapDays[$mKey];
+                if ($overlapDays > 0) {
+                    $fraction = $overlapDays / $totalAccruedDays;
                     $monthContributions[$mKey] = round($jurnalAccrued * $fraction);
                 } else {
                     $monthContributions[$mKey] = 0;
