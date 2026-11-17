@@ -5,6 +5,7 @@ namespace App\Exports;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
@@ -12,7 +13,33 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class StockNasionalExport implements FromArray, WithEvents, WithStrictNullComparison, WithColumnWidths, WithTitle
+/**
+ * Multi-Sheet Excel Export for Stock Nasional:
+ * Sheet 1: Stock Nasional (Executive 1-Page Summary matching SUMMARY 13 / Laporan Harian Jumlah Mobil)
+ * Sheet 2: Detail Unit (Comprehensive Per-Vehicle Audit List of all active units for discrepancy analysis & VLOOKUP)
+ */
+class StockNasionalExport implements WithMultipleSheets
+{
+    protected array $report;
+
+    public function __construct(array $report)
+    {
+        $this->report = $report;
+    }
+
+    public function sheets(): array
+    {
+        return [
+            new StockNasionalSummarySheet($this->report),
+            new StockNasionalDetailSheet($this->report),
+        ];
+    }
+}
+
+/**
+ * Sheet 1: Executive 1-Page Summary Table
+ */
+class StockNasionalSummarySheet implements FromArray, WithEvents, WithStrictNullComparison, WithColumnWidths, WithTitle
 {
     protected array $report;
     protected array $rowMeta = [];
@@ -66,7 +93,7 @@ class StockNasionalExport implements FromArray, WithEvents, WithStrictNullCompar
             ];
         }
 
-        // Bottom Totals (no borders outside main table, matching PDF layout)
+        // Bottom Totals
         $currentRow++;
         $this->rowMeta[$currentRow] = 'grand_total';
         $rows[] = [
@@ -197,3 +224,226 @@ class StockNasionalExport implements FromArray, WithEvents, WithStrictNullCompar
     }
 }
 
+/**
+ * Sheet 2: Comprehensive Per-Vehicle Audit List (All Active Lots)
+ * Displays truthful Odoo fields (Location, Vehicle Status, SO, Customer, JO, Condition)
+ * allowing operational and accounting teams to easily VLOOKUP and spot discrepancies.
+ */
+class StockNasionalDetailSheet implements FromArray, WithEvents, WithStrictNullComparison, WithColumnWidths, WithTitle
+{
+    protected array $report;
+    protected int $totalRows = 0;
+
+    public function __construct(array $report)
+    {
+        $this->report = $report;
+    }
+
+    public function title(): string
+    {
+        return 'Detail Unit';
+    }
+
+    public function columnWidths(): array
+    {
+        return [
+            'A' => 7,   // NO.
+            'B' => 15,  // NOPOL
+            'C' => 22,  // NO. RANGKA
+            'D' => 16,  // NO. MESIN
+            'E' => 44,  // TIPE / MODEL
+            'F' => 8,   // TAHUN
+            'G' => 14,  // WARNA
+            'H' => 28,  // LOKASI ODOO
+            'I' => 18,  // STATUS KENDARAAN ODOO
+            'J' => 30,  // KATEGORI DASHBOARD
+            'K' => 32,  // SUB-STATUS DASHBOARD
+            'L' => 18,  // NO. KONTRAK / SO
+            'M' => 40,  // CUSTOMER
+            'N' => 16,  // STATUS RENTAL SO
+            'O' => 16,  // RENTAL TYPE
+            'P' => 20,  // CONFIRMED JO
+            'Q' => 20,  // KONDISI FISIK / CABANG
+            'R' => 15,  // SEWA EXTERNAL
+        ];
+    }
+
+    public function array(): array
+    {
+        $rows = [];
+        $reportDate = $this->report['report_date_formatted'] ?? date('d F Y');
+
+        $bucketMetadata = [
+            // 1. Mobil Tersewa
+            '1_bulanan_tahunan'   => ['category' => '1. Mobil Tersewa', 'bucket' => 'Sewa Bulanan & Tahunan'],
+            '1_st_avis'           => ['category' => '1. Mobil Tersewa', 'bucket' => 'Sewa ST & AVIS'],
+            '1_rbo_sdp'           => ['category' => '1. Mobil Tersewa', 'bucket' => 'RBO - Unit SDP'],
+            '1_rbo_external'      => ['category' => '1. Mobil Tersewa', 'bucket' => 'RBO - Sewa External'],
+
+            // 2A. Stock Rent Brand New (BN)
+            '2a_ready'            => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - Ready'],
+            '2a_moving'           => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - Moving Out Start Sewa'],
+            '2a_tunggu'           => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - Tunggu Start Sewa'],
+            '2a_asuransi'         => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - Asuransi'],
+            '2a_service'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - Service'],
+            '2a_rbo'              => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock BN - RBO'],
+
+            // 2B. Stock Rent (SR)
+            '2b_ready'            => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Ready'],
+            '2b_replace'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Replace'],
+            '2b_compliment'       => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Compliment'],
+            '2b_idle'             => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Idle'],
+            '2b_service'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Service'],
+            '2b_asuransi'         => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Rent - Asuransi'],
+
+            // 2C. Stock GS (GS)
+            '2c_ready'            => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Ready'],
+            '2c_replace'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Replace'],
+            '2c_compliment'       => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Compliment'],
+            '2c_idle'             => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Idle'],
+            '2c_service'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Service'],
+            '2c_asuransi'         => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock GS - Asuransi'],
+
+            // 2D. Stock Plan Jual (PJ)
+            '2d_ready'            => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Ready'],
+            '2d_replace'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Replace'],
+            '2d_compliment'       => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Compliment'],
+            '2d_idle'             => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Idle'],
+            '2d_service'          => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Service'],
+            '2d_asuransi'         => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Asuransi'],
+            '2d_rusak'            => ['category' => '2. Mobil Stock Sewa & Replace', 'bucket' => 'Stock Plan Jual - Rusak Total'],
+
+            // 3. Operasional
+            '3a_ok'               => ['category' => '3. Operasional', 'bucket' => 'Operasional Kantor (OK)'],
+            '3b_or'               => ['category' => '3. Operasional', 'bucket' => 'Operasional Rental (OR)'],
+
+            // 4. Mobil Stock Jual
+            '4_siap_jual'         => ['category' => '4. Mobil Stock Jual', 'bucket' => 'Siap Jual'],
+            '4_tidak_siap_jual'   => ['category' => '4. Mobil Stock Jual', 'bucket' => 'Tidak Siap Jual'],
+            '4_rusak'             => ['category' => '4. Mobil Stock Jual', 'bucket' => 'Rusak Total'],
+
+            // 5. Non-Rented / Audit
+            'external_standby'    => ['category' => '5. Non-Rented / Audit', 'bucket' => 'External Standby'],
+            'untagged_non_rented' => ['category' => '5. Non-Rented / Audit', 'bucket' => 'Untagged Non-Rented'],
+        ];
+
+        // Header Metadata (Rows 1-3)
+        $rows[] = ['PT. SURYA DARMA PERKASA - DETAIL UNIT STOCK NASIONAL', null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+        $rows[] = ['Per Tanggal: ' . $reportDate . ' | Data Odoo ERP Live (stock.lot)', null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+        $rows[] = [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null];
+
+        // Table Header (Row 4)
+        $rows[] = [
+            'NO.',
+            'NOPOL',
+            'NO. RANGKA',
+            'NO. MESIN',
+            'TIPE / MODEL KENDARAAN',
+            'TAHUN',
+            'WARNA',
+            'LOKASI ODOO',
+            'STATUS KENDARAAN ODOO',
+            'KATEGORI DASHBOARD',
+            'SUB-STATUS DASHBOARD',
+            'NO. KONTRAK / SO',
+            'CUSTOMER',
+            'STATUS RENTAL SO',
+            'RENTAL TYPE',
+            'CONFIRMED JO',
+            'KONDISI FISIK / CABANG',
+            'SEWA EXTERNAL',
+        ];
+
+        $no = 1;
+        foreach ($bucketMetadata as $key => $meta) {
+            $units = $this->report['buckets'][$key] ?? [];
+            foreach ($units as $u) {
+                $rows[] = [
+                    $no++,
+                    $u['lot_number'] ?? '-',
+                    $u['chassis'] ?? '-',
+                    $u['engine_number'] ?? '-',
+                    $u['product'] ?? '-',
+                    $u['year'] ?? ($u['vehicle_year'] ?? '-'),
+                    $u['color'] ?? ($u['color_id'] ?? '-'),
+                    $u['location'] ?? '-',
+                    (!empty($u['vehicle_status']) && $u['vehicle_status'] !== 'Empty') ? $u['vehicle_status'] : 'Empty',
+                    $meta['category'],
+                    $meta['bucket'],
+                    $u['rental_id'] ?? '-',
+                    $u['customer'] ?? '-',
+                    $u['rental_status'] ?? '-',
+                    $u['rental_type'] ?? '-',
+                    $u['confirmed_jo'] ?? '-',
+                    $u['branch_condition'] ?? '-',
+                    !empty($u['is_vendor_rent']) ? 'Yes' : 'No',
+                ];
+            }
+        }
+
+        $this->totalRows = count($rows);
+        return $rows;
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $lastRow = $this->totalRows;
+
+                if ($lastRow < 4) {
+                    return;
+                }
+
+                // Title Box (Row 1-2)
+                $sheet->getStyle('A1')->getFont()->setName('Arial')->setSize(12)->setBold(true);
+                $sheet->getStyle('A2')->getFont()->setName('Arial')->setSize(9)->setItalic(true)->getColor()->setRGB('64748B');
+
+                // Table Header Styling (Row 4, A4:R4)
+                $sheet->getRowDimension(4)->setRowHeight(24);
+                $sheet->getStyle("A4:R4")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 9, 'name' => 'Arial', 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E293B']],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
+                    'borders' => [
+                        'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '334155']],
+                    ],
+                ]);
+
+                // Table Data Rows (Row 5..$lastRow)
+                if ($lastRow >= 5) {
+                    $sheet->getStyle("A5:R{$lastRow}")->getFont()->setName('Arial')->setSize(9);
+                    $sheet->getStyle("A5:R{$lastRow}")->applyFromArray([
+                        'borders' => [
+                            'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']],
+                            'outline' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['rgb' => '64748B']],
+                        ],
+                    ]);
+
+                    // Center-aligned columns: A (No), B (Nopol), F (Tahun), G (Warna), I (Vehicle Status), L (SO), N (Rental Status), O (Rental Type), P (JO), R (Sewa External)
+                    $centerCols = ['A', 'B', 'F', 'G', 'I', 'L', 'N', 'O', 'P', 'R'];
+                    foreach ($centerCols as $col) {
+                        $sheet->getStyle("{$col}5:{$col}{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    }
+
+                    // Left-aligned columns: C (Chassis), D (Engine), E (Product), H (Location), J (Category), K (Bucket), M (Customer), Q (Branch Condition)
+                    $leftCols = ['C', 'D', 'E', 'H', 'J', 'K', 'M', 'Q'];
+                    foreach ($leftCols as $col) {
+                        $sheet->getStyle("{$col}5:{$col}{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+                    }
+                }
+
+                // AutoFilter across all columns
+                $sheet->setAutoFilter("A4:R{$lastRow}");
+
+                // Freeze panes so header row 4 and No / Nopol stay visible when scrolling
+                $sheet->freezePane('C5');
+            },
+        ];
+    }
+}

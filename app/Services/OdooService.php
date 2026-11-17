@@ -3237,7 +3237,8 @@ class OdooService
                     'fields' => [
                         'id', 'name', 'ref', 'product_id', 'location_id', 'product_qty',
                         'is_vendor_rent', 'rental_id', 'vehicle_status_id',
-                        'vehicle_condition', 'x_studio_related_field_7i9_1jf5ourt4'
+                        'vehicle_condition', 'x_studio_related_field_7i9_1jf5ourt4',
+                        'vehicle_year', 'engine_number', 'color_id'
                     ]
                 ]);
 
@@ -3331,7 +3332,10 @@ class OdooService
                         'id' => (int) $l['id'],
                         'lot_number' => $lotName,
                         'chassis' => trim((string)($l['ref'] ?? '')) ?: '-',
+                        'engine_number' => trim((string)($l['engine_number'] ?? '')) ?: '-',
                         'product' => is_array($l['product_id'] ?? null) ? $l['product_id'][1] : '-',
+                        'year' => trim((string)($l['vehicle_year'] ?? '')) ?: '-',
+                        'color' => is_array($l['color_id'] ?? null) ? $l['color_id'][1] : (trim((string)($l['color_id'] ?? '')) ?: '-'),
                         'location' => $loc ?: '-',
                         'vehicle_status' => $vs ?: 'Empty',
                         'confirmed_jo' => $confirmedJoNames,
