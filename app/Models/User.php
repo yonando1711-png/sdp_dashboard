@@ -28,6 +28,7 @@ class User extends Authenticatable
         'can_export_lor_smd',
         'can_view_et_report',
         'can_view_cadangan_biaya',
+        'can_view_lor_list_so',
         'can_export_disposal',
         'can_view_accounting_report',
         'can_view_summary_rented_vehicle',
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'can_export_lor_smd' => 'boolean',
             'can_view_et_report' => 'boolean',
             'can_view_cadangan_biaya' => 'boolean',
+            'can_view_lor_list_so' => 'boolean',
             'can_export_disposal' => 'boolean',
             'can_view_accounting_report' => 'boolean',
             'can_view_summary_rented_vehicle' => 'boolean',
@@ -126,6 +128,14 @@ class User extends Authenticatable
     public function canViewCadanganBiaya(): bool
     {
         return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_view_cadangan_biaya);
+    }
+
+    /**
+     * Check if user can view List SO Report under LoR (SMD)
+     */
+    public function canViewListSo(): bool
+    {
+        return $this->isItAdmin() || ($this->canAccessSmd() && (bool) $this->can_view_lor_list_so);
     }
 
     /**
@@ -210,6 +220,10 @@ class User extends Authenticatable
 
         if ($key === 'cadangan-biaya' || $key === 'lor-cadangan-biaya') {
             return $this->canViewCadanganBiaya();
+        }
+
+        if ($key === 'list-so' || $key === 'lor-list-so') {
+            return $this->canViewListSo();
         }
 
         if ($key === 'accounting-report' || $key === 'accounting') {
