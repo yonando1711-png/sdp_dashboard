@@ -262,10 +262,10 @@
                 @endif
 
                 @if(auth()->check() && auth()->user()->canAccessSmd())
-                    @if(auth()->user()->canViewEtReport() || auth()->user()->canViewCadanganBiaya())
-                    <div x-data="{ open: {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*')) ? 'true' : 'false' }} }" class="space-y-1">
+                    @if(auth()->user()->canViewEtReport() || auth()->user()->canViewCadanganBiaya() || auth()->user()->canViewListSo())
+                    <div x-data="{ open: {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*') || request()->routeIs('lor.list-so*')) ? 'true' : 'false' }} }" class="space-y-1">
                         <button type="button" @click="open = !open"
-                            class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*')) ? 'active' : '' }}"
+                            class="sidebar-link w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ (request()->routeIs('lor.smd') || request()->routeIs('lor.et-report*') || request()->routeIs('lor.cadangan-biaya*') || request()->routeIs('lor.list-so*')) ? 'active' : '' }}"
                             title="LoR (SMD)">
                             <div class="flex items-center gap-3">
                                 <!-- LoR SMD Briefcase/Sales Icon -->
@@ -297,6 +297,12 @@
                             <a href="{{ route('lor.cadangan-biaya') }}"
                                 class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.cadangan-biaya*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
                                 Cadangan Biaya
+                            </a>
+                            @endif
+                            @if(auth()->user()->canViewListSo())
+                            <a href="{{ route('lor.list-so') }}"
+                                class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors {{ request()->routeIs('lor.list-so*') ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30' : '' }}">
+                                List SO
                             </a>
                             @endif
                         </div>
@@ -526,6 +532,19 @@
                     <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300"
                         :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Settings</span>
                 </a>
+
+                <a href="{{ route('backups.index') }}"
+                    class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group {{ request()->routeIs('backups.*') ? 'active' : '' }}"
+                    title="Database Backup">
+                    <svg class="w-5 h-5 group-hover:scale-110 transition-transform flex-shrink-0" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4">
+                        </path>
+                    </svg>
+                    <span class="font-medium whitespace-nowrap overflow-hidden transition-all duration-300"
+                        :class="sidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'">Database Backup</span>
+                </a>
                 @endif
 
             </nav>
@@ -732,6 +751,7 @@
                         @if(auth()->user()->isItAdmin())
                             <a href="{{ route('users.index') }}" class="block px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">User Management</a>
                             <a href="{{ route('settings') }}" class="block px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">System Settings</a>
+                            <a href="{{ route('backups.index') }}" class="block px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Database Backup</a>
                         @endif
                         <form action="{{ route('logout') }}" method="POST">
                             @csrf

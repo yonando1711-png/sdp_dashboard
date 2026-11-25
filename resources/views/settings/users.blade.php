@@ -17,6 +17,7 @@
             'can_export_lor_smd' => (bool) $u->can_export_lor_smd,
             'can_view_et_report' => (bool) $u->can_view_et_report,
             'can_view_cadangan_biaya' => (bool) $u->can_view_cadangan_biaya,
+            'can_view_lor_list_so' => (bool) $u->can_view_lor_list_so,
             'can_export_disposal' => (bool) $u->can_export_disposal,
             'can_view_accounting_report' => (bool) $u->can_view_accounting_report,
             'can_view_summary_rented_vehicle' => (bool) $u->can_view_summary_rented_vehicle,
@@ -50,6 +51,7 @@ function userManagementApp() {
             can_export_lor_smd: {{ old('can_export_lor_smd') ? 'true' : 'false' }},
             can_view_et_report: {{ old('can_view_et_report') ? 'true' : 'false' }},
             can_view_cadangan_biaya: {{ old('can_view_cadangan_biaya') ? 'true' : 'false' }},
+            can_view_lor_list_so: {{ old('can_view_lor_list_so') ? 'true' : 'false' }},
             can_export_disposal: {{ old('can_export_disposal') ? 'true' : 'false' }},
             can_view_accounting_report: {{ old('can_view_accounting_report') ? 'true' : 'false' }},
             can_view_summary_rented_vehicle: {{ old('can_view_summary_rented_vehicle') ? 'true' : 'false' }},
@@ -88,6 +90,7 @@ function userManagementApp() {
                 can_export_lor_smd: false,
                 can_view_et_report: false,
                 can_view_cadangan_biaya: false,
+                can_view_lor_list_so: false,
                 can_export_disposal: false,
                 can_view_accounting_report: false,
                 can_view_summary_rented_vehicle: false,
@@ -116,6 +119,7 @@ function userManagementApp() {
                 can_export_lor_smd: Boolean(u.can_export_lor_smd),
                 can_view_et_report: Boolean(u.can_view_et_report),
                 can_view_cadangan_biaya: Boolean(u.can_view_cadangan_biaya),
+                can_view_lor_list_so: Boolean(u.can_view_lor_list_so),
                 can_export_disposal: Boolean(u.can_export_disposal),
                 can_view_accounting_report: Boolean(u.can_view_accounting_report),
                 can_view_summary_rented_vehicle: Boolean(u.can_view_summary_rented_vehicle),
@@ -528,6 +532,13 @@ function userManagementApp() {
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-800 dark:text-slate-200">View Cadangan Biaya</span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing Cadangan Biaya Report under LoR (SMD)</span>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                <input type="checkbox" name="can_view_lor_list_so" value="1" x-model="form.can_view_lor_list_so" class="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">View List SO</span>
+                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Allows viewing and printing daily Sales Order list under LoR (SMD)</span>
                                 </div>
                             </label>
                         </div>

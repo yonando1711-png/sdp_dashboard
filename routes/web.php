@@ -8,10 +8,12 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\LorController;
+use App\Http\Controllers\LorListSoController;
 use App\Http\Controllers\SuratKuasaController;
 use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AccountingController;
+use App\Http\Controllers\BackupController;
 use App\Http\Middleware\CheckItAdmin;
 use App\Http\Middleware\CheckMenuPermission;
 
@@ -64,6 +66,13 @@ Route::middleware(['auth'])->group(function () {
     // Cadangan Biaya Report Routes under LoR SMD (Protected by Cadangan Biaya Permission)
     Route::get('/lor/smd/cadangan-biaya', [LorController::class, 'cadanganBiaya'])->middleware(CheckMenuPermission::class . ':cadangan-biaya')->name('lor.cadangan-biaya');
     Route::get('/lor/smd/cadangan-biaya/export', [LorController::class, 'exportCadanganBiaya'])->middleware(CheckMenuPermission::class . ':cadangan-biaya')->name('lor.cadangan-biaya.export');
+
+    // List SO Report Routes under LoR SMD (Protected by List SO Permission)
+    Route::get('/lor/smd/list-so', [LorListSoController::class, 'index'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so');
+    Route::get('/lor/smd/list-so/preview', [LorListSoController::class, 'previewPdf'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.preview');
+    Route::post('/lor/smd/list-so/sync', [LorListSoController::class, 'sync'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.sync');
+    Route::post('/lor/smd/list-so/print', [LorListSoController::class, 'printBatch'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.print');
+    Route::get('/lor/smd/list-so/batch/{id}/download', [LorListSoController::class, 'downloadBatchPdf'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.batch.download');
 
     // LoR Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':lor'])->group(function () {
@@ -160,5 +169,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/settings/odoo', [SettingsController::class, 'updateOdoo'])->name('settings.odoo');
         Route::post('/settings/surat-kuasa', [SettingsController::class, 'updateSuratKuasaSettings'])->name('settings.surat-kuasa');
         Route::post('/settings/surat-kuasa-auto', [SettingsController::class, 'updateSuratKuasaAutoSettings'])->name('settings.surat-kuasa-auto');
+
+        // Database Backups (IT Admin Only)
+        Route::get('/settings/backups', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('/settings/backups/create', [BackupController::class, 'create'])->name('backups.create');
+        Route::post('/settings/backups/schedule', [BackupController::class, 'updateSchedule'])->name('backups.schedule');
+        Route::get('/settings/backups/download/{filename}', [BackupController::class, 'download'])->name('backups.download');
+        Route::delete('/settings/backups/delete/{filename}', [BackupController::class, 'delete'])->name('backups.delete');
+        Route::post('/settings/backups/prune', [BackupController::class, 'prune'])->name('backups.prune');
     });
 });
