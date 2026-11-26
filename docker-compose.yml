@@ -94,6 +94,23 @@ services:
       - --innodb-flush-log-at-trx-commit=2
       - --skip-log-bin
 
+  # phpMyAdmin untuk akses IT (read/write penuh via user DB it_harent).
+  # Port MySQL TIDAK di-publish; phpMyAdmin masuk lewat network stack (PMA_HOST=mysql).
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: sdp_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8084:80"
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+      - UPLOAD_LIMIT=256M
+      - TZ=Asia/Jakarta
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   sdp_storage:
   sdp_mysql_data:
