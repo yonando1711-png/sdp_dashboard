@@ -21,14 +21,15 @@ class BackupDatabase extends Command
      *
      * @var string
      */
-    protected $description = 'Create a compressed SQLite database backup snapshot (.sqlite.gz)';
+    protected $description = 'Create a compressed database backup snapshot (.sql.gz / .sqlite.gz)';
 
     /**
      * Execute the console command.
      */
     public function handle(BackupService $backupService): int
     {
-        $this->info('Starting SQLite database backup snapshot...');
+        $conn = config('database.default', 'mysql');
+        $this->info("Starting {$conn} database backup snapshot...");
 
         try {
             $filename = $backupService->create($this->option('remark'));

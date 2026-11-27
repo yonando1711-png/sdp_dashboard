@@ -195,4 +195,66 @@ class LorListSoController extends Controller
             abort(404, 'PDF file not found in storage: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Preview an existing batch document in modal HTML
+     */
+    public function previewBatch($id)
+    {
+        $user = auth()->user();
+        if (!$user->canViewListSo() && !$user->isItAdmin()) {
+            abort(403, 'Unauthorized access to List SO.');
+        }
+
+        try {
+            $htmlOutput = $this->service->generateBatchPreviewHtml((int)$id);
+            return response($htmlOutput, 200, [
+                'Content-Type' => 'text/html; charset=UTF-8',
+            ]);
+        } catch (\Exception $e) {
+            return response('Gagal memuat preview batch: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Reset a batch back to unprinted queue and remove batch record
+     */
+    public function resetBatch($id)
+    {
+        $user = auth()->user();
+        if (!$user->canViewListSo() && !$user->isItAdmin()) {
+            abort(403, 'Anda tidak memiliki wewenang untuk me-reset batch cetakan.');
+        }
+
+        $batch = LorSmdSoBatch::findOrFail($id);
+        $batchNo = $batch->batch_no;
+
+        // 1. Delete any non-rental SOs (like S/... Sold Out) that were mistakenly stored
+        LorSmdSoItem::where('batch_id', $batch->id)
+            ->where('so_number', 'not like', 'R/%')
+            ->delete();
+
+        // Also clean up any unprinted non-rental items
+        LorSmdSoItem::where('so_number', 'not like', 'R/%')->where('is_printed', false)->delete();
+
+        // 2. Return valid rental items in this batch to unprinted queue
+        $updatedCount = LorSmdSoItem::where('batch_id', $batch->id)->update([
+            'is_printed' => false,
+            'batch_id'   => null,
+        ]);
+
+        // 2. Delete stored PDF file if exists
+        if ($batch->pdf_path && Storage::disk('public')->exists($batch->pdf_path)) {
+            Storage::disk('public')->delete($batch->pdf_path);
+        }
+
+        // 3. Delete batch record
+        $batch->delete();
+
+        return redirect()->route('lor.list-so')->with('success', sprintf(
+            'Batch %s berhasil di-reset! %d SO telah dikembalikan ke Antrean Cetak.',
+            $batchNo,
+            $updatedCount
+        ));
+    }
 }

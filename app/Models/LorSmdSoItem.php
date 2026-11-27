@@ -64,10 +64,15 @@ class LorSmdSoItem extends Model
         return $this->belongsTo(LorSmdSoBatch::class, 'batch_id');
     }
 
+    public function getVehicleYearAttribute()
+    {
+        return $this->raw_odoo_data['vehicle_year'] ?? null;
+    }
+
     // Scopes
     public function scopeUnprinted($query)
     {
-        return $query->where('is_printed', false);
+        return $query->where('is_printed', false)->where('so_number', 'like', 'R/%');
     }
 
     public function scopePrinted($query)

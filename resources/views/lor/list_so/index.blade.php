@@ -37,6 +37,17 @@
                 </select>
             </form>
 
+            {{-- Date Range for Sync --}}
+            <div class="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                <input type="date" x-model="syncDateFrom" class="text-xs py-1.5 px-2 bg-transparent border-0 text-slate-700 dark:text-slate-200 focus:ring-0" title="Tanggal Mulai Sync">
+                <span class="text-slate-400 text-[10px]">s/d</span>
+                <input type="date" x-model="syncDateTo" class="text-xs py-1.5 px-2 bg-transparent border-0 text-slate-700 dark:text-slate-200 focus:ring-0" title="Tanggal Akhir Sync">
+                <div class="flex items-center gap-1 pl-1 border-l border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="setSyncToday()" class="px-2 py-1 text-[10px] font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">Hari Ini</button>
+                    <button type="button" @click="setSyncYesterday()" class="px-2 py-1 text-[10px] font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">Kemarin</button>
+                </div>
+            </div>
+
             {{-- Manual Sync Button --}}
             <button type="button" @click="syncOdoo()" :disabled="syncing"
                 class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all disabled:opacity-50">
@@ -77,7 +88,7 @@
     {{-- TABS NAVIGATION & QUICK ACTIONS --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-1">
         <div class="flex items-center gap-2">
-            <button type="button" @click="activeTab = 'queue'"
+            <button type="button" @click="switchTab('queue')"
                 class="px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2"
                 :class="activeTab === 'queue' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
@@ -88,7 +99,7 @@
                 </span>
             </button>
 
-            <button type="button" @click="activeTab = 'history'"
+            <button type="button" @click="switchTab('history')"
                 class="px-4 py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2"
                 :class="activeTab === 'history' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -248,8 +259,8 @@
         @endif
 
         {{-- 3. TERMINATE & FORCE CLOSED --}}
-        @if($grouped['terminate']->isNotEmpty())
-        @php $termIds = $grouped['terminate']->pluck('id')->toArray(); @endphp
+        @if(!empty($grouped['terminate_and_force_close']) && $grouped['terminate_and_force_close']->isNotEmpty())
+        @php $termIds = $grouped['terminate_and_force_close']->pluck('id')->toArray(); @endphp
         <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
             <div class="px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
                 <div class="flex items-center gap-2.5">
@@ -261,7 +272,7 @@
                     <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">3. Terminate &amp; Force Closed</h2>
                 </div>
                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400">
-                    {{ $grouped['terminate']->count() }} SO
+                    {{ $grouped['terminate_and_force_close']->count() }} SO
                 </span>
             </div>
             <div class="overflow-x-auto">
@@ -284,16 +295,23 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {{-- SUB-HEADER A: TERMINATE --}}
+                        @if($grouped['terminate']->isNotEmpty())
+                        <tr class="bg-rose-50/70 dark:bg-rose-950/40 border-y border-rose-200 dark:border-rose-900 font-bold text-rose-800 dark:text-rose-300">
+                            <td colspan="13" class="py-2 px-3 text-[11px] tracking-wide">
+                                ▶ TERMINATE ({{ $grouped['terminate']->count() }} SO)
+                            </td>
+                        </tr>
                         @foreach($grouped['terminate'] as $item)
                         @php
                             $actualMonths = ($item->start_date && $item->actual_end_rental_date)
-                                ? max(0, \Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date))) . ' Bln'
+                                ? max(0, (int) round(\Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date)))) . ' Bln'
                                 : '-';
                             $sisaMonths = ($item->actual_end_rental_date && $item->end_date)
-                                ? max(0, \Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date))) . ' Bln'
+                                ? max(0, (int) round(\Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date)))) . ' Bln'
                                 : '-';
                             preg_match('/20\d\d/', $item->product ?? '', $yearMatches);
-                            $tahunKend = !empty($yearMatches[0]) ? $yearMatches[0] : '-';
+                            $tahunKend = $item->vehicle_year ?? (!empty($yearMatches[0]) ? $yearMatches[0] : '-');
                         @endphp
                         <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" :class="selectedItems.includes({{ $item->id }}) ? 'bg-rose-50/30 dark:bg-rose-950/20' : ''">
                             <td class="py-2.5 px-3 text-center">
@@ -303,7 +321,7 @@
                             <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
                             <td class="py-2.5 px-3 font-bold text-rose-600 dark:text-rose-400">{{ $item->so_number }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">
-                                {{ $item->actual_end_rental_date ? $item->actual_end_rental_date->format('d/m/Y') : ($item->updated_at ? $item->updated_at->format('d/m/Y') : '-') }}
+                                {{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}
                             </td>
                             <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}</td>
@@ -313,11 +331,55 @@
                             <td class="py-2.5 px-3 text-slate-600 dark:text-slate-400">{{ $item->product ?? '-' }}</td>
                             <td class="py-2.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{{ $item->reserved_lot ?? '-' }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-500">{{ $tahunKend }}</td>
-                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{{ $actualMonths }}</td>
-                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{{ $sisaMonths }}</td>
+                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300" title="{{ $item->start_date && $item->actual_end_rental_date ? $item->start_date->format('d/m/Y') . ' s.d ' . $item->actual_end_rental_date->format('d/m/Y') : '' }}">{{ $actualMonths }}</td>
+                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300" title="{{ $item->actual_end_rental_date && $item->end_date ? $item->actual_end_rental_date->format('d/m/Y') . ' s.d ' . $item->end_date->format('d/m/Y') : '' }}">{{ $sisaMonths }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
                         </tr>
                         @endforeach
+                        @endif
+
+                        {{-- SUB-HEADER B: FORCE CLOSED --}}
+                        @if($grouped['force_close']->isNotEmpty())
+                        <tr class="bg-amber-50/70 dark:bg-amber-950/40 border-y border-amber-200 dark:border-amber-900 font-bold text-amber-800 dark:text-amber-300">
+                            <td colspan="13" class="py-2 px-3 text-[11px] tracking-wide">
+                                ▶ FORCE CLOSED ({{ $grouped['force_close']->count() }} SO)
+                            </td>
+                        </tr>
+                        @foreach($grouped['force_close'] as $item)
+                        @php
+                            $actualMonths = ($item->start_date && $item->actual_end_rental_date)
+                                ? max(0, (int) round(\Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date)))) . ' Bln'
+                                : '-';
+                            $sisaMonths = ($item->actual_end_rental_date && $item->end_date)
+                                ? max(0, (int) round(\Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date)))) . ' Bln'
+                                : '-';
+                            preg_match('/20\d\d/', $item->product ?? '', $yearMatches);
+                            $tahunKend = $item->vehicle_year ?? (!empty($yearMatches[0]) ? $yearMatches[0] : '-');
+                        @endphp
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" :class="selectedItems.includes({{ $item->id }}) ? 'bg-amber-50/30 dark:bg-amber-950/20' : ''">
+                            <td class="py-2.5 px-3 text-center">
+                                <input type="checkbox" :value="{{ $item->id }}" x-model="selectedItems"
+                                    class="w-4 h-4 text-amber-600 rounded border-slate-300 dark:border-slate-700 focus:ring-amber-500">
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
+                            <td class="py-2.5 px-3 font-bold text-amber-600 dark:text-amber-400">{{ $item->so_number }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">
+                                {{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}</td>
+                            <td class="py-2.5 px-3 text-center font-bold text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20">
+                                {{ $item->actual_end_rental_date ? $item->actual_end_rental_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-slate-600 dark:text-slate-400">{{ $item->product ?? '-' }}</td>
+                            <td class="py-2.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{{ $item->reserved_lot ?? '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500">{{ $tahunKend }}</td>
+                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300" title="{{ $item->start_date && $item->actual_end_rental_date ? $item->start_date->format('d/m/Y') . ' s.d ' . $item->actual_end_rental_date->format('d/m/Y') : '' }}">{{ $actualMonths }}</td>
+                            <td class="py-2.5 px-3 text-center font-semibold text-slate-700 dark:text-slate-300" title="{{ $item->actual_end_rental_date && $item->end_date ? $item->actual_end_rental_date->format('d/m/Y') . ' s.d ' . $item->end_date->format('d/m/Y') : '' }}">{{ $sisaMonths }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
+                        </tr>
+                        @endforeach
+                        @endif
                     </tbody>
                 </table>
             </div>
@@ -355,10 +417,18 @@
                             <th class="py-2.5 px-3 font-semibold text-right text-emerald-600">Duration Price</th>
                             <th class="py-2.5 px-3 font-semibold text-right text-slate-400">Duration Price Sblmnya</th>
                             <th class="py-2.5 px-3 font-semibold text-center">Reserved Lot</th>
+                            <th class="py-2.5 px-3 font-semibold text-center">Source Dokumen</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                        @foreach($grouped['extend_and_update_price'] as $item)
+                        {{-- SUB-HEADER A: EXTEND ONLY --}}
+                        @if($grouped['extend_only']->isNotEmpty())
+                        <tr class="bg-emerald-50/70 dark:bg-emerald-950/40 border-y border-emerald-200 dark:border-emerald-900 font-bold text-emerald-800 dark:text-emerald-300">
+                            <td colspan="11" class="py-2 px-3 text-[11px] tracking-wide">
+                                ▶ EXTEND ONLY (Perpanjangan Saja) ({{ $grouped['extend_only']->count() }} SO)
+                            </td>
+                        </tr>
+                        @foreach($grouped['extend_only'] as $item)
                         <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" :class="selectedItems.includes({{ $item->id }}) ? 'bg-emerald-50/30 dark:bg-emerald-950/20' : ''">
                             <td class="py-2.5 px-3 text-center">
                                 <input type="checkbox" :value="{{ $item->id }}" x-model="selectedItems"
@@ -366,7 +436,9 @@
                             </td>
                             <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
                             <td class="py-2.5 px-3 font-bold text-emerald-600 dark:text-emerald-400">{{ $item->so_number }}</td>
-                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->updated_at ? $item->updated_at->format('d/m/Y') : '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">
+                                {{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}
+                            </td>
                             <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
                             <td class="py-2.5 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
                                 {{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}
@@ -378,18 +450,99 @@
                                 {{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}
                             </td>
                             <td class="py-2.5 px-3 text-right font-mono text-slate-400">
-                                @if($item->previous_duration_price)
+                                @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
                                     Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
-                                    @if((float)$item->previous_duration_price === (float)$item->duration_price)
-                                        <span class="text-[10px] text-slate-400 font-normal italic block">(Tetap)</span>
-                                    @endif
                                 @else
                                     -
                                 @endif
                             </td>
                             <td class="py-2.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{{ $item->reserved_lot ?? '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
                         </tr>
                         @endforeach
+                        @endif
+
+                        {{-- SUB-HEADER B: UPDATE PRICE ONLY --}}
+                        @if($grouped['update_price_only']->isNotEmpty())
+                        <tr class="bg-sky-50/70 dark:bg-sky-950/40 border-y border-sky-200 dark:border-sky-900 font-bold text-sky-800 dark:text-sky-300">
+                            <td colspan="11" class="py-2 px-3 text-[11px] tracking-wide">
+                                ▶ UPDATE PRICE ONLY (Perubahan Harga Saja) ({{ $grouped['update_price_only']->count() }} SO)
+                            </td>
+                        </tr>
+                        @foreach($grouped['update_price_only'] as $item)
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" :class="selectedItems.includes({{ $item->id }}) ? 'bg-sky-50/30 dark:bg-sky-950/20' : ''">
+                            <td class="py-2.5 px-3 text-center">
+                                <input type="checkbox" :value="{{ $item->id }}" x-model="selectedItems"
+                                    class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-700 focus:ring-sky-500">
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
+                            <td class="py-2.5 px-3 font-bold text-sky-600 dark:text-sky-400">{{ $item->so_number }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">
+                                {{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
+                            <td class="py-2.5 px-3 text-center font-bold text-sky-600 dark:text-sky-400 bg-sky-50/50 dark:bg-sky-950/20">
+                                {{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-slate-400">
+                                {{ $item->previous_end_date ? $item->previous_end_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-right font-mono font-bold text-sky-600 dark:text-sky-400">
+                                {{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-right font-mono text-slate-400">
+                                @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
+                                    Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td class="py-2.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{{ $item->reserved_lot ?? '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
+                        </tr>
+                        @endforeach
+                        @endif
+
+                        {{-- SUB-HEADER C: EXTEND & UPDATE PRICE --}}
+                        @if($grouped['extend_and_update_both']->isNotEmpty())
+                        <tr class="bg-teal-50/70 dark:bg-teal-950/40 border-y border-teal-200 dark:border-teal-900 font-bold text-teal-800 dark:text-teal-300">
+                            <td colspan="11" class="py-2 px-3 text-[11px] tracking-wide">
+                                ▶ EXTEND &amp; UPDATE PRICE (Perpanjangan &amp; Perubahan Harga) ({{ $grouped['extend_and_update_both']->count() }} SO)
+                            </td>
+                        </tr>
+                        @foreach($grouped['extend_and_update_both'] as $item)
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40" :class="selectedItems.includes({{ $item->id }}) ? 'bg-teal-50/30 dark:bg-teal-950/20' : ''">
+                            <td class="py-2.5 px-3 text-center">
+                                <input type="checkbox" :value="{{ $item->id }}" x-model="selectedItems"
+                                    class="w-4 h-4 text-teal-600 rounded border-slate-300 dark:border-slate-700 focus:ring-teal-500">
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
+                            <td class="py-2.5 px-3 font-bold text-teal-600 dark:text-teal-400">{{ $item->so_number }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">
+                                {{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
+                            <td class="py-2.5 px-3 text-center font-bold text-teal-600 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-950/20">
+                                {{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-center text-slate-400 line-through">
+                                {{ $item->previous_end_date ? $item->previous_end_date->format('d/m/Y') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-right font-mono font-bold text-teal-600 dark:text-teal-400">
+                                {{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}
+                            </td>
+                            <td class="py-2.5 px-3 text-right font-mono text-slate-400">
+                                @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
+                                    Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td class="py-2.5 px-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300">{{ $item->reserved_lot ?? '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
+                        </tr>
+                        @endforeach
+                        @endif
                     </tbody>
                 </table>
             </div>
@@ -428,6 +581,7 @@
                             <th class="py-2.5 px-3 font-semibold text-center">Superseeded SO</th>
                             <th class="py-2.5 px-3 font-semibold">Previous Customer</th>
                             <th class="py-2.5 px-3 font-semibold text-center">Tgl End Prev Cust</th>
+                            <th class="py-2.5 px-3 font-semibold text-center">Source Dokumen</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -439,7 +593,7 @@
                             </td>
                             <td class="py-2.5 px-3 text-center text-slate-400">{{ $loop->iteration }}</td>
                             <td class="py-2.5 px-3 font-bold text-purple-600 dark:text-purple-400">{{ $item->so_number }}</td>
-                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->updated_at ? $item->updated_at->format('d/m/Y') : '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->order_date ? $item->order_date->format('d/m/Y') : '-' }}</td>
                             <td class="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">{{ $item->customer_name }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->start_date ? $item->start_date->format('d/m/Y') : '-' }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-600 dark:text-slate-400">{{ $item->end_date ? $item->end_date->format('d/m/Y') : '-' }}</td>
@@ -447,6 +601,7 @@
                             <td class="py-2.5 px-3 text-center font-bold text-slate-700 dark:text-slate-300">{{ $item->previous_so ?? '-' }}</td>
                             <td class="py-2.5 px-3 text-slate-500">{{ $item->previous_customer ?? '-' }}</td>
                             <td class="py-2.5 px-3 text-center text-slate-500">{{ $item->previous_end_date_cust ? $item->previous_end_date_cust->format('d/m/Y') : '-' }}</td>
+                            <td class="py-2.5 px-3 text-center text-slate-500 text-[11px]">{{ $item->source_doc ?? '-' }}</td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -515,15 +670,24 @@
                                 @endif
                             </td>
                             <td class="py-3 px-4 text-right">
-                                <a href="{{ route('lor.list-so.batch.download', $batch->id) }}"
-                                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                    @if(($batch->print_count ?? 1) <= 0)
-                                        <span>Cetak Ulang (Asli)</span>
-                                    @else
-                                        <span>Cetak Ulang (Duplikat {{ $batch->print_count ?? 1 }})</span>
+                                <div class="inline-flex items-center gap-2">
+                                    <button type="button"
+                                            @click="openBatchPreview('{{ route('lor.list-so.batch.preview', $batch->id) }}', '{{ $batch->batch_no }}', '{{ $batch->id }}', {{ $batch->total_so }}, '{{ route('lor.list-so.batch.reset', $batch->id) }}', '{{ route('lor.list-so.batch.download', $batch->id) }}')"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                        <span>Preview Dokumen</span>
+                                    </button>
+
+                                    @if(auth()->user()->canViewListSo() || auth()->user()->isItAdmin())
+                                    <button type="button"
+                                            @click="openResetModal('{{ $batch->batch_no }}', {{ $batch->total_so }}, '{{ route('lor.list-so.batch.reset', $batch->id) }}')"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-semibold text-xs transition-colors"
+                                            title="Reset Batch ke Antrean Cetak">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                        <span>Reset Batch</span>
+                                    </button>
                                     @endif
-                                </a>
+                                </div>
                             </td>
                         </tr>
                         @empty
@@ -591,18 +755,136 @@
                         Tutup / Batal
                     </button>
                     
-                    <form method="POST" action="{{ route('lor.list-so.print') }}" @submit="executeDownload()">
+                    <form method="POST" action="{{ route('lor.list-so.print') }}" @submit.prevent="executeDownload($event)">
                         @csrf
                         <input type="hidden" name="sales_manager" value="{{ $selectedManager }}">
                         <input type="hidden" name="item_ids" :value="selectedItems.join(',')">
-                        <button type="submit"
-                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            <span>Download PDF (<span x-text="selectedItems.length"></span>)</span>
+                        <button type="submit" :disabled="downloading || selectedItems.length === 0"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50">
+                            <svg x-show="!downloading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            <svg x-show="downloading" class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span x-text="downloading ? 'Memproses PDF...' : 'Download PDF (' + selectedItems.length + ')'"></span>
                         </button>
                     </form>
                 </div>
             </div>
+        </div>
+    </div>
+
+    {{-- ======================================================== --}}
+    {{-- BATCH HISTORY PREVIEW MODAL                              --}}
+    {{-- ======================================================== --}}
+    <div x-show="showBatchPreviewModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-sm transition-opacity"
+         @keydown.escape.window="showBatchPreviewModal = false">
+        
+        <div class="bg-white dark:bg-slate-900 w-full max-w-6xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[92vh] overflow-hidden">
+            
+            {{-- Modal Header --}}
+            <div class="px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                            <span>Pratinjau Dokumen Batch:</span>
+                            <span class="font-mono text-indigo-600 dark:text-indigo-400" x-text="batchPreviewNo"></span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500">Periksa isi dokumen batch sebelum memutuskan untuk me-reset atau mencetak ulang</p>
+                    </div>
+                </div>
+                <button type="button" @click="showBatchPreviewModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold p-1">
+                    &times;
+                </button>
+            </div>
+
+            {{-- Modal Body: Batch Preview in iframe --}}
+            <div class="flex-1 p-2 sm:p-4 bg-slate-100 dark:bg-slate-950 overflow-hidden flex flex-col">
+                <template x-if="showBatchPreviewModal">
+                    <iframe :src="batchPreviewUrl" class="w-full h-[68vh] rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner bg-white"></iframe>
+                </template>
+            </div>
+
+            {{-- Modal Footer --}}
+            <div class="px-6 py-4 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-2 text-xs text-slate-500">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                    <span>Total Isi: <strong class="text-slate-800 dark:text-slate-100"><span x-text="batchPreviewTotalSo"></span> SO</strong></span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="showBatchPreviewModal = false"
+                        class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors">
+                        Tutup
+                    </button>
+                    
+                    <a :href="batchPreviewDownloadUrl"
+                       class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span>Unduh PDF</span>
+                    </a>
+
+                    <button type="button" @click="openResetFromPreview()"
+                        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        <span>Reset Batch Ini</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ======================================================== --}}
+    {{-- RESET BATCH CONFIRMATION GUARD MODAL                     --}}
+    {{-- ======================================================== --}}
+    <div x-show="showResetModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm transition-opacity"
+         @keydown.escape.window="showResetModal = false">
+        
+        <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-4"
+             @click.away="showResetModal = false">
+            
+            <div class="flex items-start gap-3.5">
+                <div class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950 flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 dark:text-slate-100">Konfirmasi Reset Batch</h3>
+                    <p class="text-xs text-slate-500 font-mono mt-0.5" x-text="resetBatchNo"></p>
+                </div>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 text-xs text-rose-900 dark:text-rose-200 space-y-1.5">
+                <div class="font-bold flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
+                    <span>Apakah Anda yakin ingin me-reset batch ini?</span>
+                </div>
+                <ul class="list-disc pl-4 space-y-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                    <li>Seluruh <strong><span x-text="resetBatchTotalSo"></span> SO</strong> di batch ini akan <strong>dikembalikan ke Antrean Cetak (Unprinted)</strong>.</li>
+                    <li>Dokumen batch ini akan <strong>dihapus</strong> dari Riwayat Cetak.</li>
+                    <li>Setelah di-reset, Anda dapat melakukan <strong>Sync Odoo ulang</strong> atau menambahkan SO baru sebelum mencetak kembali.</li>
+                </ul>
+            </div>
+
+            <label class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 cursor-pointer select-none text-xs text-slate-700 dark:text-slate-300">
+                <input type="checkbox" x-model="resetConfirmed"
+                       class="mt-0.5 w-4 h-4 text-rose-600 rounded border-slate-300 dark:border-slate-600 focus:ring-rose-500">
+                <span class="text-[11px] leading-snug">
+                    Saya sudah memeriksa isi dokumen batch ini dan yakin ingin me-reset seluruh SO ke antrean cetak.
+                </span>
+            </label>
+
+            <form method="POST" :action="resetBatchActionUrl" class="flex items-center justify-end gap-3 pt-2">
+                @csrf
+                <button type="button" @click="showResetModal = false"
+                        class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors">
+                    Batal
+                </button>
+                <button type="submit" :disabled="!resetConfirmed"
+                        class="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span>Ya, Reset Batch</span>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -620,12 +902,80 @@ function listSoApp() {
         activeTab: '{{ $activeTab }}',
         totalUnprinted: {{ $totalUnprinted }},
         syncing: false,
+        downloading: false,
+        syncDateFrom: '{{ date('Y-m-d') }}',
+        syncDateTo: '{{ date('Y-m-d') }}',
         alertMessage: null,
         alertType: 'success',
         showPreviewModal: false,
         previewUrl: '',
         selectedItems: [...initialIds],
         allItemIds: [...initialIds],
+
+        // Batch History Preview
+        showBatchPreviewModal: false,
+        batchPreviewUrl: '',
+        batchPreviewNo: '',
+        batchPreviewId: null,
+        batchPreviewTotalSo: 0,
+        batchPreviewResetUrl: '',
+        batchPreviewDownloadUrl: '',
+
+        // Reset Batch Guard Modal
+        showResetModal: false,
+        resetBatchNo: '',
+        resetBatchTotalSo: 0,
+        resetBatchActionUrl: '',
+        resetConfirmed: false,
+
+        openBatchPreview(previewUrl, batchNo, batchId, totalSo, resetUrl, downloadUrl) {
+            this.batchPreviewUrl = previewUrl + '?t=' + Date.now();
+            this.batchPreviewNo = batchNo;
+            this.batchPreviewId = batchId;
+            this.batchPreviewTotalSo = totalSo;
+            this.batchPreviewResetUrl = resetUrl;
+            this.batchPreviewDownloadUrl = downloadUrl;
+            this.showBatchPreviewModal = true;
+        },
+
+        openResetModal(batchNo, totalSo, actionUrl) {
+            this.resetBatchNo = batchNo;
+            this.resetBatchTotalSo = totalSo;
+            this.resetBatchActionUrl = actionUrl;
+            this.resetConfirmed = false;
+            this.showResetModal = true;
+        },
+
+        openResetFromPreview() {
+            this.showBatchPreviewModal = false;
+            this.openResetModal(this.batchPreviewNo, this.batchPreviewTotalSo, this.batchPreviewResetUrl);
+        },
+
+        setSyncToday() {
+            const today = '{{ date('Y-m-d') }}';
+            this.syncDateFrom = today;
+            this.syncDateTo = today;
+        },
+
+        setSyncYesterday() {
+            const y = new Date();
+            y.setDate(y.getDate() - 1);
+            const pad = (n) => String(n).padStart(2, '0');
+            const yesterday = `${y.getFullYear()}-${pad(y.getMonth() + 1)}-${pad(y.getDate())}`;
+            this.syncDateFrom = yesterday;
+            this.syncDateTo = yesterday;
+        },
+
+        switchTab(tab) {
+            this.activeTab = tab;
+            const url = new URL(window.location.href);
+            if (tab === 'queue') {
+                url.searchParams.delete('tab');
+            } else {
+                url.searchParams.set('tab', tab);
+            }
+            window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+        },
 
         isAllSelected() {
             return this.allItemIds.length > 0 && this.selectedItems.length === this.allItemIds.length;
@@ -670,11 +1020,58 @@ function listSoApp() {
             this.showPreviewModal = true;
         },
 
-        executeDownload() {
-            this.showPreviewModal = false;
-            setTimeout(() => {
-                window.location.href = "{{ route('lor.list-so') }}?tab=history&sales_manager={{ $selectedManager }}";
-            }, 2500);
+        async executeDownload(e) {
+            this.downloading = true;
+            this.alertMessage = null;
+
+            const form = e.target;
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/pdf, application/json, text/html'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Gagal mencetak dokumen (Server Error ' + response.status + ')');
+                }
+
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/pdf')) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+
+                    const disposition = response.headers.get('content-disposition');
+                    let filename = 'LIST_SO.pdf';
+                    if (disposition && disposition.indexOf('filename=') !== -1) {
+                        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                }
+
+                this.showPreviewModal = false;
+                window.location.href = "{{ route('lor.list-so') }}{{ $selectedManager ? '?sales_manager=' . $selectedManager : '' }}";
+            } catch (err) {
+                this.alertType = 'error';
+                this.alertMessage = err.message || 'Terjadi kesalahan saat mengunduh PDF.';
+            } finally {
+                this.downloading = false;
+            }
         },
 
         async syncOdoo() {
@@ -691,7 +1088,9 @@ function listSoApp() {
                     },
                     body: JSON.stringify({
                         sales_manager: '{{ $selectedManager }}',
-                        target_date: '{{ date('Y-m-d') }}'
+                        date_from: this.syncDateFrom,
+                        date_to: this.syncDateTo,
+                        target_date: this.syncDateFrom
                     })
                 });
 
