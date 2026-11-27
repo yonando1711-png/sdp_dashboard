@@ -2,12 +2,9 @@ version: '3.8'
 
 # docker-compose untuk cutover sdp_dashboard: SQLite -> MySQL
 # Dasar: docker-compose.yml di main (bbcf620) + service mysql + env DB_* di app & scheduler.
-# Password TIDAK ditulis di file ini dan TIDAK lagi diambil dari Portainer > Environment variables
-# (Portainer mengganti seluruh daftar Env setiap redeploy -> nilainya hilang dan harus diisi ulang).
-# Semua nilai sensitif dibaca dari file di host, di luar repo:
-#   /home/administrator/sdp/sdp.env     (chmod 600, milik administrator, dibuat sekali)
-# berisi: DB_PASSWORD, MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD, dan variabel MAIL_*/CRM_* bila dipakai.
-# Konsekuensi: redeploy dari Portainer/API tidak pernah menghapus variabel lagi.
+# Password TIDAK ditulis di file ini: diisi di Portainer > stack sdp_dashboard > Environment variables
+#   SDP_DB_PASSWORD       (password user sdp)
+#   SDP_DB_ROOT_PASSWORD  (password root MySQL)
 
 services:
   app:
@@ -20,8 +17,6 @@ services:
       - "8085:80"
     volumes:
       - sdp_storage:/var/www/html/storage/app
-    env_file:
-      - /home/administrator/sdp/sdp.env
     environment:
       - APP_NAME=SDP_Dashboard
       - APP_ENV=production
@@ -32,6 +27,7 @@ services:
       - DB_PORT=3306
       - DB_DATABASE=sdp
       - DB_USERNAME=sdp
+      - DB_PASSWORD=${SDP_DB_PASSWORD}
       - SESSION_DRIVER=file
       - CACHE_STORE=file
       - TZ=Asia/Jakarta
@@ -55,8 +51,6 @@ services:
       done"
     volumes:
       - sdp_storage:/var/www/html/storage/app
-    env_file:
-      - /home/administrator/sdp/sdp.env
     environment:
       - APP_NAME=SDP_Dashboard
       - APP_ENV=production
@@ -67,6 +61,7 @@ services:
       - DB_PORT=3306
       - DB_DATABASE=sdp
       - DB_USERNAME=sdp
+      - DB_PASSWORD=${SDP_DB_PASSWORD}
       - SESSION_DRIVER=file
       - CACHE_STORE=file
       - TZ=Asia/Jakarta
@@ -86,11 +81,11 @@ services:
       timeout: 3s
       retries: 20
       start_period: 30s
-    env_file:
-      - /home/administrator/sdp/sdp.env
     environment:
       - MYSQL_DATABASE=sdp
       - MYSQL_USER=sdp
+      - MYSQL_PASSWORD=${SDP_DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${SDP_DB_ROOT_PASSWORD}
       - TZ=Asia/Jakarta
     volumes:
       - sdp_mysql_data:/var/lib/mysql
