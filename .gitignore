@@ -40,6 +40,7 @@ UNINVOICED_*.md
 
 # Local debug/scratch scripts
 /scratch/
+routes/uncovered_cost.php
 
 # Security: ignore data dumps and spreadsheets
 odoo_debug_output.json
@@ -48,3 +49,7 @@ odoo_debug_output.json
 *.docx
 *.pdf
 .~lock.*
+*.sql
+*.sql.gz
+*.sqlite.gz
+backup-*.gz

@@ -73,6 +73,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/lor/smd/list-so/sync', [LorListSoController::class, 'sync'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.sync');
     Route::post('/lor/smd/list-so/print', [LorListSoController::class, 'printBatch'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.print');
     Route::get('/lor/smd/list-so/batch/{id}/download', [LorListSoController::class, 'downloadBatchPdf'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.batch.download');
+    Route::get('/lor/smd/list-so/batch/{id}/preview', [LorListSoController::class, 'previewBatch'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.batch.preview');
+    Route::post('/lor/smd/list-so/batch/{id}/reset', [LorListSoController::class, 'resetBatch'])->middleware(CheckMenuPermission::class . ':list-so')->name('lor.list-so.batch.reset');
 
     // LoR Routes (Protected by Menu Permission & Secondary Password)
     Route::middleware([CheckMenuPermission::class . ':lor'])->group(function () {
@@ -179,3 +181,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/settings/backups/prune', [BackupController::class, 'prune'])->name('backups.prune');
     });
 });
+
+// Local Uncovered Cost routes (only if routes/uncovered_cost.php exists)
+if (file_exists(__DIR__ . '/uncovered_cost.php')) {
+    require __DIR__ . '/uncovered_cost.php';
+}

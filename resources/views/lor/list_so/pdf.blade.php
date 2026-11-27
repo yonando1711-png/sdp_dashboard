@@ -262,7 +262,7 @@
     {{-- ======================================================== --}}
     {{-- 3. TERMINATE & FORCE CLOSED                              --}}
     {{-- ======================================================== --}}
-    @if($terminate->isNotEmpty())
+    @if(!empty($terminate_and_force_close) && $terminate_and_force_close->isNotEmpty())
     <div class="section-page {{ $renderedSections > 0 ? 'page-break' : '' }}">
         @php $renderedSections++; @endphp
         <div class="header-title-box">
@@ -308,22 +308,28 @@
                 </tr>
             </thead>
             <tbody>
+                {{-- SUB-HEADER A: TERMINATE --}}
+                @if(!empty($terminate) && $terminate->isNotEmpty())
+                <tr style="background-color: #fee2e2; font-weight: bold;">
+                    <td colspan="12" style="padding: 3px 6px; font-size: 7.5px; color: #991b1b; text-align: left;">
+                        ▶ TERMINATE ({{ $terminate->count() }} SO)
+                    </td>
+                </tr>
                 @foreach($terminate as $item)
                 @php
                     $actualMonths = ($item->start_date && $item->actual_end_rental_date)
-                        ? max(0, \Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date))) . ' BLN'
+                        ? max(0, (int) round(\Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date)))) . ' BLN'
                         : '-';
                     $sisaMonths = ($item->actual_end_rental_date && $item->end_date)
-                        ? max(0, \Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date))) . ' BLN'
+                        ? max(0, (int) round(\Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date)))) . ' BLN'
                         : '-';
-                    // Extract vehicle year from product name if possible
                     preg_match('/20\d\d/', $item->product ?? '', $yearMatches);
-                    $tahunKend = !empty($yearMatches[0]) ? $yearMatches[0] : '-';
+                    $tahunKend = $item->vehicle_year ?? (!empty($yearMatches[0]) ? $yearMatches[0] : '-');
                 @endphp
                 <tr>
                     <td class="text-center">{{ $loop->iteration }}</td>
                     <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
-                    <td class="text-center">{{ $item->actual_end_rental_date ? \Carbon\Carbon::parse($item->actual_end_rental_date)->format('d/m/Y') : ($item->updated_at ? $item->updated_at->format('d/m/Y') : '-') }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
                     <td>{{ $item->customer_name }}</td>
                     <td class="text-center">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
                     <td class="text-center" style="font-weight: bold; color: #b91c1c;">{{ $item->actual_end_rental_date ? \Carbon\Carbon::parse($item->actual_end_rental_date)->format('d/m/Y') : '-' }}</td>
@@ -335,6 +341,42 @@
                     <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
                 </tr>
                 @endforeach
+                @endif
+
+                {{-- SUB-HEADER B: FORCE CLOSED --}}
+                @if(!empty($force_close) && $force_close->isNotEmpty())
+                <tr style="background-color: #fef3c7; font-weight: bold;">
+                    <td colspan="12" style="padding: 3px 6px; font-size: 7.5px; color: #92400e; text-align: left;">
+                        ▶ FORCE CLOSED ({{ $force_close->count() }} SO)
+                    </td>
+                </tr>
+                @foreach($force_close as $item)
+                @php
+                    $actualMonths = ($item->start_date && $item->actual_end_rental_date)
+                        ? max(0, (int) round(\Carbon\Carbon::parse($item->start_date)->diffInMonths(\Carbon\Carbon::parse($item->actual_end_rental_date)))) . ' BLN'
+                        : '-';
+                    $sisaMonths = ($item->actual_end_rental_date && $item->end_date)
+                        ? max(0, (int) round(\Carbon\Carbon::parse($item->actual_end_rental_date)->diffInMonths(\Carbon\Carbon::parse($item->end_date)))) . ' BLN'
+                        : '-';
+                    preg_match('/20\d\d/', $item->product ?? '', $yearMatches);
+                    $tahunKend = $item->vehicle_year ?? (!empty($yearMatches[0]) ? $yearMatches[0] : '-');
+                @endphp
+                <tr>
+                    <td class="text-center">{{ $loop->iteration }}</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
+                    <td>{{ $item->customer_name }}</td>
+                    <td class="text-center">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center" style="font-weight: bold; color: #b91c1c;">{{ $item->actual_end_rental_date ? \Carbon\Carbon::parse($item->actual_end_rental_date)->format('d/m/Y') : '-' }}</td>
+                    <td>{{ $item->product ?? '-' }}</td>
+                    <td class="text-center">{{ $item->reserved_lot ?? '-' }}</td>
+                    <td class="text-center">{{ $tahunKend }}</td>
+                    <td class="text-center">{{ $actualMonths }}</td>
+                    <td class="text-center">{{ $sisaMonths }}</td>
+                    <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
+                </tr>
+                @endforeach
+                @endif
             </tbody>
         </table>
     </div>
@@ -374,40 +416,105 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width: 22px;">NO</th>
-                    <th style="width: 85px;">NO SO</th>
-                    <th style="width: 70px;">UPDATE DATE</th>
+                    <th style="width: 20px;">NO</th>
+                    <th style="width: 80px;">NO SO</th>
+                    <th style="width: 65px;">UPDATE DATE</th>
                     <th>CUSTOMER</th>
-                    <th style="width: 75px;">ACTUAL END</th>
-                    <th style="width: 85px;">TGL END SBLMNYA</th>
-                    <th style="width: 90px;">DURATION PRICE</th>
-                    <th style="width: 100px;">DURATION PRICE SBLMNYA</th>
-                    <th style="width: 75px;">RESERVED LOT</th>
+                    <th style="width: 70px;">ACTUAL END</th>
+                    <th style="width: 80px;">TGL END SBLMNYA</th>
+                    <th style="width: 85px;">DURATION PRICE</th>
+                    <th style="width: 90px;">DURATION PRICE SBLMNYA</th>
+                    <th style="width: 65px;">RESERVED LOT</th>
+                    <th style="width: 80px;">SOURCE DOKUMEN</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach($extend_and_update_price as $item)
+                {{-- SUB-HEADER A: EXTEND ONLY --}}
+                @if(!empty($extend_only) && $extend_only->isNotEmpty())
+                <tr style="background-color: #d1fae5; font-weight: bold;">
+                    <td colspan="10" style="padding: 3px 6px; font-size: 7.5px; color: #065f46; text-align: left;">
+                        ▶ EXTEND ONLY (Perpanjangan Saja) ({{ $extend_only->count() }} SO)
+                    </td>
+                </tr>
+                @foreach($extend_only as $item)
                 <tr>
                     <td class="text-center">{{ $loop->iteration }}</td>
                     <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
-                    <td class="text-center">{{ $item->updated_at ? $item->updated_at->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
                     <td>{{ $item->customer_name }}</td>
                     <td class="text-center" style="font-weight: bold; color: #047857;">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
                     <td class="text-center" style="color: #6b7280; text-decoration: line-through;">{{ $item->previous_end_date ? \Carbon\Carbon::parse($item->previous_end_date)->format('d/m/Y') : '-' }}</td>
                     <td class="text-right" style="font-weight: bold;">{{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}</td>
                     <td class="text-right" style="color: #6b7280;">
-                        @if($item->previous_duration_price)
+                        @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
                             Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
-                            @if((float)$item->previous_duration_price === (float)$item->duration_price)
-                                <div style="font-size: 5pt; color: #94a3b8; font-style: italic;">(Harga Tetap)</div>
-                            @endif
                         @else
                             -
                         @endif
                     </td>
                     <td class="text-center">{{ $item->reserved_lot ?? '-' }}</td>
+                    <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
                 </tr>
                 @endforeach
+                @endif
+
+                {{-- SUB-HEADER B: UPDATE PRICE ONLY --}}
+                @if(!empty($update_price_only) && $update_price_only->isNotEmpty())
+                <tr style="background-color: #e0f2fe; font-weight: bold;">
+                    <td colspan="10" style="padding: 3px 6px; font-size: 7.5px; color: #075985; text-align: left;">
+                        ▶ UPDATE PRICE ONLY (Perubahan Harga Saja) ({{ $update_price_only->count() }} SO)
+                    </td>
+                </tr>
+                @foreach($update_price_only as $item)
+                <tr>
+                    <td class="text-center">{{ $loop->iteration }}</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
+                    <td>{{ $item->customer_name }}</td>
+                    <td class="text-center" style="font-weight: bold; color: #0284c7;">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center" style="color: #6b7280;">{{ $item->previous_end_date ? \Carbon\Carbon::parse($item->previous_end_date)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-right" style="font-weight: bold;">{{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}</td>
+                    <td class="text-right" style="color: #6b7280;">
+                        @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
+                            Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
+                        @else
+                            -
+                        @endif
+                    </td>
+                    <td class="text-center">{{ $item->reserved_lot ?? '-' }}</td>
+                    <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
+                </tr>
+                @endforeach
+                @endif
+
+                {{-- SUB-HEADER C: EXTEND & UPDATE PRICE --}}
+                @if(!empty($extend_and_update_both) && $extend_and_update_both->isNotEmpty())
+                <tr style="background-color: #ccfbf1; font-weight: bold;">
+                    <td colspan="10" style="padding: 3px 6px; font-size: 7.5px; color: #115e59; text-align: left;">
+                        ▶ EXTEND &amp; UPDATE PRICE (Perpanjangan &amp; Perubahan Harga) ({{ $extend_and_update_both->count() }} SO)
+                    </td>
+                </tr>
+                @foreach($extend_and_update_both as $item)
+                <tr>
+                    <td class="text-center">{{ $loop->iteration }}</td>
+                    <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
+                    <td>{{ $item->customer_name }}</td>
+                    <td class="text-center" style="font-weight: bold; color: #047857;">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center" style="color: #6b7280; text-decoration: line-through;">{{ $item->previous_end_date ? \Carbon\Carbon::parse($item->previous_end_date)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-right" style="font-weight: bold;">{{ $item->duration_price ? 'Rp ' . number_format($item->duration_price, 0, ',', '.') : '-' }}</td>
+                    <td class="text-right" style="color: #6b7280;">
+                        @if($item->previous_duration_price && (float)$item->previous_duration_price !== (float)$item->duration_price)
+                            Rp {{ number_format($item->previous_duration_price, 0, ',', '.') }}
+                        @else
+                            -
+                        @endif
+                    </td>
+                    <td class="text-center">{{ $item->reserved_lot ?? '-' }}</td>
+                    <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
+                </tr>
+                @endforeach
+                @endif
             </tbody>
         </table>
     </div>
@@ -457,6 +564,7 @@
                     <th style="width: 85px;">SUPERSEEDED SO</th>
                     <th>PREVIOUS CUSTOMER</th>
                     <th style="width: 80px;">TGL END PREV CUST</th>
+                    <th style="width: 80px;">SOURCE DOKUMEN</th>
                 </tr>
             </thead>
             <tbody>
@@ -464,7 +572,7 @@
                 <tr>
                     <td class="text-center">{{ $loop->iteration }}</td>
                     <td style="font-weight: bold; color: #1e3a8a;">{{ $item->so_number }}</td>
-                    <td class="text-center">{{ $item->updated_at ? $item->updated_at->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center">{{ $item->order_date ? \Carbon\Carbon::parse($item->order_date)->format('d/m/Y') : '-' }}</td>
                     <td>{{ $item->customer_name }}</td>
                     <td class="text-center">{{ $item->start_date ? \Carbon\Carbon::parse($item->start_date)->format('d/m/Y') : '-' }}</td>
                     <td class="text-center">{{ $item->end_date ? \Carbon\Carbon::parse($item->end_date)->format('d/m/Y') : '-' }}</td>
@@ -472,6 +580,7 @@
                     <td class="text-center" style="font-weight: bold;">{{ $item->previous_so ?? '-' }}</td>
                     <td>{{ $item->previous_customer ?? '-' }}</td>
                     <td class="text-center">{{ $item->previous_end_date_cust ? \Carbon\Carbon::parse($item->previous_end_date_cust)->format('d/m/Y') : '-' }}</td>
+                    <td class="text-center">{{ $item->source_doc ?? '-' }}</td>
                 </tr>
                 @endforeach
             </tbody>

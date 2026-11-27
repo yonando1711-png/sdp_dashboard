@@ -3,6 +3,12 @@
 @section('title', 'Database Backups')
 
 @section('content')
+@php
+    $dbConn = config('database.default', 'sqlite');
+    $dbDriver = config("database.connections.{$dbConn}.driver", 'sqlite');
+    $isMysql = $dbDriver === 'mysql';
+@endphp
+
 <div class="space-y-6">
     <!-- Header Section -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -18,11 +24,15 @@
                 Database Backups
             </h1>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Pencadangan database SQLite aman dengan snapshot atomik <code>VACUUM INTO</code> terkompresi <code>.sqlite.gz</code> tanpa mengunci tabel.
+                Pencadangan database terkompresi (<code>.sql.gz</code> / <code>.sqlite.gz</code>) aman dan bebas timeout.
             </p>
         </div>
 
         <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold {{ $isMysql ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' }}">
+                <span class="w-2 h-2 rounded-full {{ $isMysql ? 'bg-amber-500' : 'bg-indigo-500' }}"></span>
+                Database: {{ $isMysql ? 'MySQL 8.0' : 'SQLite' }}
+            </span>
             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
@@ -61,7 +71,7 @@
                     <h2 class="text-base font-bold text-slate-800 dark:text-slate-100">Buat Backup Manual (Instan)</h2>
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Snapshot seluruh database SQLite saat ini langsung ke arsip terkompresi <code>.sqlite.gz</code>.
+                    Snapshot seluruh database {{ $isMysql ? 'MySQL' : 'SQLite' }} langsung ke arsip terkompresi <code>{{ $isMysql ? '.sql.gz' : '.sqlite.gz' }}</code>.
                 </p>
             </div>
 
@@ -73,8 +83,8 @@
                         </svg>
                         Keamanan Snapshot
                     </div>
-                    <div>• Menyalin seluruh tabel (Item, Surat Kuasa, Settings, LoR, Odoo, dll).</div>
-                    <div>• Menggunakan <code>VACUUM INTO</code> sehingga bebas korupsi meskipun ada proses sync.</div>
+                    <div>• Menyalin seluruh tabel dan relasi data secara aman.</div>
+                    <div>• Menggunakan kompresi Gzip cepat (Level 4) bebas timeout Cloudflare.</div>
                 </div>
 
                 <form method="POST" action="{{ route('backups.create') }}" class="space-y-4" onsubmit="this.querySelector('button[type=submit]').disabled=true; this.querySelector('button[type=submit]').innerHTML='Memproses Backup...';">
@@ -173,7 +183,7 @@
                     <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
                     </svg>
-                    Riwayat File Backup (.sqlite.gz)
+                    Riwayat File Backup (.sql.gz / .sqlite.gz)
                 </h2>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     File cadangan tersimpan di penyimpanan lokal server dan siap diunduh sewaktu-waktu.
